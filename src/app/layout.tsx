@@ -1,4 +1,6 @@
 import "~/styles/globals.css";
+import { MantineProvider, createTheme } from "@mantine/core"; // Wrap project in mantine as part of mantine setup process
+import '@mantine/core/styles.css'; //Import mandatory mantine default styles
 
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
@@ -16,13 +18,22 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
+const mantineTheme = createTheme({
+  colors: { //Mantine theme declarations, requires 10 shades and does not allow 1
+    primary: ["#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
+    buttonColor: ["#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9"]
+  },
+});
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable}`}>
       <body>
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <MantineProvider theme={mantineTheme}>
+          <TRPCReactProvider>{children}</TRPCReactProvider>
+        </MantineProvider>
       </body>
     </html>
   );
