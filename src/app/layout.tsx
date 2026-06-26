@@ -1,6 +1,7 @@
 import "~/styles/globals.css";
 import { MantineProvider, createTheme } from "@mantine/core"; // Wrap project in mantine as part of mantine setup process
 import '@mantine/core/styles.css'; //Import mandatory mantine default styles
+import "@mantine/dates/styles.css"; //Import mandatory mantine styles for its dates library
 
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
@@ -20,8 +21,9 @@ const geist = Geist({
 
 const mantineTheme = createTheme({
   colors: { //Mantine theme declarations, requires 10 shades and does not allow 1
-    primary: ["#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
-    buttonColor: ["#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9"]
+    primaryColor: ["#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF","#FFFFFF"],
+    buttonColor: ["#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9", "#D9D9D9"],
+    backgroundColor: ["#DDDDDD", "#DDDDDD", "#DDDDDD", "#DDDDDD", "#DDDDDD", "#DDDDDD", "#DDDDDD", "#DDDDDD", "#DDDDDD", "#DDDDDD"]
   },
 });
 
