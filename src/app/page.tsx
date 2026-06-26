@@ -10,7 +10,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { DatePicker, DateTimePicker } from "@mantine/dates";
+import { DateTimePicker } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import PangSeal from "~/assets/icons/pang";
 
