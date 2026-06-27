@@ -1,6 +1,7 @@
 "use client";
 import { Flex, Group, Title } from "@mantine/core";
 import PangSeal from "~/assets/icons/pang";
+import BookingForm from "./_components/landing page components/booking-form";
 
 export default function Home() {
   return (
@@ -18,12 +19,9 @@ export default function Home() {
         </Title>
       </Group>
 
-      <Flex
-        align={"center"}
-        bg={"backgroundColor"}
-        flex={1}
-        justify={"center"}
-      ></Flex>
+      <Flex align={"center"} bg={"backgroundColor"} flex={1} justify={"center"}>
+        <BookingForm />
+      </Flex>
     </Flex>
   );
 }

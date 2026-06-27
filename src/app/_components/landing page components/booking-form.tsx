@@ -1,49 +1,86 @@
-/*
 "use client";
-import {
-  Box,
-  Button,
-  Center,
-  Combobox,
-  ComboboxTarget,
-  Flex,
-  Group,
-  Paper,
-  Text,
-  TextInput,
-  Title,
-  useCombobox,
-} from "@mantine/core";
+import { Button, Combobox, Paper, TextInput, useCombobox } from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import dayjs from "dayjs";
-import { useState } from "react";
-import PangSeal from "~/assets/icons/pang";
+import { type Dispatch, type SetStateAction, useState } from "react";
 
 //Pick-up and drop-off location options
 const suggestedLocations = ["Grocery Store", "Airport"];
+
+//Locally reused component for pickup/dest addr fields
+const DropdownField = ({
+  fieldValue,
+  changeValue,
+  ariaLabel,
+  placeholder,
+}: {
+  fieldValue: string;
+  changeValue: Dispatch<SetStateAction<string>>;
+  ariaLabel: string;
+  placeholder: string;
+}) => {
+  const comboBox = useCombobox();
+
+  //Location filter behavior based on user input
+  const filteredLocations =
+    fieldValue.length === 0
+      ? suggestedLocations
+      : suggestedLocations.filter((location) => {
+          return location
+            .toLowerCase()
+            .includes(fieldValue.toLowerCase().trim());
+        });
+
+  //Make options that appear in pickup/dest fields
+  const options = filteredLocations.map((location) => (
+    <Combobox.Option key={location} value={location}>
+      {location}
+    </Combobox.Option>
+  ));
+
+  return (
+    <Combobox
+      onOptionSubmit={(selectedOption) => {
+        changeValue(selectedOption);
+        comboBox.closeDropdown();
+      }}
+      store={comboBox}
+    >
+      <Combobox.Target>
+        <TextInput
+          aria-label={ariaLabel}
+          onBlur={() => {
+            comboBox.closeDropdown();
+          }}
+          onChange={(event) => {
+            changeValue(event.currentTarget.value);
+            comboBox.openDropdown();
+          }}
+          onClick={() => {
+            comboBox.openDropdown();
+          }}
+          onFocus={() => {
+            comboBox.openDropdown();
+          }}
+          placeholder={placeholder}
+          value={fieldValue}
+        />
+      </Combobox.Target>
+
+      <Combobox.Dropdown hidden={options.length === 0}>
+        <Combobox.Options>
+          <Combobox.Group label="Suggested Locations">{options}</Combobox.Group>
+        </Combobox.Options>
+      </Combobox.Dropdown>
+    </Combobox>
+  );
+};
 
 export default function BookingForm() {
   //use states for pickup and dest addr
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
-
-  //Define combo box for pickup/dest addr fields
-  const pickupAddrField = useCombobox();
-  const destAddrField = useCombobox();
-
-  //Filter behavior for pickup/dest addr locations
-  const pickAddrFilteredLocs =
-    pickupAddr.length === 0
-      ? suggestedLocations
-      : suggestedLocations.filter((location) => {
-          location.toLowerCase().includes(pickupAddr.toLowerCase().trim());
-        });
-
-  //Make options that appear in pickup/dest fields
-  const pickupAddrOptions = pickAddrFilteredLocs.map((location) => (
-    <Combobox.Option value={location}>{location}</Combobox.Option>
-  ));
 
   //Configure form
   const bookingForm = useForm({
@@ -95,42 +132,21 @@ export default function BookingForm() {
           valueFormat={"ddd[,] MMM D [at] h:mm A"}
         />
 
-        <Combobox
-          onOptionSubmit={(selectedOption) => {
-            setPickupAddr(selectedOption);
-            pickupAddrField.closeDropdown();
-          }}
-          store={pickupAddrField}
-        >
-          <Combobox.Target>
-            <TextInput
-              aria-label="Pick-up address field"
-              onBlur={() => {
-                pickupAddrField.closeDropdown();
-              }}
-              onChange={(event) => {
-                setPickupAddr(event.currentTarget.value);
-                pickupAddrField.openDropdown();
-              }}
-              onClick={() => {
-                pickupAddrField.openDropdown();
-              }}
-              onFocus={() => {
-                pickupAddrField.openDropdown();
-              }}
-              placeholder="Pick-up Address"
-              value={pickupAddr}
-            />
-          </Combobox.Target>
-
-          <Combobox.Dropdown hidden={pickupAddrOptions.length === 0}>
-            <Combobox.Options>{pickupAddrOptions}</Combobox.Options>
-          </Combobox.Dropdown>
-        </Combobox>
+        <DropdownField
+          ariaLabel="Pick-up address field"
+          changeValue={setPickupAddr}
+          fieldValue={pickupAddr}
+          placeholder="Pick-up Address"
+        />
+        <DropdownField
+          ariaLabel="Destination address field"
+          changeValue={setDestAddr}
+          fieldValue={destAddr}
+          placeholder="Destination Address"
+        />
 
         <Button type="submit">Submit</Button>
       </form>
     </Paper>
   );
 }
-*/
