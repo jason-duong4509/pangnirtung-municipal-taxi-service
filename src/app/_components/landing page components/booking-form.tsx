@@ -2,8 +2,18 @@
 import { Button, Combobox, Paper, TextInput, useCombobox } from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
 import { useForm } from "@mantine/form";
+import {
+  CalendarBlankIcon,
+  MapPinLineIcon,
+  PathIcon,
+} from "@phosphor-icons/react";
 import dayjs from "dayjs";
-import { type Dispatch, type SetStateAction, useState } from "react";
+import {
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+  useState,
+} from "react";
 
 //Pick-up and drop-off location options
 const suggestedLocations = ["Grocery Store", "Airport"];
@@ -14,11 +24,13 @@ const DropdownField = ({
   changeValue,
   ariaLabel,
   placeholder,
+  icon,
 }: {
   fieldValue: string;
   changeValue: Dispatch<SetStateAction<string>>;
   ariaLabel: string;
   placeholder: string;
+  icon: ReactNode;
 }) => {
   const comboBox = useCombobox();
 
@@ -50,6 +62,7 @@ const DropdownField = ({
       <Combobox.Target>
         <TextInput
           aria-label={ariaLabel}
+          leftSection={icon}
           onBlur={() => {
             comboBox.closeDropdown();
           }}
@@ -107,20 +120,13 @@ export default function BookingForm() {
           console.log("form submitted");
         })}
       >
-        <TextInput
-          key={bookingForm.key("pickupAddr")}
-          label="e"
-          withAsterisk
-          {...bookingForm.getInputProps("pickupAddr")}
-        />
-
         <DateTimePicker
           aria-label="Pick-up Time Selection"
           clearable
-          label="Pick date and time"
+          leftSection={<CalendarBlankIcon size={19} />}
           maxDate={dayjs().add(1, "month").toDate()}
           minDate={new Date()}
-          placeholder="Pick date and time"
+          placeholder="Pick-up Time"
           presets={[
             { value: dayjs().format("YYYY-MM-DD HH:mm:ss"), label: "Now" },
           ]}
@@ -136,12 +142,14 @@ export default function BookingForm() {
           ariaLabel="Pick-up address field"
           changeValue={setPickupAddr}
           fieldValue={pickupAddr}
+          icon={<MapPinLineIcon size={20} />}
           placeholder="Pick-up Address"
         />
         <DropdownField
           ariaLabel="Destination address field"
           changeValue={setDestAddr}
           fieldValue={destAddr}
+          icon={<PathIcon size={20} />}
           placeholder="Destination Address"
         />
 
