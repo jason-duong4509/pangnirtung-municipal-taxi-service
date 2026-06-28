@@ -1,15 +1,18 @@
 "use client";
 import {
+  Box,
   Button,
   Combobox,
+  type CSSProperties,
   Paper,
   Stack,
   TextInput,
   Title,
+  Transition,
   useCombobox,
 } from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
-import { useForm } from "@mantine/form";
+import { type UseFormReturnType, useForm } from "@mantine/form";
 import {
   CalendarBlankIcon,
   MapPinLineIcon,
@@ -28,17 +31,36 @@ const suggestedLocations = ["Grocery Store", "Airport"];
 
 //Locally reused component for pickup/dest addr fields
 const DropdownField = ({
+  fieldName,
   fieldValue,
   changeValue,
   ariaLabel,
   placeholder,
   icon,
+  form,
 }: {
+  fieldName: string;
   fieldValue: string;
   changeValue: Dispatch<SetStateAction<string>>;
   ariaLabel: string;
   placeholder: string;
   icon: ReactNode;
+  form: UseFormReturnType<
+    {
+      pickupTime: Date | null;
+      pickupAddr: string;
+      destAddr: string;
+    },
+    (values: {
+      pickupTime: Date | null;
+      pickupAddr: string;
+      destAddr: string;
+    }) => {
+      pickupTime: Date | null;
+      pickupAddr: string;
+      destAddr: string;
+    }
+  >;
 }) => {
   const comboBox = useCombobox();
 
@@ -63,6 +85,7 @@ const DropdownField = ({
     <Combobox
       onOptionSubmit={(selectedOption) => {
         changeValue(selectedOption);
+        form.setFieldValue(fieldName, selectedOption);
         comboBox.closeDropdown();
       }}
       store={comboBox}
@@ -70,12 +93,14 @@ const DropdownField = ({
       <Combobox.Target>
         <TextInput
           aria-label={ariaLabel}
+          error={form.errors[fieldName] ?? ""}
           leftSection={icon}
           onBlur={() => {
             comboBox.closeDropdown();
           }}
           onChange={(event) => {
             changeValue(event.currentTarget.value);
+            form.setFieldValue(fieldName, event.currentTarget.value);
             comboBox.openDropdown();
           }}
           onClick={() => {
@@ -98,29 +123,39 @@ const DropdownField = ({
   );
 };
 
-export default function BookingForm() {
-  //use states for pickup and dest addr
-  const [pickupAddr, setPickupAddr] = useState("");
-  const [destAddr, setDestAddr] = useState("");
-
-  //Configure form
-  const bookingForm = useForm({
-    mode: "uncontrolled",
-
-    //Initial field values of form
-    initialValues: {
-      pickupTime: "",
-      pickupAddr: "",
-      destAddr: "",
+//First form UI
+const FormOne = ({
+  pickupAddr,
+  setPickupAddr,
+  destAddr,
+  setDestAddr,
+  form,
+  changeFormNum,
+  transitionStyle,
+}: {
+  pickupAddr: string;
+  setPickupAddr: Dispatch<SetStateAction<string>>;
+  destAddr: string;
+  setDestAddr: Dispatch<SetStateAction<string>>;
+  form: UseFormReturnType<
+    {
+      pickupTime: Date | null;
+      pickupAddr: string;
+      destAddr: string;
     },
-
-    //Simple form field checks
-    validate: {
-      pickupAddr: (value) =>
-        value.length !== 0 ? null : "Cannot submit blank address",
-    },
-  });
-
+    (values: {
+      pickupTime: Date | null;
+      pickupAddr: string;
+      destAddr: string;
+    }) => {
+      pickupTime: Date | null;
+      pickupAddr: string;
+      destAddr: string;
+    }
+  >;
+  changeFormNum: Dispatch<SetStateAction<number>>;
+  transitionStyle: CSSProperties;
+}) => {
   return (
     <Paper
       bg={"primaryColor"}
@@ -128,13 +163,15 @@ export default function BookingForm() {
       p={"xl"}
       radius="lg"
       shadow="xl"
+      style={transitionStyle}
       w={"400px"}
     >
       <Stack gap={"lg"}>
         <Title order={4}>Where to?</Title>
         <form
-          onSubmit={bookingForm.onSubmit(() => {
+          onSubmit={form.onSubmit(() => {
             console.log("form submitted");
+            changeFormNum(2);
           })}
         >
           <Stack gap={"sm"}>
@@ -154,19 +191,24 @@ export default function BookingForm() {
                 popoverProps: { withinPortal: false },
               }}
               valueFormat={"ddd[,] MMM D [at] h:mm A"}
+              {...form.getInputProps("pickupTime")}
             />
 
             <DropdownField
               ariaLabel="Pick-up address field"
               changeValue={setPickupAddr}
+              fieldName="pickupAddr"
               fieldValue={pickupAddr}
+              form={form}
               icon={<MapPinLineIcon size={20} />}
               placeholder="Pick-up Address"
             />
             <DropdownField
               ariaLabel="Destination address field"
               changeValue={setDestAddr}
+              fieldName="destAddr"
               fieldValue={destAddr}
+              form={form}
               icon={<PathIcon size={20} />}
               placeholder="Destination Address"
             />
@@ -178,5 +220,65 @@ export default function BookingForm() {
         </form>
       </Stack>
     </Paper>
+  );
+};
+
+export default function BookingForm() {
+  const [pickupAddr, setPickupAddr] = useState("");
+  const [destAddr, setDestAddr] = useState("");
+  //Use state to keep track of what form is displayed
+  const [formNumber, setFormNum] = useState(1);
+
+  //Configure forms
+  const formOne = useForm({
+    mode: "uncontrolled",
+
+    //Initial field values of form
+    initialValues: {
+      pickupTime: null as Date | null,
+      pickupAddr: "",
+      destAddr: "",
+    },
+
+    //Simple form field checks
+    validate: {
+      pickupTime: (value) =>
+        value !== null ? null : "Must select a pick-up time",
+      pickupAddr: (value) =>
+        value.length !== 0 ? null : "Must add a pick-up address",
+      destAddr: (value) =>
+        value.length !== 0 ? null : "Must add a destination address",
+    },
+  });
+
+  return (
+    <div>
+      <Transition
+        duration={4000}
+        mounted={formNumber === 1}
+        timingFunction="ease"
+        transition={"fade"}
+      >
+        {(transitionStyle) => (
+          <FormOne
+            changeFormNum={setFormNum}
+            destAddr={destAddr}
+            form={formOne}
+            pickupAddr={pickupAddr}
+            setDestAddr={setDestAddr}
+            setPickupAddr={setPickupAddr}
+            transitionStyle={transitionStyle}
+          />
+        )}
+      </Transition>
+      <Transition
+        duration={4000}
+        mounted={formNumber === 2}
+        timingFunction="ease"
+        transition={"fade"}
+      >
+        {(styles) => <div style={styles}>Your modal</div>}
+      </Transition>
+    </div>
   );
 }
