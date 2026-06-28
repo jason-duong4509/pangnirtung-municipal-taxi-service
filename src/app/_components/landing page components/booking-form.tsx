@@ -1,5 +1,13 @@
 "use client";
-import { Button, Combobox, Paper, TextInput, useCombobox } from "@mantine/core";
+import {
+  Button,
+  Combobox,
+  Paper,
+  Stack,
+  TextInput,
+  Title,
+  useCombobox,
+} from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import {
@@ -114,47 +122,61 @@ export default function BookingForm() {
   });
 
   return (
-    <Paper bg={"red"} h={"400px"} shadow="md">
-      <form
-        onSubmit={bookingForm.onSubmit(() => {
-          console.log("form submitted");
-        })}
-      >
-        <DateTimePicker
-          aria-label="Pick-up Time Selection"
-          clearable
-          leftSection={<CalendarBlankIcon size={19} />}
-          maxDate={dayjs().add(1, "month").toDate()}
-          minDate={new Date()}
-          placeholder="Pick-up Time"
-          presets={[
-            { value: dayjs().format("YYYY-MM-DD HH:mm:ss"), label: "Now" },
-          ]}
-          timePickerProps={{
-            withDropdown: true,
-            format: "12h",
-            popoverProps: { withinPortal: false },
-          }}
-          valueFormat={"ddd[,] MMM D [at] h:mm A"}
-        />
+    <Paper
+      bg={"primaryColor"}
+      mah={"400px"}
+      p={"xl"}
+      radius="lg"
+      shadow="xl"
+      w={"400px"}
+    >
+      <Stack gap={"lg"}>
+        <Title order={4}>Where to?</Title>
+        <form
+          onSubmit={bookingForm.onSubmit(() => {
+            console.log("form submitted");
+          })}
+        >
+          <Stack gap={"sm"}>
+            <DateTimePicker
+              aria-label="Pick-up Time Selection"
+              clearable
+              leftSection={<CalendarBlankIcon size={19} />}
+              maxDate={dayjs().add(1, "month").toDate()}
+              minDate={new Date()}
+              placeholder="Pick-up Time"
+              presets={[
+                { value: dayjs().format("YYYY-MM-DD HH:mm:ss"), label: "Now" },
+              ]}
+              timePickerProps={{
+                withDropdown: true,
+                format: "12h",
+                popoverProps: { withinPortal: false },
+              }}
+              valueFormat={"ddd[,] MMM D [at] h:mm A"}
+            />
 
-        <DropdownField
-          ariaLabel="Pick-up address field"
-          changeValue={setPickupAddr}
-          fieldValue={pickupAddr}
-          icon={<MapPinLineIcon size={20} />}
-          placeholder="Pick-up Address"
-        />
-        <DropdownField
-          ariaLabel="Destination address field"
-          changeValue={setDestAddr}
-          fieldValue={destAddr}
-          icon={<PathIcon size={20} />}
-          placeholder="Destination Address"
-        />
+            <DropdownField
+              ariaLabel="Pick-up address field"
+              changeValue={setPickupAddr}
+              fieldValue={pickupAddr}
+              icon={<MapPinLineIcon size={20} />}
+              placeholder="Pick-up Address"
+            />
+            <DropdownField
+              ariaLabel="Destination address field"
+              changeValue={setDestAddr}
+              fieldValue={destAddr}
+              icon={<PathIcon size={20} />}
+              placeholder="Destination Address"
+            />
 
-        <Button type="submit">Submit</Button>
-      </form>
+            <Button c={"black"} color="buttonColor" type="submit">
+              Continue
+            </Button>
+          </Stack>
+        </form>
+      </Stack>
     </Paper>
   );
 }
