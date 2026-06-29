@@ -262,7 +262,10 @@ const FormTwo = ({
           <ActionIcon
             aria-label="Go back button"
             color="black"
-            onClick={() => changeFormNum(1)}
+            onClick={() => {
+              changeFormNum(1);
+              form.clearErrors();
+            }}
             size={"xs"}
             variant="transparent"
           >
@@ -339,12 +342,17 @@ export default function BookingForm() {
   });
 
   return (
-    <Center h={"100%"} pos={"relative"} w={"100%"}>
+    <Center
+      h={"100%"}
+      pos={"relative"}
+      style={{ overflow: "hidden" }}
+      w={"100%"}
+    >
       <Transition
-        duration={4000}
+        duration={1000}
         mounted={formNumber === 1}
         timingFunction="ease"
-        transition={"fade"}
+        transition={"slide-right"}
       >
         {(transitionStyle) => (
           <FormOne
@@ -359,10 +367,12 @@ export default function BookingForm() {
         )}
       </Transition>
       <Transition
-        duration={4000}
+        duration={1000}
         mounted={formNumber === 2}
         timingFunction="ease"
-        transition={"fade"}
+        transition={
+          formNumber === 2 || formNumber === 1 ? "slide-left" : "slide-right"
+        }
       >
         {(transitionStyle) => (
           <FormTwo
