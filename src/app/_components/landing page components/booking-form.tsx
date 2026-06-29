@@ -27,10 +27,25 @@ import dayjs from "dayjs";
 import { INITIAL_OVERLAY_STATE } from "next/dist/next-devtools/dev-overlay/shared";
 import {
   type Dispatch,
+  type JSX,
   type ReactNode,
   type SetStateAction,
   useState,
 } from "react";
+
+//Enum constants to denote what UI is displayed to the user
+const BookingUIStates = {
+  Where_To: "Where_to",
+  Enter_Email_Phone: "Enter_Email_Phone",
+  Verify: "Verify",
+  About_You: "About_You",
+  Payment: "Payment",
+  Buy_Rides: "Buy_Rides",
+  Select_Pay: "Select_Pay",
+  Confirm: "Confirm",
+  End: "End",
+} as const;
+type BookingUIStates = (typeof BookingUIStates)[keyof typeof BookingUIStates];
 
 //Pick-up and drop-off location options
 const suggestedLocations = ["Grocery Store", "Airport"];
@@ -129,178 +144,108 @@ const DropdownField = ({
   );
 };
 
-//First form UI
-const FormOne = ({
-  pickupAddr,
-  setPickupAddr,
-  destAddr,
-  setDestAddr,
+//Locally reused component for UIs in the booking process
+const FormUI = ({
   form,
-  changeFormNum,
-  transitionStyle,
+  currentFormState,
+  nextUIType,
+  prevUIType,
+  uiType,
+  changeFormState,
+  showBackButton,
+  handleSubmit,
+  nextButtonText,
+  title,
+  body,
 }: {
-  pickupAddr: string;
-  setPickupAddr: Dispatch<SetStateAction<string>>;
-  destAddr: string;
-  setDestAddr: Dispatch<SetStateAction<string>>;
-  form: UseFormReturnType<
-    {
-      pickupTime: Date | null;
-      pickupAddr: string;
-      destAddr: string;
-    },
-    (values: {
-      pickupTime: Date | null;
-      pickupAddr: string;
-      destAddr: string;
-    }) => {
-      pickupTime: Date | null;
-      pickupAddr: string;
-      destAddr: string;
-    }
-  >;
-  changeFormNum: Dispatch<SetStateAction<number>>;
-  transitionStyle: CSSProperties;
+  form: UseFormReturnType<any>;
+  currentFormState: BookingUIStates;
+  nextUIType: BookingUIStates | null;
+  prevUIType: BookingUIStates | null;
+  uiType: BookingUIStates;
+  changeFormState: Dispatch<SetStateAction<BookingUIStates>>;
+  showBackButton: boolean;
+  handleSubmit?: (values: typeof form.values) => Promise<void>;
+  nextButtonText: string;
+  title: string;
+  body: JSX.Element;
 }) => {
   return (
-    <Paper
-      bg={"primaryColor"}
-      mah={"400px"}
-      p={"xl"}
-      pos={"absolute"}
-      radius="lg"
-      shadow="xl"
-      style={transitionStyle}
-      w={"400px"}
+    <Transition
+      duration={1000}
+      mounted={currentFormState === uiType}
+      timingFunction="ease"
+      transition={
+        prevUIType === null
+          ? "slide-right"
+          : currentFormState === uiType || currentFormState === prevUIType
+            ? "slide-left"
+            : "slide-right"
+      }
     >
-      <Stack gap={"lg"}>
-        <Title order={4}>Where to?</Title>
-        <form
-          onSubmit={form.onSubmit(() => {
-            changeFormNum(2);
-          })}
+      {(transitionStyle) => (
+        <Paper
+          bg={"primaryColor"}
+          mah={"400px"}
+          p={"xl"}
+          pos={"absolute"}
+          radius="lg"
+          shadow="xl"
+          style={transitionStyle}
+          w={"400px"}
         >
-          <Stack gap={"sm"}>
-            <DateTimePicker
-              aria-label="Pick-up Time Selection"
-              clearable
-              leftSection={<CalendarBlankIcon size={19} />}
-              maxDate={dayjs().add(1, "month").toDate()}
-              minDate={new Date()}
-              placeholder="Pick-up Time"
-              presets={[
-                { value: dayjs().format("YYYY-MM-DD HH:mm:ss"), label: "Now" },
-              ]}
-              timePickerProps={{
-                withDropdown: true,
-                format: "12h",
-                popoverProps: { withinPortal: false },
-              }}
-              valueFormat={"ddd[,] MMM D [at] h:mm A"}
-              {...form.getInputProps("pickupTime")}
-            />
-
-            <DropdownField
-              ariaLabel="Pick-up address field"
-              changeValue={setPickupAddr}
-              fieldName="pickupAddr"
-              fieldValue={pickupAddr}
-              form={form}
-              icon={<MapPinLineIcon size={20} />}
-              placeholder="Pick-up Address"
-            />
-            <DropdownField
-              ariaLabel="Destination address field"
-              changeValue={setDestAddr}
-              fieldName="destAddr"
-              fieldValue={destAddr}
-              form={form}
-              icon={<PathIcon size={20} />}
-              placeholder="Destination Address"
-            />
-
-            <Button c={"black"} color="buttonColor" type="submit">
-              Continue
-            </Button>
+          <Stack gap={"lg"}>
+            <Group gap={"xs"}>
+              {showBackButton && (
+                <ActionIcon
+                  aria-label="Go back button"
+                  color="black"
+                  onClick={() => {
+                    if (prevUIType) {
+                      changeFormState(prevUIType);
+                    }
+                    form.clearErrors();
+                  }}
+                  size={"xs"}
+                  variant="transparent"
+                >
+                  <ArrowLeftIcon size={20} />
+                </ActionIcon>
+              )}
+              <Title order={4}>{title}</Title>
+            </Group>
+            <form
+              onSubmit={form.onSubmit(() => {
+                if (nextUIType) {
+                  changeFormState(nextUIType);
+                }
+                if (handleSubmit) {
+                  //Provided a submit form funct
+                  form.onSubmit(handleSubmit);
+                }
+              })}
+            >
+              <Stack gap={"sm"}>
+                {body}
+                <Button c={"black"} color="buttonColor" type="submit">
+                  {nextButtonText}
+                </Button>
+              </Stack>
+            </form>
           </Stack>
-        </form>
-      </Stack>
-    </Paper>
-  );
-};
-
-//Second form UI
-const FormTwo = ({
-  form,
-  changeFormNum,
-  transitionStyle,
-}: {
-  form: UseFormReturnType<
-    {
-      emailOrPhone: string;
-    },
-    (values: { emailOrPhone: string }) => {
-      emailOrPhone: string;
-    }
-  >;
-  changeFormNum: Dispatch<SetStateAction<number>>;
-  transitionStyle: CSSProperties;
-}) => {
-  return (
-    <Paper
-      bg={"primaryColor"}
-      mah={"400px"}
-      p={"xl"}
-      pos={"absolute"}
-      radius="lg"
-      shadow="xl"
-      style={transitionStyle}
-      w={"400px"}
-    >
-      <Stack gap={"lg"}>
-        <Group gap={"xs"}>
-          <ActionIcon
-            aria-label="Go back button"
-            color="black"
-            onClick={() => {
-              changeFormNum(1);
-              form.clearErrors();
-            }}
-            size={"xs"}
-            variant="transparent"
-          >
-            <ArrowLeftIcon size={20} />
-          </ActionIcon>
-          <Title order={4}>Enter Email/Phone</Title>
-        </Group>
-        <form
-          onSubmit={form.onSubmit(() => {
-            changeFormNum(3);
-          })}
-        >
-          <Stack>
-            <TextInput
-              aria-label="Enter email or phone number"
-              description="Verify that you're not a bot. Enter your email or phone number"
-              key={form.key("emailOrPhone")}
-              leftSection={<ShieldCheckIcon size={20} />}
-              {...form.getInputProps("emailOrPhone")}
-            />
-            <Button c={"black"} color="buttonColor" type="submit">
-              Continue
-            </Button>
-          </Stack>
-        </form>
-      </Stack>
-    </Paper>
+        </Paper>
+      )}
+    </Transition>
   );
 };
 
 export default function BookingForm() {
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
-  //Use state to keep track of what form is displayed
-  const [formNumber, setFormNum] = useState(1);
+  //Use state to keep track of what UI of the form is displayed
+  const [formState, setFormState] = useState<BookingUIStates>(
+    BookingUIStates.Where_To,
+  );
 
   //Configure forms
   const formOne = useForm({
@@ -348,40 +293,81 @@ export default function BookingForm() {
       style={{ overflow: "hidden" }}
       w={"100%"}
     >
-      <Transition
-        duration={1000}
-        mounted={formNumber === 1}
-        timingFunction="ease"
-        transition={"slide-right"}
-      >
-        {(transitionStyle) => (
-          <FormOne
-            changeFormNum={setFormNum}
-            destAddr={destAddr}
-            form={formOne}
-            pickupAddr={pickupAddr}
-            setDestAddr={setDestAddr}
-            setPickupAddr={setPickupAddr}
-            transitionStyle={transitionStyle}
-          />
-        )}
-      </Transition>
-      <Transition
-        duration={1000}
-        mounted={formNumber === 2}
-        timingFunction="ease"
-        transition={
-          formNumber === 2 || formNumber === 1 ? "slide-left" : "slide-right"
+      <FormUI
+        body={
+          <>
+            <DateTimePicker
+              aria-label="Pick-up Time Selection"
+              clearable
+              leftSection={<CalendarBlankIcon size={19} />}
+              maxDate={dayjs().add(1, "month").toDate()}
+              minDate={new Date()}
+              placeholder="Pick-up Time"
+              presets={[
+                { value: dayjs().format("YYYY-MM-DD HH:mm:ss"), label: "Now" },
+              ]}
+              timePickerProps={{
+                withDropdown: true,
+                format: "12h",
+                popoverProps: { withinPortal: false },
+              }}
+              valueFormat={"ddd[,] MMM D [at] h:mm A"}
+              {...formOne.getInputProps("pickupTime")}
+            />
+
+            <DropdownField
+              ariaLabel="Pick-up address field"
+              changeValue={setPickupAddr}
+              fieldName="pickupAddr"
+              fieldValue={pickupAddr}
+              form={formOne}
+              icon={<MapPinLineIcon size={20} />}
+              placeholder="Pick-up Address"
+            />
+            <DropdownField
+              ariaLabel="Destination address field"
+              changeValue={setDestAddr}
+              fieldName="destAddr"
+              fieldValue={destAddr}
+              form={formOne}
+              icon={<PathIcon size={20} />}
+              placeholder="Destination Address"
+            />
+          </>
         }
-      >
-        {(transitionStyle) => (
-          <FormTwo
-            changeFormNum={setFormNum}
-            form={formTwo}
-            transitionStyle={transitionStyle}
-          />
-        )}
-      </Transition>
+        changeFormState={setFormState}
+        currentFormState={formState}
+        form={formOne}
+        nextButtonText={"Continue"}
+        nextUIType={BookingUIStates.Enter_Email_Phone}
+        prevUIType={null}
+        showBackButton={false}
+        title={"Where to?"}
+        uiType={BookingUIStates.Where_To}
+      />
+
+      <FormUI
+        body={
+          <>
+            <TextInput
+              aria-label="Enter email or phone number"
+              description="Verify that you're not a bot. Enter your email or phone number"
+              key={formTwo.key("emailOrPhone")}
+              leftSection={<ShieldCheckIcon size={20} />}
+              {...formTwo.getInputProps("emailOrPhone")}
+            />
+          </>
+        }
+        changeFormState={setFormState}
+        currentFormState={formState}
+        form={formTwo}
+        nextButtonText={"Continue"}
+        nextUIType={BookingUIStates.Verify}
+        prevUIType={BookingUIStates.Where_To}
+        showBackButton={true}
+        title={"Enter Email/Phone"}
+        uiType={BookingUIStates.Enter_Email_Phone}
+      />
     </Center>
   );
 }
