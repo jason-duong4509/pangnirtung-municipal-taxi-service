@@ -1,9 +1,12 @@
 "use client";
 import {
+  ActionIcon,
   Box,
   Button,
+  Center,
   Combobox,
   type CSSProperties,
+  Group,
   Paper,
   Stack,
   TextInput,
@@ -14,11 +17,14 @@ import {
 import { DateTimePicker } from "@mantine/dates";
 import { type UseFormReturnType, useForm } from "@mantine/form";
 import {
+  ArrowLeftIcon,
   CalendarBlankIcon,
   MapPinLineIcon,
   PathIcon,
+  ShieldCheckIcon,
 } from "@phosphor-icons/react";
 import dayjs from "dayjs";
+import { INITIAL_OVERLAY_STATE } from "next/dist/next-devtools/dev-overlay/shared";
 import {
   type Dispatch,
   type ReactNode,
@@ -161,6 +167,7 @@ const FormOne = ({
       bg={"primaryColor"}
       mah={"400px"}
       p={"xl"}
+      pos={"absolute"}
       radius="lg"
       shadow="xl"
       style={transitionStyle}
@@ -170,7 +177,6 @@ const FormOne = ({
         <Title order={4}>Where to?</Title>
         <form
           onSubmit={form.onSubmit(() => {
-            console.log("form submitted");
             changeFormNum(2);
           })}
         >
@@ -223,6 +229,70 @@ const FormOne = ({
   );
 };
 
+//Second form UI
+const FormTwo = ({
+  form,
+  changeFormNum,
+  transitionStyle,
+}: {
+  form: UseFormReturnType<
+    {
+      emailOrPhone: string;
+    },
+    (values: { emailOrPhone: string }) => {
+      emailOrPhone: string;
+    }
+  >;
+  changeFormNum: Dispatch<SetStateAction<number>>;
+  transitionStyle: CSSProperties;
+}) => {
+  return (
+    <Paper
+      bg={"primaryColor"}
+      mah={"400px"}
+      p={"xl"}
+      pos={"absolute"}
+      radius="lg"
+      shadow="xl"
+      style={transitionStyle}
+      w={"400px"}
+    >
+      <Stack gap={"lg"}>
+        <Group gap={"xs"}>
+          <ActionIcon
+            aria-label="Go back button"
+            color="black"
+            onClick={() => changeFormNum(1)}
+            size={"xs"}
+            variant="transparent"
+          >
+            <ArrowLeftIcon size={20} />
+          </ActionIcon>
+          <Title order={4}>Enter Email/Phone</Title>
+        </Group>
+        <form
+          onSubmit={form.onSubmit(() => {
+            changeFormNum(3);
+          })}
+        >
+          <Stack>
+            <TextInput
+              aria-label="Enter email or phone number"
+              description="Verify that you're not a bot. Enter your email or phone number"
+              key={form.key("emailOrPhone")}
+              leftSection={<ShieldCheckIcon size={20} />}
+              {...form.getInputProps("emailOrPhone")}
+            />
+            <Button c={"black"} color="buttonColor" type="submit">
+              Continue
+            </Button>
+          </Stack>
+        </form>
+      </Stack>
+    </Paper>
+  );
+};
+
 export default function BookingForm() {
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
@@ -250,9 +320,26 @@ export default function BookingForm() {
         value.length !== 0 ? null : "Must add a destination address",
     },
   });
+  const formTwo = useForm({
+    mode: "uncontrolled",
+
+    initialValues: {
+      emailOrPhone: "",
+    },
+
+    validate: {
+      emailOrPhone: (value) => {
+        //Blank field
+        if (value.length === 0) {
+          return "Field cannot be blank";
+        }
+        return null;
+      },
+    },
+  });
 
   return (
-    <div>
+    <Center h={"100%"} pos={"relative"} w={"100%"}>
       <Transition
         duration={4000}
         mounted={formNumber === 1}
@@ -277,8 +364,14 @@ export default function BookingForm() {
         timingFunction="ease"
         transition={"fade"}
       >
-        {(styles) => <div style={styles}>Your modal</div>}
+        {(transitionStyle) => (
+          <FormTwo
+            changeFormNum={setFormNum}
+            form={formTwo}
+            transitionStyle={transitionStyle}
+          />
+        )}
       </Transition>
-    </div>
+    </Center>
   );
 }
