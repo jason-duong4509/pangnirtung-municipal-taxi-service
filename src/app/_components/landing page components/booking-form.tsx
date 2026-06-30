@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   Group,
   Paper,
+  Radio,
   Stack,
   TextInput,
   Title,
@@ -148,6 +149,7 @@ const DropdownField = ({
 const FormUI = ({
   form,
   currentFormState,
+  prevFormState,
   nextUIType,
   prevUIType,
   uiType,
@@ -157,9 +159,11 @@ const FormUI = ({
   nextButtonText,
   title,
   body,
+  changePrevFormState,
 }: {
   form: UseFormReturnType<any>;
   currentFormState: BookingUIStates;
+  prevFormState: BookingUIStates | null;
   nextUIType: BookingUIStates | null;
   prevUIType: BookingUIStates | null;
   uiType: BookingUIStates;
@@ -169,6 +173,7 @@ const FormUI = ({
   nextButtonText: string;
   title: string;
   body: JSX.Element;
+  changePrevFormState: Dispatch<SetStateAction<BookingUIStates | null>>;
 }) => {
   return (
     <Transition
@@ -176,7 +181,7 @@ const FormUI = ({
       mounted={currentFormState === uiType}
       timingFunction="ease"
       transition={
-        prevUIType === null
+        prevUIType === null || prevFormState === nextUIType
           ? "slide-right"
           : currentFormState === uiType || currentFormState === prevUIType
             ? "slide-left"
@@ -202,6 +207,7 @@ const FormUI = ({
                   color="black"
                   onClick={() => {
                     if (prevUIType) {
+                      changePrevFormState(currentFormState);
                       changeFormState(prevUIType);
                     }
                     form.clearErrors();
@@ -217,6 +223,7 @@ const FormUI = ({
             <form
               onSubmit={form.onSubmit(() => {
                 if (nextUIType) {
+                  changePrevFormState(currentFormState);
                   changeFormState(nextUIType);
                 }
                 if (handleSubmit) {
@@ -225,8 +232,8 @@ const FormUI = ({
                 }
               })}
             >
-              <Stack gap={"sm"}>
-                {body}
+              <Stack gap={"lg"}>
+                <Stack gap={"sm"}>{body}</Stack>
                 <Button c={"black"} color="buttonColor" type="submit">
                   {nextButtonText}
                 </Button>
@@ -245,6 +252,10 @@ export default function BookingForm() {
   //Use state to keep track of what UI of the form is displayed
   const [formState, setFormState] = useState<BookingUIStates>(
     BookingUIStates.Where_To,
+  );
+  //Holds the previously visited UI state
+  const [prevFormState, setPrevFormState] = useState<BookingUIStates | null>(
+    null,
   );
 
   //Configure forms
@@ -276,13 +287,44 @@ export default function BookingForm() {
     },
 
     validate: {
-      emailOrPhone: (value) => {
-        //Blank field
-        if (value.length === 0) {
-          return "Field cannot be blank";
-        }
-        return null;
-      },
+      emailOrPhone: (value) =>
+        value.length !== 0 ? null : "Field cannot be blank",
+    },
+  });
+  const formThree = useForm({
+    mode: "uncontrolled",
+
+    initialValues: {
+      oneTimeCode: "",
+    },
+
+    validate: {
+      oneTimeCode: (value) =>
+        value.length !== 0 ? null : "Field cannot be blank",
+    },
+  });
+  const formFour = useForm({
+    mode: "uncontrolled",
+
+    initialValues: {
+      name: "",
+      reasonForTrip: "",
+    },
+
+    validate: {
+      name: (value) => (value.length !== 0 ? null : "Field cannot be blank"),
+    },
+  });
+  const formFive = useForm({
+    mode: "uncontrolled",
+
+    initialValues: {
+      paymentType: "Pay with Credit Card",
+    },
+
+    validate: {
+      paymentType: (value) =>
+        value.length !== 0 ? null : "A selection must be made",
     },
   });
 
@@ -336,10 +378,12 @@ export default function BookingForm() {
           </>
         }
         changeFormState={setFormState}
+        changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={formOne}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Enter_Email_Phone}
+        prevFormState={prevFormState}
         prevUIType={null}
         showBackButton={false}
         title={"Where to?"}
@@ -351,22 +395,115 @@ export default function BookingForm() {
           <>
             <TextInput
               aria-label="Enter email or phone number"
-              description="Verify that you're not a bot. Enter your email or phone number"
+              description="Verify that you're human. Enter an email or phone number that we can contact you with"
               key={formTwo.key("emailOrPhone")}
               leftSection={<ShieldCheckIcon size={20} />}
               {...formTwo.getInputProps("emailOrPhone")}
+              placeholder="Email or Phone Number"
             />
           </>
         }
         changeFormState={setFormState}
+        changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={formTwo}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Verify}
+        prevFormState={prevFormState}
         prevUIType={BookingUIStates.Where_To}
         showBackButton={true}
         title={"Enter Email/Phone"}
         uiType={BookingUIStates.Enter_Email_Phone}
+      />
+
+      <FormUI
+        body={
+          <>
+            <TextInput
+              aria-label="Enter one-time code"
+              description="A code was sent to this [email/phone number via SMS]. Enter the code below"
+              key={formThree.key("oneTimeCode")}
+              leftSection={<ShieldCheckIcon size={20} />}
+              {...formThree.getInputProps("oneTimeCode")}
+              placeholder="One-Time Code"
+            />
+          </>
+        }
+        changeFormState={setFormState}
+        changePrevFormState={setPrevFormState}
+        currentFormState={formState}
+        form={formThree}
+        nextButtonText={"Continue"}
+        nextUIType={BookingUIStates.About_You}
+        prevFormState={prevFormState}
+        prevUIType={BookingUIStates.Enter_Email_Phone}
+        showBackButton={true}
+        title={"Verify"}
+        uiType={BookingUIStates.Verify}
+      />
+
+      <FormUI
+        body={
+          <>
+            <TextInput
+              aria-label="Text box for your name"
+              key={formFour.key("name")}
+              leftSection={<ShieldCheckIcon size={20} />}
+              {...formFour.getInputProps("name")}
+              placeholder="Your Name"
+            />
+            <TextInput
+              aria-label="Reason for trip (optional)"
+              key={formFour.key("reasonForTrip")}
+              leftSection={<ShieldCheckIcon size={20} />}
+              {...formFour.getInputProps("reasonForTrip")}
+              placeholder="Reason for Trip (optional)"
+            />
+          </>
+        }
+        changeFormState={setFormState}
+        changePrevFormState={setPrevFormState}
+        currentFormState={formState}
+        form={formFour}
+        nextButtonText={"Continue"}
+        nextUIType={BookingUIStates.Payment}
+        prevFormState={prevFormState}
+        prevUIType={BookingUIStates.Verify}
+        showBackButton={true}
+        title={"About You"}
+        uiType={BookingUIStates.About_You}
+      />
+
+      <FormUI
+        body={
+          <>
+            <Radio.Group
+              aria-label="Select payment method"
+              {...formFive.getInputProps("paymentType")}
+              size="md"
+            >
+              <Stack>
+                <Radio
+                  label="Pay with Credit Card"
+                  value="Pay with Credit Card"
+                />
+                <Radio label="Redeem Code" value="Redeem Code" />
+                <Radio label="Pay with Rides" value="Pay with Rides" />
+              </Stack>
+            </Radio.Group>
+          </>
+        }
+        changeFormState={setFormState}
+        changePrevFormState={setPrevFormState}
+        currentFormState={formState}
+        form={formFive}
+        nextButtonText={"Continue"}
+        nextUIType={BookingUIStates.Select_Pay}
+        prevFormState={prevFormState}
+        prevUIType={BookingUIStates.About_You}
+        showBackButton={true}
+        title={"Payment"}
+        uiType={BookingUIStates.Payment}
       />
     </Center>
   );
