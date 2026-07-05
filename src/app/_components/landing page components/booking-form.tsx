@@ -316,15 +316,25 @@ export default function BookingForm() {
     },
   });
   const formFive = useForm({
-    mode: "uncontrolled",
+    mode: "controlled",
 
     initialValues: {
       paymentType: "Pay with Credit Card",
+      enteredCode: "",
     },
 
     validate: {
-      paymentType: (value) =>
-        value.length !== 0 ? null : "A selection must be made",
+      paymentType: (paymentType, formValues) => {
+        if (paymentType.length === 0) {
+          return "A selection must be made";
+        } else if (
+          paymentType === "Redeem Code" &&
+          formValues.enteredCode === ""
+        ) {
+          return "Must input a valid code";
+        }
+        return null;
+      },
     },
   });
 
@@ -480,15 +490,35 @@ export default function BookingForm() {
             <Radio.Group
               aria-label="Select payment method"
               {...formFive.getInputProps("paymentType")}
+              error={null}
               size="md"
             >
               <Stack>
                 <Radio
+                  color="buttonColor"
                   label="Pay with Credit Card"
                   value="Pay with Credit Card"
                 />
-                <Radio label="Redeem Code" value="Redeem Code" />
-                <Radio label="Pay with Rides" value="Pay with Rides" />
+                <Radio
+                  color="buttonColor"
+                  label="Redeem Code"
+                  value="Redeem Code"
+                />
+                {formFive.values.paymentType === "Redeem Code" && (
+                  <TextInput
+                    error={formFive.errors.paymentType}
+                    onChange={(event) => {
+                      formFive.values.enteredCode = event.currentTarget.value;
+                      formFive.clearErrors();
+                    }}
+                    placeholder="Enter Code"
+                  />
+                )}
+                <Radio
+                  color="buttonColor"
+                  label="Pay with Rides"
+                  value="Pay with Rides"
+                />
               </Stack>
             </Radio.Group>
           </>
