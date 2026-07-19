@@ -18,9 +18,11 @@ import {
   Title,
   Transition,
   useCombobox,
+  useMantineTheme,
 } from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
 import { type UseFormReturnType, useForm } from "@mantine/form";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   ArrowLeftIcon,
   CalendarBlankIcon,
@@ -152,6 +154,7 @@ const FormUI = ({
   title,
   body,
   changePrevFormState,
+  isMobile,
 }: {
   form: UseFormReturnType<any>;
   currentFormState: BookingUIStates;
@@ -166,6 +169,7 @@ const FormUI = ({
   title: string;
   body: JSX.Element;
   changePrevFormState: Dispatch<SetStateAction<BookingUIStates | null>>;
+  isMobile: boolean | undefined;
 }) => {
   return (
     <Transition
@@ -183,13 +187,13 @@ const FormUI = ({
       {(transitionStyle) => (
         <Paper
           bg={"primaryColor"}
-          mah={"400px"}
+          mah={{ base: "350px", smMd: "400px" }}
           p={"xl"}
           pos={"absolute"}
           radius="lg"
           shadow="xl"
           style={transitionStyle}
-          w={"400px"}
+          w={{ base: "350px", smMd: "400px" }}
         >
           <Stack gap={"lg"}>
             <Group gap={"xs"}>
@@ -226,9 +230,13 @@ const FormUI = ({
             >
               <Stack gap={"lg"}>
                 <ScrollArea.Autosize
-                  mah={"220px"}
+                  mah={isMobile ? "170px" : "220px"}
                   scrollbars={
-                    currentFormState === BookingUIStates.Confirm ? "y" : false
+                    isMobile
+                      ? "y"
+                      : currentFormState === BookingUIStates.Confirm
+                        ? "y"
+                        : false
                   }
                 >
                   <Stack gap={"sm"}>{body}</Stack>
@@ -248,6 +256,10 @@ const FormUI = ({
 export default function BookingForm() {
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
+  const mantineTheme = useMantineTheme();
+  const isMobile = useMediaQuery(
+    `(max-width: ${mantineTheme.breakpoints.smMd})`,
+  );
   //Use state to keep track of what UI of the form is displayed
   const [formState, setFormState] = useState<BookingUIStates>(
     BookingUIStates.Where_To,
@@ -408,6 +420,7 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={bookingForm}
+        isMobile={isMobile}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Enter_Email_Phone}
         prevFormState={prevFormState}
@@ -434,6 +447,7 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={verificationForm}
+        isMobile={isMobile}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Verify}
         prevFormState={prevFormState}
@@ -460,6 +474,7 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={verificationForm}
+        isMobile={isMobile}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.About_You}
         prevFormState={prevFormState}
@@ -495,6 +510,7 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={bookingForm}
+        isMobile={isMobile}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Payment}
         prevFormState={prevFormState}
@@ -558,6 +574,7 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={paymentForm}
+        isMobile={isMobile}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Confirm}
         prevFormState={prevFormState}
@@ -700,6 +717,7 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={bookingForm}
+        isMobile={isMobile}
         nextButtonText={"Book"}
         nextUIType={BookingUIStates.End}
         prevFormState={prevFormState}

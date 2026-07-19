@@ -5,5 +5,5 @@ pre-commit:
   parallel: true
   commands:
     biome:
-      glob: "*.{js,jsx,ts,tsx,json,jsonc}"
+      glob: "*.{js,jsx,ts,tsx,json,jsonc,html,css}"
       run: yarn biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files} && git add {staged_files}

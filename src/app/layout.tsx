@@ -1,5 +1,10 @@
 import "~/styles/globals.css";
-import { createTheme, MantineProvider } from "@mantine/core"; // Wrap project in mantine as part of mantine setup process
+import {
+  ColorSchemeScript,
+  createTheme,
+  MantineProvider,
+  mantineHtmlProps,
+} from "@mantine/core"; // Wrap project in mantine as part of mantine setup process
 import "@mantine/core/styles.css"; //Import mandatory mantine default styles
 import "@mantine/dates/styles.css"; //Import mandatory mantine styles for its dates library
 
@@ -59,6 +64,22 @@ const mantineTheme = createTheme({
       "#DDDDDD",
       "#DDDDDD",
     ],
+    customWhite: [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff", //when used on buttons, chooses this color by default
+      "#e7e7e7", //shades after
+      "#cdcdcd",
+      "#b2b2b2",
+    ],
+  },
+
+  breakpoints: {
+    smMd: "51em",
   },
 });
 
@@ -66,7 +87,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html className={`${geist.variable}`} lang="en">
+    <html className={`${geist.variable}`} lang="en" {...mantineHtmlProps}>
+      <head>
+        <ColorSchemeScript />
+      </head>
+
       <body>
         <MantineProvider theme={mantineTheme}>
           <TRPCReactProvider>{children}</TRPCReactProvider>
