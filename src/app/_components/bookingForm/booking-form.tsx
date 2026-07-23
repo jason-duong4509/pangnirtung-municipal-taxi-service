@@ -468,6 +468,18 @@ export default function BookingForm() {
               {...verificationForm.getInputProps("oneTimeCode")}
               placeholder="One-Time Code"
             />
+            <Group align="flex-start">
+              <Button
+                c={"black"}
+                fw={"normal"}
+                p={0}
+                size="compact-sm"
+                style={{ textDecoration: "underline" }}
+                variant="transparent"
+              >
+                Request new code
+              </Button>
+            </Group>
           </>
         }
         changeFormState={setFormState}
