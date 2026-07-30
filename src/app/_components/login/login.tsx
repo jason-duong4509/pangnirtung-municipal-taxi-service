@@ -1,8 +1,10 @@
 "use client";
 import {
   Button,
+  CloseButton,
   Group,
   Modal,
+  PasswordInput,
   Stack,
   Text,
   TextInput,
@@ -18,8 +20,10 @@ import {
   ShieldCheckIcon,
   UserIcon,
 } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
 
 export default function Login() {
+  const router = useRouter();
   const mantineTheme = useMantineTheme();
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
@@ -110,6 +114,7 @@ export default function Login() {
                 <Button
                   c={"black"}
                   fw={"normal"}
+                  onClick={() => router.push("/register")}
                   p={0}
                   size="compact-sm"
                   style={{ textDecoration: "underline" }}
@@ -126,7 +131,7 @@ export default function Login() {
                   {...loginForm.getInputProps("username")}
                   placeholder="Username"
                 />
-                <TextInput
+                <PasswordInput
                   aria-label="Password input field"
                   key={loginForm.key("password")}
                   leftSection={<LockSimpleIcon size={20} />}
@@ -190,6 +195,7 @@ export default function Login() {
                     p={0}
                     size="compact-sm"
                     style={{ textDecoration: "underline" }}
+                    type="button"
                     variant="transparent"
                   >
                     Request new code
@@ -284,6 +290,7 @@ export default function Login() {
           <Stack gap={"lg"} p={"md"}>
             <Group justify="space-between">
               <Title order={4}>Success</Title>
+              <CloseButton onClick={() => modalStack.closeAll()} />
             </Group>
             <Stack>
               <Text>

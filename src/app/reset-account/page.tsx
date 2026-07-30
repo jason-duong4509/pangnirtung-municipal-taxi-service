@@ -4,6 +4,7 @@ import {
   Checkbox,
   Flex,
   Group,
+  PasswordInput,
   ScrollArea,
   Stack,
   Text,
@@ -21,7 +22,7 @@ export default function ResetAccountPage() {
 
   //Form used to track what account data the user wants to change
   const form = useForm<{
-    accountFields: ("username" | "password" | "")[];
+    accountFields: ("username" | "password")[];
     newUsername: string;
     newPassword: string;
   }>({
@@ -29,7 +30,7 @@ export default function ResetAccountPage() {
 
     //Initial field values of form
     initialValues: {
-      accountFields: [""],
+      accountFields: [],
       newUsername: "",
       newPassword: "",
     },
@@ -70,6 +71,7 @@ export default function ResetAccountPage() {
 
   const handleOnSubmit = async (values: typeof form.values) => {
     console.log(values);
+    changeShowSuccess(true);
   };
 
   return (
@@ -110,7 +112,7 @@ export default function ResetAccountPage() {
                   onChange={(selectedOptions) =>
                     form.setFieldValue(
                       "accountFields",
-                      selectedOptions as ("username" | "password" | "")[],
+                      selectedOptions as ("username" | "password")[],
                     )
                   }
                 >
@@ -140,7 +142,7 @@ export default function ResetAccountPage() {
                       value={"password"}
                     />
                     {form.getValues().accountFields.includes("password") && (
-                      <TextInput
+                      <PasswordInput
                         error={form.errors.newPassword ?? ""}
                         onChange={(event) =>
                           form.setFieldValue(
