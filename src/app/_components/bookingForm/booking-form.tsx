@@ -344,7 +344,10 @@ export default function BookingForm() {
   });
 
   //Configure payment form
-  const paymentForm = useForm({
+  const paymentForm = useForm<{
+    paymentType: "Pay with Credit Card" | "Pay with Rides" | "Redeem Code";
+    enteredCode: string;
+  }>({
     mode: "controlled",
 
     initialValues: {
