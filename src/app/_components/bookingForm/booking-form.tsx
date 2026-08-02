@@ -344,7 +344,10 @@ export default function BookingForm() {
   });
 
   //Configure payment form
-  const paymentForm = useForm({
+  const paymentForm = useForm<{
+    paymentType: "Pay with Credit Card" | "Pay with Rides" | "Redeem Code";
+    enteredCode: string;
+  }>({
     mode: "controlled",
 
     initialValues: {
@@ -432,16 +435,14 @@ export default function BookingForm() {
 
       <FormUI
         body={
-          <>
-            <TextInput
-              aria-label="Enter email or phone number"
-              description="Verify that you're human. Enter an email or phone number that we can contact you with"
-              key={verificationForm.key("emailOrPhone")}
-              leftSection={<PaperPlaneTiltIcon size={20} />}
-              {...verificationForm.getInputProps("emailOrPhone")}
-              placeholder="Email or Phone Number"
-            />
-          </>
+          <TextInput
+            aria-label="Enter email or phone number"
+            description="Verify that you're human. Enter an email or phone number that we can contact you with"
+            key={verificationForm.key("emailOrPhone")}
+            leftSection={<PaperPlaneTiltIcon size={20} />}
+            {...verificationForm.getInputProps("emailOrPhone")}
+            placeholder="Email or Phone Number"
+          />
         }
         changeFormState={setFormState}
         changePrevFormState={setPrevFormState}
@@ -468,6 +469,19 @@ export default function BookingForm() {
               {...verificationForm.getInputProps("oneTimeCode")}
               placeholder="One-Time Code"
             />
+            <Group align="flex-start">
+              <Button
+                c={"black"}
+                fw={"normal"}
+                p={0}
+                size="compact-sm"
+                style={{ textDecoration: "underline" }}
+                type="button"
+                variant="transparent"
+              >
+                Request new code
+              </Button>
+            </Group>
           </>
         }
         changeFormState={setFormState}
@@ -522,53 +536,50 @@ export default function BookingForm() {
 
       <FormUI
         body={
-          <>
-            <Radio.Group
-              aria-label="Select payment method"
-              {...paymentForm.getInputProps("paymentType")}
-              error={null}
-              size="md"
-            >
-              <Stack>
-                <Radio
-                  color="buttonColor"
-                  label="Pay with Credit Card"
-                  value="Pay with Credit Card"
+          <Radio.Group
+            aria-label="Select payment method"
+            {...paymentForm.getInputProps("paymentType")}
+            error={null}
+            size="md"
+          >
+            <Stack>
+              <Radio
+                color="buttonColor"
+                label="Pay with Credit Card"
+                value="Pay with Credit Card"
+              />
+              <Radio
+                color="buttonColor"
+                label="Redeem Code"
+                value="Redeem Code"
+              />
+              {paymentForm.values.paymentType === "Redeem Code" && (
+                <TextInput
+                  aria-label="Text input field to redeem a code that covers a ride"
+                  error={paymentForm.errors.paymentType}
+                  onChange={(event) => {
+                    paymentForm.values.enteredCode = event.currentTarget.value;
+                    paymentForm.clearErrors();
+                  }}
+                  placeholder="Enter Code"
+                  value={paymentForm.values.enteredCode}
                 />
-                <Radio
-                  color="buttonColor"
-                  label="Redeem Code"
-                  value="Redeem Code"
-                />
-                {paymentForm.values.paymentType === "Redeem Code" && (
-                  <TextInput
-                    aria-label="Text input field to redeem a code that covers a ride"
-                    error={paymentForm.errors.paymentType}
-                    onChange={(event) => {
-                      paymentForm.values.enteredCode =
-                        event.currentTarget.value;
-                      paymentForm.clearErrors();
-                    }}
-                    placeholder="Enter Code"
-                    value={paymentForm.values.enteredCode}
-                  />
-                )}
-                <Radio
-                  color="buttonColor"
-                  label="Pay with Rides"
-                  value="Pay with Rides"
-                />
-                {paymentForm.values.paymentType === "Pay with Rides" && (
-                  <Text>
-                    <Text span>
-                      This trip costs 1 Ride. You will have 40 Rides remaining.{" "}
-                    </Text>
-                    <Text span>Buy More</Text>
+              )}
+              <Radio
+                color="buttonColor"
+                label="Pay with Rides"
+                value="Pay with Rides"
+              />
+              {paymentForm.values.paymentType === "Pay with Rides" && (
+                <Text>
+                  <Text span>
+                    This trip costs 1 Ride. You will have 40 Rides remaining.{" "}
                   </Text>
-                )}
-              </Stack>
-            </Radio.Group>
-          </>
+                  <Text span>Buy More</Text>
+                </Text>
+              )}
+            </Stack>
+          </Radio.Group>
         }
         changeFormState={setFormState}
         changePrevFormState={setPrevFormState}
