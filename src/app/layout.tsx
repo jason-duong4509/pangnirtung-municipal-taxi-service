@@ -7,10 +7,11 @@ import {
 } from "@mantine/core"; // Wrap project in mantine as part of mantine setup process
 import "@mantine/core/styles.css"; //Import mandatory mantine default styles
 import "@mantine/dates/styles.css"; //Import mandatory mantine styles for its dates library
+import "@mantine/notifications/styles.css"; //Mandatory import for notification styles
 
+import { Notifications } from "@mantine/notifications";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
-
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
@@ -94,6 +95,7 @@ export default function RootLayout({
 
       <body>
         <MantineProvider theme={mantineTheme}>
+          <Notifications />
           <TRPCReactProvider>{children}</TRPCReactProvider>
         </MantineProvider>
       </body>

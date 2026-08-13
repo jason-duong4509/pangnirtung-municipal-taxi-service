@@ -3,6 +3,7 @@ import {
   Button,
   CloseButton,
   Group,
+  Loader,
   Modal,
   PasswordInput,
   Stack,
@@ -21,9 +22,14 @@ import {
   UserIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { showNotifications } from "~/lib/mantine-notifications-system";
+import { authClient } from "~/server/better-auth/client";
+import { otpRegex, usernameRegex } from "~/types/validation";
 
 export default function Login() {
   const router = useRouter();
+  const { data: session } = authClient.useSession();
   const mantineTheme = useMantineTheme();
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
@@ -31,10 +37,13 @@ export default function Login() {
   const modalStack = useModalsStack([
     "login",
     "verify",
-    "notice",
     "forgot_pass_1",
     "forgot_pass_2",
-  ]); //notice state to be moved and controlled by server result later
+    "log_out",
+  ]);
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+  const [isSubmittingOTP, setIsSubmittingOTP] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   //Mantine forms, each submitted to the server at various steps as the user navigates the page
   const loginForm = useForm({
@@ -44,21 +53,12 @@ export default function Login() {
       username: "",
       password: "",
     },
-
-    validate: {
-      username: (value) => (value.length === 0 ? "Username required" : null),
-      password: (value) => (value.length === 0 ? "Password required" : null),
-    },
   });
   const oneTimeCodeForm = useForm({
     mode: "uncontrolled",
 
     initialValues: {
       code: "",
-    },
-
-    validate: {
-      code: (value) => (value.length === 0 ? "Code required" : null),
     },
   });
   const resetAccountForm = useForm({
@@ -73,12 +73,86 @@ export default function Login() {
     },
   });
 
+  const logOut = async () => {
+    setIsLoggingOut(true);
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          showNotifications.success("Log out successful");
+          modalStack.closeAll();
+          setIsLoggingOut(false);
+          window.location.reload();
+        },
+        onError: (ctx) => {
+          showNotifications.error(ctx.error.message);
+        },
+      },
+    });
+  };
+
   //Functions that handles form submit behavior
   const handleLoginSubmit = async (values: typeof loginForm.values) => {
-    console.log(values);
+    //--Input check--
+    if (
+      values.username.length > 20 ||
+      values.username.length < 6 ||
+      !usernameRegex.test(values.username) ||
+      values.password.length < 9
+    ) {
+      showNotifications.error("Invalid username or password");
+      return;
+    }
+    //---------------
+
+    setIsSubmittingLogin(true);
+
+    const { error } = await authClient.signIn.username({
+      username: values.username,
+      password: values.password,
+    });
+
+    if (error) {
+      //Sign in failed
+      showNotifications.error(error?.message ?? "An error occurred on login");
+    } else {
+      //Sign in successful
+      const { error } = await authClient.twoFactor.sendOtp();
+      if (error) {
+        showNotifications.error(
+          error.message ?? "An error occurred when sending a OTP",
+        );
+      } else {
+        modalStack.closeAll();
+        loginForm.reset();
+        modalStack.open("verify");
+      }
+    }
+    setIsSubmittingLogin(false);
   };
   const handleCodeSubmit = async (values: typeof oneTimeCodeForm.values) => {
-    console.log(values);
+    //--Input check--
+    if (values.code.length !== 6 || !otpRegex.test(values.code)) {
+      showNotifications.error("Invalid code");
+      return;
+    }
+    //---------------
+
+    setIsSubmittingOTP(true);
+
+    const { error } = await authClient.twoFactor.verifyOtp({
+      code: values.code,
+    });
+
+    if (error) {
+      showNotifications.error(
+        error.message ?? "An error occurred while validating OTP",
+      );
+    } else {
+      showNotifications.success("Login successful");
+      modalStack.closeAll();
+      window.location.reload();
+    }
+    setIsSubmittingOTP(false);
   };
   const handleResetAccountSubmit = async (
     values: typeof resetAccountForm.values,
@@ -91,15 +165,60 @@ export default function Login() {
       <Button
         c={"black"}
         color={isMobile ? "buttonColor" : "customWhite"}
-        onClick={() => modalStack.open("login")}
+        onClick={() => {
+          if (session) {
+            return modalStack.open("log_out");
+          } else {
+            return modalStack.open("login");
+          }
+        }}
         radius={"lg"}
         size="xs"
         type="button"
       >
-        Log in
+        {!session && "Log in"}
+        {session && "Log out"}
       </Button>
 
       <Modal.Stack>
+        <Modal
+          centered
+          {...modalStack.register("log_out")}
+          radius={"lg"}
+          size={"sm"}
+          withCloseButton={false}
+        >
+          <Stack gap={"lg"} p={"md"}>
+            <Title order={4}>Log Out</Title>
+            <Text>Are you sure?</Text>
+            <Text>Any incomplete bookings will be lost!</Text>
+            <Group grow>
+              <Button
+                c={"black"}
+                color="buttonColor"
+                onClick={() => modalStack.closeAll()}
+                p={0}
+                size="compact-sm"
+                type="button"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button
+                c={"black"}
+                color="buttonColor"
+                onClick={() => logOut()}
+                p={0}
+                size="compact-sm"
+                type="button"
+                variant="filled"
+              >
+                {isLoggingOut && <Loader color="black" size={20} />}
+                {!isLoggingOut && "Log out"}
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
         <Modal
           centered
           radius={"lg"}
@@ -153,16 +272,9 @@ export default function Login() {
                   </Button>
                 </Group>
               </Stack>
-              <Button
-                c={"black"}
-                color="buttonColor"
-                onClick={() => {
-                  modalStack.closeAll();
-                  modalStack.open("verify");
-                }}
-                type="submit"
-              >
-                Log in
+              <Button c={"black"} color="buttonColor" type="submit">
+                {isSubmittingLogin && <Loader color="black" size={20} />}
+                {!isSubmittingLogin && "Log in"}
               </Button>
             </Stack>
           </form>
@@ -185,8 +297,8 @@ export default function Login() {
                   key={oneTimeCodeForm.key("code")}
                   leftSection={<ShieldCheckIcon size={20} />}
                   {...oneTimeCodeForm.getInputProps("code")}
-                  description="Enter the code sent to this account's [email/phone number via SMS]"
-                  placeholder="Enter One-Time Code"
+                  description="A code has been sent to your email or phone via SMS. Enter the code below"
+                  placeholder="One-Time Code"
                 />
                 <Group align="flex-start">
                   <Button
@@ -202,49 +314,12 @@ export default function Login() {
                   </Button>
                 </Group>
               </Stack>
-              <Button
-                c={"black"}
-                color="buttonColor"
-                onClick={() => {
-                  modalStack.closeAll();
-                  modalStack.open("notice");
-                }}
-                type="submit"
-              >
-                Submit
+              <Button c={"black"} color="buttonColor" type="submit">
+                {isSubmittingOTP && <Loader color="black" size={20} />}
+                {!isSubmittingOTP && "Submit"}
               </Button>
             </Stack>
           </form>
-        </Modal>
-        <Modal
-          centered
-          radius={"lg"}
-          size={"sm"}
-          withCloseButton={false}
-          {...modalStack.register("notice")}
-        >
-          <Stack gap={"lg"} p={"md"}>
-            <Group justify="space-between">
-              <Title order={4}>Note</Title>
-            </Group>
-            <Stack>
-              <Text>You have successfully logged in</Text>
-              <Text>
-                Your residency status is still under review. This account cannot
-                access discounted rides until residency has been verified
-              </Text>
-            </Stack>
-            <Button
-              c={"black"}
-              color="buttonColor"
-              onClick={() => {
-                modalStack.closeAll();
-              }}
-              type="button"
-            >
-              I understand
-            </Button>
-          </Stack>
         </Modal>
         <Modal
           centered

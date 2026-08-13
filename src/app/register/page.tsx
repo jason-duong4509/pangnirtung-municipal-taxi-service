@@ -1,14 +1,10 @@
 "use client";
 import {
-  ActionIcon,
   Box,
   Button,
-  CloseButton,
-  FileInput,
-  type FileInputProps,
   Flex,
   Group,
-  Modal,
+  Loader,
   PasswordInput,
   ScrollArea,
   Stack,
@@ -19,49 +15,21 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
-import { ArrowLeftIcon } from "@phosphor-icons/react";
+import { parsePhoneNumberWithError } from "libphonenumber-js";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import PangSeal from "~/assets/icons/pang";
+import { showNotifications } from "~/lib/mantine-notifications-system";
+import { authClient } from "~/server/better-auth/client";
+import { emailRegex, usernameRegex } from "~/types/validation";
 
 //Enum constants to denote what UI is displayed to the user
 const RegisterUIStates = {
   makeAccount: 0, //displays a form where the user can input account credentials (user,pass,etc)
-  verify: 1, //prompts the user to verify their residency status
-  success: 2, //tells the user that account creation was successful
+  success: 1, //tells the user that account creation was successful
 } as const;
 type RegisterUIStates =
   (typeof RegisterUIStates)[keyof typeof RegisterUIStates];
-
-//Function which returns a component that renders an image from a file
-const MakeImagePreview: FileInputProps["valueComponent"] = ({
-  value: file,
-}) => {
-  //Tracks the file URL from the previous render
-  const [oldFileURL, setOldFileURL] = useState<string | null>(null);
-
-  //Runs every time the file object changes
-  useEffect(() => {
-    if (!file || Array.isArray(file)) {
-      return; //Should never reach this as file is always of type File in this context
-    }
-
-    //Create a URL for the file
-    const fileURL = URL.createObjectURL(file);
-    //Start tracking it across renders
-    setOldFileURL(fileURL);
-
-    //When useEffect reruns (unmounted or file changes), remove URL for the file (memory clean-up)
-    return () => URL.revokeObjectURL(fileURL);
-  }, [file]);
-
-  //First render, skip (no URL created yet)
-  if (oldFileURL === null) {
-    return null;
-  }
-
-  return <img alt="Submitted ID" src={oldFileURL} />;
-};
 
 export default function RegisterAccountPage() {
   const router = useRouter();
@@ -73,6 +41,7 @@ export default function RegisterAccountPage() {
   );
   const [stack, changeStack] = useState([] as RegisterUIStates[]);
   const [wentBack, setWentBack] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   //Form used to track what account data the user wants to change
   const form = useForm<{
@@ -80,7 +49,6 @@ export default function RegisterAccountPage() {
     password: string;
     email: string;
     phoneNumber: string;
-    proofOfResidency: File | null;
   }>({
     mode: "controlled",
 
@@ -90,38 +58,110 @@ export default function RegisterAccountPage() {
       password: "",
       email: "",
       phoneNumber: "",
-      proofOfResidency: null,
     },
 
     //Frontend field checks
     validate: {
-      proofOfResidency: (fileBlob) => {
-        if (
-          fileBlob !== null &&
-          fileBlob.type !== "image/png" &&
-          fileBlob.type !== "image/jpg" &&
-          fileBlob.type !== "image/jpeg"
-        ) {
-          return "Incorrect file type given";
+      username: (value) => {
+        if (value.length < 6 || value.length > 20) {
+          return "Username must be 6-20 characters long";
+        } else if (!usernameRegex.test(value)) {
+          return "Invalid username provided";
         }
+        return null;
       },
-      username: (value) =>
-        value.length === 0 ? "Field cannot be blank" : null,
       password: (value) =>
-        value.length === 0 ? "Field cannot be blank" : null,
-      email: (value, values) =>
-        value.length === 0 && values.phoneNumber.length === 0
-          ? "Either email or phone number must be given"
-          : null,
-      phoneNumber: (value, values) =>
-        value.length === 0 && values.email.length === 0
-          ? "Either email or phone number must be given"
-          : null,
+        value.length < 9 ? "Password must be at least 9 characters long" : null,
+      email: (value, values) => {
+        if (value.length === 0 && values.phoneNumber.length === 0) {
+          return "Either email or phone number must be given";
+        } else if (value !== "" && !emailRegex.test(value)) {
+          return "Invalid email provided";
+        }
+        return null;
+      },
+      phoneNumber: (value, values) => {
+        if (value.length === 0 && values.email.length === 0) {
+          return "Either email or phone number must be given";
+        } else if (value !== "") {
+          try {
+            const phoneNumber = parsePhoneNumberWithError(value, "CA");
+            if (!phoneNumber.isValid()) {
+              throw new Error();
+            }
+          } catch (error) {
+            if (error instanceof Error) {
+              return "Invalid phone number given";
+            } else {
+              return `An unexpected error occurred: ${error}`;
+            }
+          }
+        }
+        return null;
+      },
     },
   });
 
   const handleOnSubmit = async (values: typeof form.values) => {
-    console.log(values);
+    setIsSubmitting(true);
+
+    let phoneNumber = values.phoneNumber;
+    if (values.phoneNumber !== "") {
+      try {
+        phoneNumber = parsePhoneNumberWithError(
+          values.phoneNumber,
+          "CA",
+        ).formatNational();
+      } catch (error) {
+        setIsSubmitting(false);
+        showNotifications.error("Invalid phone number");
+        return;
+      }
+    }
+
+    const result = await authClient.signUp.email({
+      email: values.email,
+      password: values.password,
+      username: values.username,
+      phone: phoneNumber,
+      name: "",
+    });
+
+    if (result.error) {
+      showNotifications.error(
+        result.error.message ?? "An unknown error occurred",
+      );
+    } else {
+      //Enable 2FA on behalf of the user
+      const { error } = await authClient.twoFactor.enable({
+        password: values.password,
+        method: "otp",
+      });
+
+      if (error) {
+        showNotifications.error(
+          error.message ?? "An error occurred while setting up 2FA",
+        );
+      } else {
+        //Sign the user out
+        await authClient.signOut({
+          fetchOptions: {
+            onSuccess: () => {
+              //--Move to success UI--
+              setUiState(RegisterUIStates.success);
+              stack.push(RegisterUIStates.makeAccount);
+              changeStack([...stack]); //Need to recreate the [] for react to rerender
+              //----------------------
+            },
+            onError: (ctx) => {
+              showNotifications.error(ctx.error.message);
+            },
+          },
+        });
+      }
+    }
+
+    setIsSubmitting(false);
   };
 
   return (
@@ -143,77 +183,8 @@ export default function RegisterAccountPage() {
         }}
       >
         <form id="register-form" onSubmit={form.onSubmit(handleOnSubmit)}>
-          <Modal
-            centered
-            onClose={closeModal}
-            opened={isModalOpen}
-            radius={"lg"}
-            size={"sm"}
-            withCloseButton={false}
-          >
-            <Stack gap={"lg"} p={"md"}>
-              <Group justify="space-between">
-                <Title order={4}>Are you Sure?</Title>
-                <CloseButton onClick={closeModal} />
-              </Group>
-              <Text>
-                Upload your proof of local residency to access discounted rides
-              </Text>
-              <Text>Proof of residency can be added to your account later</Text>
-              <Group grow>
-                <Button
-                  c={"black"}
-                  color="buttonColor"
-                  onClick={closeModal}
-                  p={0}
-                  size="compact-sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  c={"black"}
-                  color="buttonColor"
-                  form="register-form"
-                  onClick={() => {
-                    setUiState(RegisterUIStates.success);
-                    stack.push(RegisterUIStates.verify);
-                    changeStack([...stack]); //Need to recreate the [] for react to rerender
-                    setWentBack(false);
-                    closeModal();
-                  }}
-                  p={0}
-                  size="compact-sm"
-                  type="submit"
-                  variant="filled"
-                >
-                  Skip
-                </Button>
-              </Group>
-            </Stack>
-          </Modal>
           <Stack>
             <Group wrap="nowrap">
-              {uiState !== RegisterUIStates.makeAccount &&
-                uiState !== RegisterUIStates.success && (
-                  <ActionIcon
-                    aria-label="Go back button"
-                    color="black"
-                    onClick={() => {
-                      const previousState = stack.pop();
-                      changeStack([...stack]); //Need to recreate the [] for react to rerender
-                      if (previousState !== undefined) {
-                        setUiState(previousState);
-                        setWentBack(true);
-                      }
-                    }}
-                    size={"xs"}
-                    variant="transparent"
-                  >
-                    <ArrowLeftIcon size={20} />
-                  </ActionIcon>
-                )}
               <PangSeal
                 height={"clamp(2.2rem, 3vh, 3rem)"}
                 width={"clamp(2.2rem, 3vh, 3rem)"}
@@ -235,30 +206,6 @@ export default function RegisterAccountPage() {
                     style={{ ...transitionStyle, gridArea: "1/1" }}
                   >
                     Register Your Resident Account
-                  </Title>
-                )}
-              </Transition>
-              <Transition
-                duration={1000}
-                enterDelay={300}
-                mounted={uiState === RegisterUIStates.verify}
-                timingFunction="ease"
-                transition={
-                  wentBack
-                    ? uiState === RegisterUIStates.verify
-                      ? "slide-right"
-                      : "slide-left"
-                    : uiState === RegisterUIStates.verify
-                      ? "slide-left"
-                      : "slide-right"
-                }
-              >
-                {(transitionStyle) => (
-                  <Title
-                    order={5}
-                    style={{ ...transitionStyle, gridArea: "1/1" }}
-                  >
-                    Verify Your Residency
                   </Title>
                 )}
               </Transition>
@@ -299,7 +246,7 @@ export default function RegisterAccountPage() {
                       />
                       <PasswordInput
                         label="Password"
-                        placeholder="Alphanumeric (A-Z, 0-9)"
+                        placeholder="At least 9 characters long"
                         withAsterisk
                         {...form.getInputProps("password")}
                         style={{ flex: 1 }}
@@ -324,76 +271,11 @@ export default function RegisterAccountPage() {
                     <Button
                       c={"black"}
                       color="buttonColor"
-                      onClick={() => {
-                        const validateFormResults = form.validate();
-
-                        if (!validateFormResults.hasErrors) {
-                          setUiState(RegisterUIStates.verify);
-                          stack.push(RegisterUIStates.makeAccount);
-                          changeStack([...stack]); //Need to recreate the [] for react to rerender
-                          setWentBack(false);
-                        }
-                      }}
-                      type="button"
-                    >
-                      Next
-                    </Button>
-                  </Stack>
-                )}
-              </Transition>
-              <Transition
-                duration={1000}
-                enterDelay={300}
-                mounted={uiState === RegisterUIStates.verify}
-                timingFunction="ease"
-                transition={
-                  wentBack
-                    ? uiState === RegisterUIStates.verify
-                      ? "slide-right"
-                      : "slide-left"
-                    : uiState === RegisterUIStates.verify
-                      ? "slide-left"
-                      : "slide-right"
-                }
-              >
-                {(transitionStyle) => (
-                  <Stack style={{ ...transitionStyle, gridArea: "1/1" }}>
-                    <FileInput
-                      accept="image/png,image/jpg,image/jpeg"
-                      clearable
-                      description="Verify your residency by uploading any government-issued ID"
-                      placeholder=".png or .jpg files accepted"
-                      valueComponent={MakeImagePreview}
-                      {...form.getInputProps("proofOfResidency")}
-                    />
-                    <Button
-                      c={"black"}
-                      color="buttonColor"
                       form="register-form"
-                      onClick={() => {
-                        if (form.getValues().proofOfResidency === null) {
-                          //Chose to skip verification process
-                          openModal();
-                        } else {
-                          const validateFormResults = form.validate();
-
-                          if (!validateFormResults.hasErrors) {
-                            setUiState(RegisterUIStates.success);
-                            stack.push(RegisterUIStates.verify);
-                            changeStack([...stack]); //Need to recreate the [] for react to rerender
-                            setWentBack(false);
-                          }
-                        }
-                      }}
-                      type={
-                        form.getValues().proofOfResidency === null
-                          ? "button"
-                          : "submit"
-                      }
+                      type={"submit"}
                     >
-                      {form.getValues().proofOfResidency === null
-                        ? "Skip and Create Account"
-                        : "Confirm and Create Account"}
+                      {isSubmitting && <Loader color="black" size={20} />}
+                      {!isSubmitting && "Create Account"}
                     </Button>
                   </Stack>
                 )}
