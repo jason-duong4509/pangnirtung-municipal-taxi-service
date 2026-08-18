@@ -7,6 +7,7 @@ import {
   Combobox,
   Grid,
   Group,
+  Loader,
   MantineProvider,
   Paper,
   Radio,
@@ -42,6 +43,8 @@ import {
   type SetStateAction,
   useState,
 } from "react";
+import { showNotifications } from "~/lib/mantine-notifications-system";
+import { api } from "~/trpc/react";
 
 //Enum constants to denote what UI is displayed to the user
 const BookingUIStates = {
@@ -155,6 +158,7 @@ const FormUI = ({
   body,
   changePrevFormState,
   isMobile,
+  formSubmitting,
 }: {
   form: UseFormReturnType<any>;
   currentFormState: BookingUIStates;
@@ -170,6 +174,7 @@ const FormUI = ({
   body: JSX.Element;
   changePrevFormState: Dispatch<SetStateAction<BookingUIStates | null>>;
   isMobile: boolean | undefined;
+  formSubmitting?: boolean;
 }) => {
   return (
     <Transition
@@ -218,13 +223,12 @@ const FormUI = ({
             </Group>
             <form
               onSubmit={form.onSubmit(() => {
-                if (nextUIType) {
+                if (handleSubmit) {
+                  //Form submit function provided
+                  handleSubmit(form.values);
+                } else if (nextUIType) {
                   changePrevFormState(currentFormState);
                   changeFormState(nextUIType);
-                }
-                if (handleSubmit) {
-                  //Provided a submit form funct
-                  form.onSubmit(handleSubmit);
                 }
               })}
             >
@@ -242,7 +246,8 @@ const FormUI = ({
                   <Stack gap={"sm"}>{body}</Stack>
                 </ScrollArea.Autosize>
                 <Button c={"black"} color="buttonColor" type="submit">
-                  {nextButtonText}
+                  {!formSubmitting && nextButtonText}
+                  {formSubmitting && <Loader color="black" size={20} />}
                 </Button>
               </Stack>
             </form>
@@ -256,6 +261,7 @@ const FormUI = ({
 export default function BookingForm() {
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
+  const [formSubmitting, setFormSubmitting] = useState(false);
   const mantineTheme = useMantineTheme();
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
@@ -269,13 +275,26 @@ export default function BookingForm() {
     null,
   );
 
+  //Create booking mutation
+  const createBookingMutation = api.bookings.create.useMutation({
+    onSuccess: () => {
+      showNotifications.success("Booking created");
+      setFormSubmitting(false);
+      window.location.reload();
+    },
+    onError: (error) => {
+      showNotifications.error(error.message);
+      setFormSubmitting(false);
+    },
+  });
+
   //Configure booking form
   const bookingForm = useForm({
     mode: "uncontrolled",
 
     //Initial field values of form
     initialValues: {
-      pickupTime: null as Date | null,
+      pickupTime: null as string | null,
       pickupAddr: "",
       destAddr: "",
       name: "",
@@ -369,6 +388,23 @@ export default function BookingForm() {
       },
     },
   });
+
+  //Functions that handles form submit behavior
+  const handleBookingSubmit = async (values: typeof bookingForm.values) => {
+    setFormSubmitting(true);
+
+    createBookingMutation.mutate({
+      pickupAddr: values.pickupAddr,
+      destAddr: values.destAddr,
+      name: values.name,
+      pickupTime:
+        values.pickupTime ??
+        `${new Date().toLocaleDateString("en-CA")} ${new Date().toLocaleTimeString(undefined, { hour12: false })}`, //Generate a date string for the immediate date/time if user did not provide one
+      tripReason: values.reasonForTrip,
+      payment: paymentForm.values.paymentType,
+      reminders: false,
+    });
+  };
 
   return (
     <Center
@@ -728,6 +764,8 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={bookingForm}
+        formSubmitting={formSubmitting}
+        handleSubmit={handleBookingSubmit}
         isMobile={isMobile}
         nextButtonText={"Book"}
         nextUIType={BookingUIStates.End}

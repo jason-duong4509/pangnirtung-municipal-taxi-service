@@ -1,13 +1,21 @@
 "use client";
-import { Flex, Group, Paper, Title, useMantineTheme } from "@mantine/core";
+import {
+  Button,
+  Flex,
+  Group,
+  Paper,
+  Title,
+  useMantineTheme,
+} from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
+import { useRouter } from "next/navigation";
 import Login from "~/app/_components/login/login";
-import HistoryButton from "~/app/_components/tripHistory/trip-history";
 import PangSeal from "~/assets/icons/pang";
 import BookingForm from "./_components/bookingForm/booking-form";
 import MenuButton from "./_components/menuButton/menu-button";
 
 export default function Home() {
+  const router = useRouter();
   const mantineTheme = useMantineTheme();
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
@@ -48,7 +56,16 @@ export default function Home() {
 
           {isMobile && (
             <>
-              <HistoryButton />
+              <Button
+                c={"black"}
+                color={isMobile ? "buttonColor" : "customWhite"}
+                onClick={() => router.push("/booking-history")}
+                radius={"lg"}
+                size="xs"
+                type="button"
+              >
+                {isMobile ? "History" : "Trip History"}
+              </Button>
               <Login />
             </>
           )}
@@ -60,7 +77,16 @@ export default function Home() {
         {!isMobile && (
           <>
             <Group justify="flex-end" pos={"absolute"} right={"5%"} top={"5%"}>
-              <HistoryButton />
+              <Button
+                c={"black"}
+                color={isMobile ? "buttonColor" : "customWhite"}
+                onClick={() => router.push("/booking-history")}
+                radius={"lg"}
+                size="xs"
+                type="button"
+              >
+                {isMobile ? "History" : "Trip History"}
+              </Button>
               <Login />
               <MenuButton />
             </Group>

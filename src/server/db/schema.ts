@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   pgTable,
   pgTableCreator,
   text,
@@ -28,8 +29,26 @@ export const posts = createTable(
   (t) => [
     index("created_by_idx").on(t.createdById),
     index("name_idx").on(t.name),
-  ]
+  ],
 );
+
+export const bookings = pgTable("bookings", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  pickupTime: text("pick_up_time").notNull(),
+  pickupAddr: text("pick_up_address").notNull(),
+  destAddr: text("destination_address").notNull(),
+  name: text("name").notNull(),
+  tripReason: text("reason_for_trip"),
+  payment: text("payment_method").notNull(),
+  reminders: boolean("receive_reminders").notNull().default(false),
+  userId: text("user_id").notNull(),
+  createdAt: timestamp("created_at")
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  updatedAt: timestamp("updated_at")
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -84,10 +103,10 @@ export const verification = pgTable("verification", {
   value: text("value").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").$defaultFn(
-    () => /* @__PURE__ */ new Date()
+    () => /* @__PURE__ */ new Date(),
   ),
   updatedAt: timestamp("updated_at").$defaultFn(
-    () => /* @__PURE__ */ new Date()
+    () => /* @__PURE__ */ new Date(),
   ),
 });
 
