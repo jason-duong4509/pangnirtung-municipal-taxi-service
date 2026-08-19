@@ -48,6 +48,7 @@ export const bookings = pgTable("bookings", {
   updatedAt: timestamp("updated_at")
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
+  status: text("status").notNull().default("pending"),
 });
 
 export const user = pgTable("user", {

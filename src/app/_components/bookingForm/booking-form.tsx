@@ -45,6 +45,8 @@ import {
 } from "react";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
+import AddressDropdown from "./booking-form-components/address-drop-down-field";
+import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 
 //Enum constants to denote what UI is displayed to the user
 const BookingUIStates = {
@@ -59,88 +61,6 @@ const BookingUIStates = {
   End: "End", //successfully booked trip
 } as const;
 type BookingUIStates = (typeof BookingUIStates)[keyof typeof BookingUIStates];
-
-//Pick-up and drop-off location options
-const suggestedLocations = ["Grocery Store", "Airport"];
-
-//Locally reused component for pickup/dest addr fields
-const DropdownField = ({
-  fieldName,
-  fieldValue,
-  changeValue,
-  ariaLabel,
-  placeholder,
-  icon,
-  form,
-}: {
-  fieldName: string;
-  fieldValue: string;
-  changeValue: Dispatch<SetStateAction<string>>;
-  ariaLabel: string;
-  placeholder: string;
-  icon: ReactNode;
-  form: UseFormReturnType<any>;
-}) => {
-  const comboBox = useCombobox();
-
-  //Location filter behavior based on user input
-  const filteredLocations =
-    fieldValue.length === 0
-      ? suggestedLocations
-      : suggestedLocations.filter((location) => {
-          return location
-            .toLowerCase()
-            .includes(fieldValue.toLowerCase().trim());
-        });
-
-  //Make options that appear in pickup/dest fields
-  const options = filteredLocations.map((location) => (
-    <Combobox.Option key={location} value={location}>
-      {location}
-    </Combobox.Option>
-  ));
-
-  return (
-    <Combobox
-      onOptionSubmit={(selectedOption) => {
-        changeValue(selectedOption);
-        form.setFieldValue(fieldName, selectedOption);
-        comboBox.closeDropdown();
-      }}
-      store={comboBox}
-    >
-      <Combobox.Target>
-        <TextInput
-          aria-label={ariaLabel}
-          error={form.errors[fieldName] ?? ""}
-          leftSection={icon}
-          onBlur={() => {
-            comboBox.closeDropdown();
-          }}
-          onChange={(event) => {
-            changeValue(event.currentTarget.value);
-            form.setFieldValue(fieldName, event.currentTarget.value);
-            comboBox.openDropdown();
-          }}
-          onClick={() => {
-            comboBox.openDropdown();
-          }}
-          onFocus={() => {
-            comboBox.openDropdown();
-          }}
-          placeholder={placeholder}
-          value={fieldValue}
-        />
-      </Combobox.Target>
-
-      <Combobox.Dropdown hidden={options.length === 0}>
-        <Combobox.Options>
-          <Combobox.Group label="Suggested Locations">{options}</Combobox.Group>
-        </Combobox.Options>
-      </Combobox.Dropdown>
-    </Combobox>
-  );
-};
 
 //Locally reused component for UIs in the booking process
 const FormUI = ({
@@ -416,26 +336,9 @@ export default function BookingForm() {
       <FormUI
         body={
           <>
-            <DateTimePicker
-              aria-label="Pick-up Time Selection"
-              clearable
-              leftSection={<CalendarBlankIcon size={19} />}
-              maxDate={dayjs().add(1, "month").toDate()}
-              minDate={new Date()}
-              placeholder="Pick-up Time"
-              presets={[
-                { value: dayjs().format("YYYY-MM-DD HH:mm:ss"), label: "Now" },
-              ]}
-              timePickerProps={{
-                withDropdown: true,
-                format: "12h",
-                popoverProps: { withinPortal: false },
-              }}
-              valueFormat={"ddd[,] MMM D [at] h:mm A"}
-              {...bookingForm.getInputProps("pickupTime")}
-            />
+            <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
 
-            <DropdownField
+            <AddressDropdown
               ariaLabel="Pick-up address field"
               changeValue={setPickupAddr}
               fieldName="pickupAddr"
@@ -444,7 +347,7 @@ export default function BookingForm() {
               icon={<MapPinLineIcon size={20} />}
               placeholder="Pick-up Address"
             />
-            <DropdownField
+            <AddressDropdown
               ariaLabel="Destination address field"
               changeValue={setDestAddr}
               fieldName="destAddr"
@@ -653,7 +556,7 @@ export default function BookingForm() {
                 <Text>Pick-up Address</Text>
               </Grid.Col>
               <Grid.Col span={6}>
-                <DropdownField
+                <AddressDropdown
                   ariaLabel="Text box with previously entered pick-up address"
                   changeValue={setPickupAddr}
                   fieldName="pickupAddr"
@@ -669,27 +572,7 @@ export default function BookingForm() {
                 <Text>Pick-up Time</Text>
               </Grid.Col>
               <Grid.Col span={6}>
-                <DateTimePicker
-                  aria-label="Text box with previously entered pick-up time"
-                  clearable
-                  leftSection={<CalendarBlankIcon size={19} />}
-                  maxDate={dayjs().add(1, "month").toDate()}
-                  minDate={new Date()}
-                  placeholder="Time and Date"
-                  presets={[
-                    {
-                      value: dayjs().format("YYYY-MM-DD HH:mm:ss"),
-                      label: "Now",
-                    },
-                  ]}
-                  timePickerProps={{
-                    withDropdown: true,
-                    format: "12h",
-                    popoverProps: { withinPortal: false },
-                  }}
-                  valueFormat={"ddd[,] MMM D [at] h:mm A"}
-                  {...bookingForm.getInputProps("pickupTime")}
-                />
+                <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
               </Grid.Col>
             </Grid>
             <Grid gutter={0}>
@@ -697,7 +580,7 @@ export default function BookingForm() {
                 <Text>Destination Address</Text>
               </Grid.Col>
               <Grid.Col span={6}>
-                <DropdownField
+                <AddressDropdown
                   ariaLabel="Text box with previously entered destination address"
                   changeValue={setDestAddr}
                   fieldName="destAddr"

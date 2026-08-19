@@ -5,6 +5,18 @@ import { bookings } from "~/server/db/schema";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
 export const bookingsRouter = createTRPCRouter({
+  get: publicProcedure.query(async ({ ctx }) => {
+    try {
+      const result = await db.select().from(bookings);
+
+      return result;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get bookings",
+      });
+    }
+  }),
   create: publicProcedure
     .input(
       z.object({
