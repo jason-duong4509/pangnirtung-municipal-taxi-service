@@ -128,7 +128,7 @@ export default function RegisterAccountPage() {
     <Flex
       align={"center"}
       bg={"backgroundColor"}
-      h={"100vh"}
+      h={"100dvh"}
       justify={"center"}
     >
       <ScrollArea.Autosize

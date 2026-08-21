@@ -20,16 +20,17 @@ export default function Home() {
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
   );
+  const shortenTitle = useMediaQuery("(max-width: 455px");
 
   return (
     <Flex
       bg={"backgroundColor"}
       direction={{ base: "column", smMd: "row" }}
-      h={"100vh"}
+      h={"100dvh"}
     >
       <Paper
         bg={"primaryColor"}
-        h={{ base: "7vh", smMd: "100vh" }}
+        h={{ smMd: "100dvh" }}
         mih={"55px"}
         style={{ boxShadow: "10px 0px 10px rgba(0, 0, 0, 0.25)" }}
         w={{ base: "100vw", smMd: "380px" }}
@@ -39,23 +40,22 @@ export default function Home() {
           gap={isMobile ? "xs" : "md"}
           h={"100%"}
           justify={"center"}
+          pl={isMobile ? "lg" : undefined}
         >
           <PangSeal
-            height={isMobile ? "clamp(2.2rem, 3vh, 3rem)" : "125px"}
-            width={isMobile ? "clamp(2.2rem, 3vh, 3rem)" : "125px"}
+            height={isMobile ? "35px" : "125px"}
+            width={isMobile ? "35px" : "125px"}
           />
           <Title
             order={2}
-            style={
-              isMobile ? { fontSize: "clamp(1.2rem, 2vh, 2rem)" } : undefined
-            }
-            w={{ base: "130px", smMd: "144px" }}
+            style={isMobile ? { fontSize: "20px" } : undefined}
+            w={{ smMd: "144px" }}
           >
-            {isMobile ? "Taxi Service" : "Municipal Taxi Service"}
+            {shortenTitle ? "Taxi Service" : "Municipal Taxi Service"}
           </Title>
 
           {isMobile && (
-            <>
+            <Group flex={1} justify="flex-end" pr={"lg"}>
               <Button
                 c={"black"}
                 color={isMobile ? "buttonColor" : "customWhite"}
@@ -67,7 +67,7 @@ export default function Home() {
                 {isMobile ? "History" : "Trip History"}
               </Button>
               <Login />
-            </>
+            </Group>
           )}
         </Group>
       </Paper>
@@ -96,7 +96,6 @@ export default function Home() {
 
       <Paper
         bg={"primaryColor"}
-        h={"7vh"}
         hiddenFrom="smMd"
         mih={"55px"}
         style={{ boxShadow: "10px 0px 10px rgba(0, 0, 0, 0.25)" }}

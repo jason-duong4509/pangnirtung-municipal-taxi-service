@@ -25,7 +25,7 @@ export default function MenuButton() {
       />
 
       <Collapse
-        bottom={isMobile ? "150%" : undefined}
+        bottom={isMobile ? "180%" : undefined}
         in={opened}
         pos={"absolute"}
         right={"0%"}
