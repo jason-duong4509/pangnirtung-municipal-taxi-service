@@ -3,11 +3,13 @@ import {
   boolean,
   index,
   integer,
+  pgEnum,
   pgTable,
   pgTableCreator,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { BookingStatus, PaymentMethods } from "~/types/types";
 
 export const createTable = pgTableCreator((name) => `pg-drizzle_${name}`);
 
@@ -32,23 +34,36 @@ export const posts = createTable(
   ],
 );
 
+export const bookingStatus = pgEnum("bookingStatus", [
+  BookingStatus.PENDING,
+  BookingStatus.IN_PROGRESS,
+  BookingStatus.CANCELLED,
+  BookingStatus.COMPLETED,
+]);
+
+export const paymentMethod = pgEnum("paymentMethod", [
+  PaymentMethods.CREDIT_CARD,
+  PaymentMethods.RIDES,
+  PaymentMethods.REDEEM_CODE,
+]);
+
 export const bookings = pgTable("bookings", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   pickupTime: text("pick_up_time").notNull(),
   pickupAddr: text("pick_up_address").notNull(),
   destAddr: text("destination_address").notNull(),
   name: text("name").notNull(),
-  tripReason: text("reason_for_trip"),
-  payment: text("payment_method").notNull(),
+  tripReason: text("reason_for_trip").notNull(),
+  payment: paymentMethod("payment_method").notNull(),
   reminders: boolean("receive_reminders").notNull().default(false),
-  userId: text("user_id").notNull(),
+  created_by: text("created_by").notNull(),
   createdAt: timestamp("created_at")
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
   updatedAt: timestamp("updated_at")
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
-  status: text("status").notNull().default("pending"),
+  status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
 });
 
 export const user = pgTable("user", {

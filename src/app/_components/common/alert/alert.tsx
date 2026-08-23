@@ -1,5 +1,13 @@
 "use client";
-import { Button, CloseButton, Group, Modal, Stack, Title } from "@mantine/core";
+import {
+  Button,
+  CloseButton,
+  Group,
+  Loader,
+  Modal,
+  Stack,
+  Title,
+} from "@mantine/core";
 import type { JSX, MouseEventHandler } from "react";
 
 export default function AlertPopup({
@@ -10,6 +18,7 @@ export default function AlertPopup({
   onConfirm,
   modalOpened,
   closeModal,
+  isLoading,
 }: {
   titleText: string;
   body: JSX.Element;
@@ -18,6 +27,7 @@ export default function AlertPopup({
   onConfirm: MouseEventHandler<HTMLButtonElement>;
   modalOpened: boolean;
   closeModal: () => void;
+  isLoading: boolean;
 }) {
   return (
     <Modal
@@ -57,7 +67,8 @@ export default function AlertPopup({
             type="submit"
             variant="filled"
           >
-            {confirmButtonText}
+            {!isLoading && confirmButtonText}
+            {isLoading && <Loader color="black" size={20} />}
           </Button>
         </Group>
       </Stack>

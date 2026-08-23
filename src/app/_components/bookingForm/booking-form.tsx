@@ -45,6 +45,7 @@ import {
 } from "react";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
+import { PaymentMethods } from "~/types/types";
 import AddressDropdown from "./booking-form-components/address-drop-down-field";
 import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 
@@ -284,22 +285,26 @@ export default function BookingForm() {
 
   //Configure payment form
   const paymentForm = useForm<{
-    paymentType: "Pay with Credit Card" | "Pay with Rides" | "Redeem Code";
+    paymentType: PaymentMethods;
     enteredCode: string;
   }>({
     mode: "controlled",
 
     initialValues: {
-      paymentType: "Pay with Credit Card",
+      paymentType: PaymentMethods.CREDIT_CARD,
       enteredCode: "",
     },
 
     validate: {
       paymentType: (paymentType, formValues) => {
-        if (paymentType.length === 0) {
+        if (
+          paymentType !== PaymentMethods.REDEEM_CODE &&
+          paymentType !== PaymentMethods.CREDIT_CARD &&
+          paymentType !== PaymentMethods.RIDES
+        ) {
           return "A selection must be made";
         } else if (
-          paymentType === "Redeem Code" &&
+          paymentType === PaymentMethods.REDEEM_CODE &&
           formValues.enteredCode === ""
         ) {
           return "Must input a valid code";
@@ -485,16 +490,17 @@ export default function BookingForm() {
               <Radio
                 color="buttonColor"
                 label="Pay with Credit Card"
-                value="Pay with Credit Card"
+                value={PaymentMethods.CREDIT_CARD}
               />
               <Radio
                 color="buttonColor"
                 label="Redeem Code"
-                value="Redeem Code"
+                value={PaymentMethods.REDEEM_CODE}
               />
-              {paymentForm.values.paymentType === "Redeem Code" && (
+              {paymentForm.values.paymentType ===
+                PaymentMethods.REDEEM_CODE && (
                 <TextInput
-                  aria-label="Text input field to redeem a code that covers a ride"
+                  aria-label="Redeem code text input"
                   error={paymentForm.errors.paymentType}
                   onChange={(event) => {
                     paymentForm.values.enteredCode = event.currentTarget.value;
@@ -507,9 +513,9 @@ export default function BookingForm() {
               <Radio
                 color="buttonColor"
                 label="Pay with Rides"
-                value="Pay with Rides"
+                value={PaymentMethods.RIDES}
               />
-              {paymentForm.values.paymentType === "Pay with Rides" && (
+              {paymentForm.values.paymentType === PaymentMethods.RIDES && (
                 <Text>
                   <Text span>
                     This trip costs 1 Ride. You will have 40 Rides remaining.{" "}

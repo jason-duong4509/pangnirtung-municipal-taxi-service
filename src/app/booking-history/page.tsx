@@ -7,6 +7,7 @@ import {
   Drawer,
   Flex,
   Group,
+  Loader,
   Paper,
   SegmentedControl,
   Skeleton,
@@ -35,22 +36,13 @@ import {
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { type JSX, useState } from "react";
+import { formatDate, formatString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
+import { BookingStatus } from "~/types/types";
 import AddressDropdown from "../_components/bookingForm/booking-form-components/address-drop-down-field";
 import PickupTimeInput from "../_components/bookingForm/booking-form-components/pick-up-time-field";
 import AlertPopup from "../_components/common/alert/alert";
-
-//Takes a Date object made by mantine and converts it into a readable string
-const formatDate = (date: Date | string) =>
-  `${new Date(date).toDateString()} at ${new Date(date).toLocaleTimeString()}`;
-
-//Takes a string written as "a_b" and converts it into a string "A B"
-const formatString = (text: string) =>
-  text
-    .split("_")
-    .map((value, _) => `${value.at(0)?.toUpperCase()}${value.substring(1)}`)
-    .join(" ");
 
 export default function BookingHistoryPage() {
   const router = useRouter();
@@ -66,6 +58,8 @@ export default function BookingHistoryPage() {
   const [destAddr, setDestAddr] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<number[]>([]); //Each element is a booking's ID
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [cancellingBookings, setCancellingBookings] = useState(false);
 
   //--Holds all bookings, separated into 4 tables--
   let pendingBookings = [] as JSX.Element[];
@@ -80,7 +74,7 @@ export default function BookingHistoryPage() {
     pickupAddr: string;
     destAddr: string;
     name: string;
-    reasonForTrip: string | null;
+    reasonForTrip: string;
     paymentMethod: string;
     paymentCode: string | null;
     id: number;
@@ -125,20 +119,53 @@ export default function BookingHistoryPage() {
     */
   });
 
-  const { data, isLoading, error } = api.bookings.get.useQuery(undefined, {
+  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
     //Ensure that the query automatically runs but does so exactly once
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
 
-  if (!isLoading && error) {
+  //Update booking mutation
+  const updateBookingMutation = api.bookings.update.useMutation({
+    onSuccess: () => {
+      showNotifications.success("Booking updated");
+      setFormSubmitting(false);
+      getBookingsQuery.refetch();
+      closeDrawer();
+    },
+    onError: (error) => {
+      showNotifications.error(error.message);
+      setFormSubmitting(false);
+    },
+  });
+
+  //Cancel booking mutation
+  const cancelBookingMutation = api.bookings.cancel.useMutation({
+    onSuccess: () => {
+      showNotifications.success("Cancelled successfully");
+      setCancellingBookings(false);
+      getBookingsQuery.refetch();
+      closeDrawer();
+      closeModal();
+      setIsDeleting(false);
+      setSelectedRows([]);
+    },
+    onError: (error) => {
+      showNotifications.error(error.message);
+      setFormSubmitting(false);
+      setCancellingBookings(false);
+    },
+  });
+
+  if (!getBookingsQuery.isLoading && getBookingsQuery.error) {
     showNotifications.error(
-      error.message ?? "An error occurred while fetching booking data",
+      getBookingsQuery.error.message ??
+        "An error occurred while fetching booking data",
     );
-  } else if (!isLoading && data) {
+  } else if (!getBookingsQuery.isLoading && getBookingsQuery.data) {
     //For each booking, make a jsx element for it
-    for (const booking of data) {
+    for (const booking of getBookingsQuery.data) {
       //Put the booking in its own jsx element
       const row = (
         <Table.Tr
@@ -173,7 +200,7 @@ export default function BookingHistoryPage() {
               destAddr: booking.destAddr,
               name: booking.name,
               reasonForTrip: booking.tripReason,
-              paymentMethod: booking.payment,
+              paymentMethod: formatString(booking.payment),
               paymentCode: null,
               id: booking.id,
               status: formatString(booking.status),
@@ -186,7 +213,7 @@ export default function BookingHistoryPage() {
               destAddr: booking.destAddr,
               name: booking.name,
               reasonForTrip: booking.tripReason,
-              paymentMethod: booking.payment,
+              paymentMethod: formatString(booking.payment),
               paymentCode: null,
               id: booking.id,
               status: formatString(booking.status),
@@ -223,7 +250,7 @@ export default function BookingHistoryPage() {
           <Table.Td>{booking.destAddr}</Table.Td>
           {!isMobile && (
             <>
-              <Table.Td>{booking.payment}</Table.Td>
+              <Table.Td>{formatString(booking.payment)}</Table.Td>
               <Table.Td>{booking.tripReason}</Table.Td>
             </>
           )}
@@ -231,17 +258,33 @@ export default function BookingHistoryPage() {
       );
 
       //Put the row in one of four tables
-      if (booking.status === "pending") {
+      if (booking.status === BookingStatus.PENDING) {
         pendingBookings = [...pendingBookings, row];
-      } else if (booking.status === "in_progress") {
+      } else if (booking.status === BookingStatus.IN_PROGRESS) {
         inProgressBookings = [...inProgressBookings, row];
-      } else if (booking.status === "completed") {
+      } else if (booking.status === BookingStatus.COMPLETED) {
         completedBookings = [...completedBookings, row];
-      } else if (booking.status === "cancelled") {
+      } else if (booking.status === BookingStatus.CANCELLED) {
         cancelledBookings = [...cancelledBookings, row];
       }
     }
   }
+
+  //Handle booking edit/update behaviors
+  const handleFormOnSubmit = async (values: typeof bookingForm.values) => {
+    setFormSubmitting(true);
+
+    updateBookingMutation.mutate({
+      pickupAddr: values.pickupAddr,
+      destAddr: values.destAddr,
+      name: values.name,
+      pickupTime:
+        values.pickupTime ??
+        `${new Date().toLocaleDateString("en-CA")} ${new Date().toLocaleTimeString(undefined, { hour12: false })}`, //Generate a date string for the immediate date/time if user did not provide one,
+      bookingId: values.id,
+      tripReason: values.reasonForTrip,
+    });
+  };
 
   return (
     <Flex
@@ -264,8 +307,14 @@ export default function BookingHistoryPage() {
           }
           closeModal={closeModal}
           confirmButtonText={"Confirm"}
+          isLoading={cancellingBookings}
           modalOpened={modalOpened}
-          onConfirm={() => {}}
+          onConfirm={() => {
+            setCancellingBookings(true);
+            cancelBookingMutation.mutate({
+              bookingIds: selectedRows,
+            });
+          }}
           titleText={"Are you Sure?"}
         />
         <Drawer
@@ -282,146 +331,158 @@ export default function BookingHistoryPage() {
             bookingForm.values.status === "Pending" ? "Edit Trip" : "View Trip"
           }
         >
-          <Stack h={"calc(100dvh - 90px)"}>
-            <TextInput
-              defaultValue={bookingForm.values.status}
-              label="Trip Status"
-              readOnly
-              variant="unstyled"
-            />
-            <TextInput
-              aria-label="Name"
-              label={"Name"}
-              leftSection={<UserIcon size={20} />}
-              placeholder="Your Name"
-              {...bookingForm.getInputProps("name")}
-              readOnly={bookingForm.values.status !== "Pending"}
-              required
-            />
-            {bookingForm.values.status === "Pending" && (
-              <>
-                <PickupTimeInput
-                  form={bookingForm}
-                  formField={"pickupTime"}
-                  required
-                  useLabel
-                />
-                <AddressDropdown
-                  ariaLabel="Pick-up address field"
-                  changeValue={setPickupAddr}
-                  fieldName="pickupAddr"
-                  fieldValue={pickupAddr}
-                  form={bookingForm}
-                  icon={<MapPinLineIcon size={20} />}
-                  label="Pick-up Address"
-                  placeholder="Pick-up Address"
-                  required
-                />
-                <AddressDropdown
-                  ariaLabel="Destination address field"
-                  changeValue={setDestAddr}
-                  fieldName="destAddr"
-                  fieldValue={destAddr}
-                  form={bookingForm}
-                  icon={<PathIcon size={20} />}
-                  label="Destination Address"
-                  placeholder="Destination Address"
-                  required
-                />
-              </>
-            )}
-            {bookingForm.values.status !== "Pending" && (
-              <>
-                <TextInput
-                  defaultValue={formatDate(bookingForm.values.pickupTime ?? "")}
-                  label={"Pick-up Time"}
-                  leftSection={<CalendarBlankIcon size={20} />}
-                  readOnly
-                />
-                <TextInput
-                  defaultValue={bookingForm.values.pickupAddr}
-                  label={"Pick-up Address"}
-                  leftSection={<MapPinLineIcon size={20} />}
-                  readOnly
-                />
-                <TextInput
-                  defaultValue={bookingForm.values.destAddr}
-                  label={"Destination Address"}
-                  leftSection={<PathIcon size={20} />}
-                  readOnly
-                />
-              </>
-            )}
-            <Textarea
-              aria-label="Reason for trip"
-              key={bookingForm.key("reasonForTrip")}
-              leftSection={<QuestionIcon size={20} />}
-              {...bookingForm.getInputProps("reasonForTrip")}
-              autosize
-              label="Reason for Trip"
-              maxRows={4}
-              minRows={1}
-              placeholder="Optional"
-              readOnly={bookingForm.values.status !== "Pending"}
-            />
-            <TextInput
-              aria-label="Payment method"
-              defaultValue={
-                bookingForm.values.paymentMethod === "Pay with Credit Card"
-                  ? "Credit Card"
-                  : bookingForm.values.paymentMethod === "Redeem Code"
+          <form
+            id="booking-form"
+            onSubmit={bookingForm.onSubmit(handleFormOnSubmit)}
+          >
+            <Stack h={"calc(100dvh - 90px)"}>
+              <TextInput
+                defaultValue={bookingForm.values.status}
+                label="Trip Status"
+                readOnly
+                variant="unstyled"
+              />
+              <TextInput
+                defaultValue={bookingForm.values.id}
+                label="Booking ID"
+                readOnly
+                variant="unstyled"
+              />
+              <TextInput
+                aria-label="Name"
+                label={"Name"}
+                leftSection={<UserIcon size={20} />}
+                placeholder="Your Name"
+                {...bookingForm.getInputProps("name")}
+                readOnly={bookingForm.values.status !== "Pending"}
+                required
+              />
+              {bookingForm.values.status === "Pending" && (
+                <>
+                  <PickupTimeInput
+                    form={bookingForm}
+                    formField={"pickupTime"}
+                    required
+                    useLabel
+                  />
+                  <AddressDropdown
+                    ariaLabel="Pick-up address field"
+                    changeValue={setPickupAddr}
+                    fieldName="pickupAddr"
+                    fieldValue={pickupAddr}
+                    form={bookingForm}
+                    icon={<MapPinLineIcon size={20} />}
+                    label="Pick-up Address"
+                    placeholder="Pick-up Address"
+                    required
+                  />
+                  <AddressDropdown
+                    ariaLabel="Destination address field"
+                    changeValue={setDestAddr}
+                    fieldName="destAddr"
+                    fieldValue={destAddr}
+                    form={bookingForm}
+                    icon={<PathIcon size={20} />}
+                    label="Destination Address"
+                    placeholder="Destination Address"
+                    required
+                  />
+                </>
+              )}
+              {bookingForm.values.status !== "Pending" && (
+                <>
+                  <TextInput
+                    defaultValue={formatDate(
+                      bookingForm.values.pickupTime ?? "",
+                    )}
+                    label={"Pick-up Time"}
+                    leftSection={<CalendarBlankIcon size={20} />}
+                    readOnly
+                  />
+                  <TextInput
+                    defaultValue={bookingForm.values.pickupAddr}
+                    label={"Pick-up Address"}
+                    leftSection={<MapPinLineIcon size={20} />}
+                    readOnly
+                  />
+                  <TextInput
+                    defaultValue={bookingForm.values.destAddr}
+                    label={"Destination Address"}
+                    leftSection={<PathIcon size={20} />}
+                    readOnly
+                  />
+                </>
+              )}
+              <Textarea
+                aria-label="Reason for trip"
+                key={bookingForm.key("reasonForTrip")}
+                leftSection={<QuestionIcon size={20} />}
+                {...bookingForm.getInputProps("reasonForTrip")}
+                autosize
+                label="Reason for Trip"
+                maxRows={4}
+                minRows={1}
+                placeholder="Optional"
+                readOnly={bookingForm.values.status !== "Pending"}
+              />
+              <TextInput
+                aria-label="Payment method"
+                defaultValue={
+                  bookingForm.values.paymentMethod === "Redeem Code"
                     ? `Code (${bookingForm.values.paymentCode ?? "unable to retrieve code"})`
-                    : bookingForm.values.paymentMethod === "Pay with Rides"
-                      ? "Rides"
-                      : ""
-              }
-              label="Payment Method"
-              readOnly
-              variant="unstyled"
-            />
-            <TextInput
-              defaultValue={formatDate(bookingForm.values.createdAt)}
-              label="Created On"
-              readOnly
-              variant="unstyled"
-            />
-            <TextInput
-              defaultValue={formatDate(bookingForm.values.updatedAt)}
-              label="Last Updated"
-              readOnly
-              variant="unstyled"
-            />
-            {bookingForm.values.status === "Pending" && (
-              <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
-                <Group bg={"primaryColor"} grow py={"md"}>
-                  <Button
-                    c={"black"}
-                    color="buttonColor"
-                    onClick={openModal}
-                    p={0}
-                    size="compact-sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    Cancel Trip
-                  </Button>
-                  <Button
-                    c={bookingForm.isDirty() ? "black" : undefined}
-                    color="buttonColor"
-                    disabled={bookingForm.isDirty() ? false : true}
-                    form="register-form"
-                    onClick={() => {}}
-                    p={0}
-                    size="compact-sm"
-                    type="submit"
-                    variant="filled"
-                  >
-                    Update Trip
-                  </Button>
-                </Group>
-              </Stack>
-            )}
-          </Stack>
+                    : bookingForm.values.paymentMethod
+                }
+                label="Payment Method"
+                readOnly
+                variant="unstyled"
+              />
+              <TextInput
+                defaultValue={formatDate(bookingForm.values.createdAt)}
+                label="Created On"
+                readOnly
+                variant="unstyled"
+              />
+              <TextInput
+                defaultValue={formatDate(bookingForm.values.updatedAt)}
+                label="Last Updated"
+                readOnly
+                variant="unstyled"
+              />
+              {bookingForm.values.status === "Pending" && (
+                <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
+                  <Group bg={"primaryColor"} grow py={"md"}>
+                    <Button
+                      c={"black"}
+                      color="buttonColor"
+                      onClick={() => {
+                        setSelectedRows([bookingForm.values.id]);
+                        openModal();
+                      }}
+                      p={0}
+                      size="compact-sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancel Trip
+                    </Button>
+                    <Button
+                      c={bookingForm.isDirty() ? "black" : undefined}
+                      color="buttonColor"
+                      disabled={bookingForm.isDirty() ? false : true}
+                      form="booking-form"
+                      p={0}
+                      size="compact-sm"
+                      type="submit"
+                      variant="filled"
+                    >
+                      {!formSubmitting && "Update Trip"}
+                      {formSubmitting && <Loader color="black" size={20} />}
+                    </Button>
+                  </Group>
+                </Stack>
+              )}
+            </Stack>
+          </form>
         </Drawer>
       </aside>
       <main>
@@ -499,8 +560,14 @@ export default function BookingHistoryPage() {
                   aria-label="Delete Bookings"
                   color="black"
                   onClick={() => {
-                    setTable("pending");
-                    setIsDeleting(!isDeleting);
+                    if (!isDeleting || selectedRows.length === 0) {
+                      //default state or in delete mode with nothing selected
+                      setTable("pending");
+                      setIsDeleting(!isDeleting);
+                    } else {
+                      //already in delete mode
+                      openModal();
+                    }
                   }}
                   variant="outline"
                 >
@@ -516,7 +583,7 @@ export default function BookingHistoryPage() {
               <Table highlightOnHover stickyHeader>
                 <Table.Thead>
                   <Table.Tr>
-                    {isDeleting && <Table.Th>Delete?</Table.Th>}
+                    {isDeleting && <Table.Th>Cancel?</Table.Th>}
                     <Table.Th>Pick-up Time</Table.Th>
                     {!isSuperSmall && <Table.Th>Pick-up Address</Table.Th>}
                     <Table.Th>Destination</Table.Th>
@@ -535,13 +602,13 @@ export default function BookingHistoryPage() {
                   {table === "complete" && completedBookings}
                 </Table.Tbody>
               </Table>
-              {isLoading && (
-                <>
-                  <Skeleton height={50} radius="xl" width={400} />
-                  <Skeleton height={50} radius="xl" width={400} />
-                  <Skeleton height={50} radius="xl" width={400} />
-                  <Skeleton height={50} radius="xl" width={400} />
-                </>
+              {getBookingsQuery.isLoading && (
+                <Stack pt={"md"}>
+                  <Skeleton height={30} radius="xl" width={"100%"} />
+                  <Skeleton height={30} radius="xl" width={"100%"} />
+                  <Skeleton height={30} radius="xl" width={"100%"} />
+                  <Skeleton height={30} radius="xl" width={"100%"} />
+                </Stack>
               )}
             </Table.ScrollContainer>
           </Stack>
