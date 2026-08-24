@@ -4,7 +4,6 @@ import {
   Button,
   Center,
   Checkbox,
-  Combobox,
   Grid,
   Group,
   Loader,
@@ -18,15 +17,12 @@ import {
   TextInput,
   Title,
   Transition,
-  useCombobox,
   useMantineTheme,
 } from "@mantine/core";
-import { DateTimePicker } from "@mantine/dates";
 import { type UseFormReturnType, useForm } from "@mantine/form";
 import { useMediaQuery } from "@mantine/hooks";
 import {
   ArrowLeftIcon,
-  CalendarBlankIcon,
   CurrencyCircleDollarIcon,
   MapPinLineIcon,
   PaperPlaneTiltIcon,
@@ -35,14 +31,14 @@ import {
   ShieldCheckIcon,
   UserIcon,
 } from "@phosphor-icons/react";
-import dayjs from "dayjs";
+import { type Dispatch, type JSX, type SetStateAction, useState } from "react";
+import { formatString } from "~/lib/helpers";
 import {
-  type Dispatch,
-  type JSX,
-  type ReactNode,
-  type SetStateAction,
-  useState,
-} from "react";
+  checkAddress,
+  checkName,
+  checkPickUpTime,
+  checkTripReason,
+} from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
 import { PaymentMethods } from "~/types/types";
@@ -225,34 +221,86 @@ export default function BookingForm() {
 
     //Frontend field checks
     validate: {
-      pickupTime: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value !== null
-            ? null
-            : "Must select a pick-up time"
-          : null,
-      pickupAddr: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Must add a pick-up address"
-          : null,
-      destAddr: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Must add a destination address"
-          : null,
-      name: (value) =>
-        formState === BookingUIStates.About_You ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Field cannot be blank"
-          : null,
+      pickupTime: (value) => {
+        if (
+          formState === BookingUIStates.Where_To ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkPickUpTime(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      pickupAddr: (value) => {
+        if (
+          formState === BookingUIStates.Where_To ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkAddress(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      destAddr: (value) => {
+        if (
+          formState === BookingUIStates.Where_To ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkAddress(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      name: (value) => {
+        if (
+          formState === BookingUIStates.About_You ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkName(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      reasonForTrip: (value) => {
+        if (
+          formState === BookingUIStates.About_You ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkTripReason(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
     },
   });
 
@@ -316,18 +364,19 @@ export default function BookingForm() {
 
   //Functions that handles form submit behavior
   const handleBookingSubmit = async (values: typeof bookingForm.values) => {
+    if (formSubmitting) {
+      return;
+    }
     setFormSubmitting(true);
 
     createBookingMutation.mutate({
       pickupAddr: values.pickupAddr,
       destAddr: values.destAddr,
       name: values.name,
-      pickupTime:
-        values.pickupTime ??
-        `${new Date().toLocaleDateString("en-CA")} ${new Date().toLocaleTimeString(undefined, { hour12: false })}`, //Generate a date string for the immediate date/time if user did not provide one
+      pickupTime: values.pickupTime,
       tripReason: values.reasonForTrip,
       payment: paymentForm.values.paymentType,
-      reminders: false,
+      reminders: values.receiveReminders,
     });
   };
 
@@ -625,7 +674,7 @@ export default function BookingForm() {
                   leftSection={<CurrencyCircleDollarIcon size={20} />}
                   minRows={1}
                   readOnly
-                  value={paymentForm.values.paymentType}
+                  value={formatString(paymentForm.values.paymentType)}
                 />
               </Grid.Col>
             </Grid>

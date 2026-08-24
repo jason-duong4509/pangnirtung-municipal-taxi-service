@@ -20,7 +20,7 @@ export default function Home() {
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
   );
-  const shortenTitle = useMediaQuery("(max-width: 455px");
+  const shortenTitle = useMediaQuery("(max-width: 455px)");
 
   return (
     <Flex
@@ -75,22 +75,20 @@ export default function Home() {
       <Flex align={"center"} flex={1} justify={"center"} pos={"relative"}>
         <BookingForm />
         {!isMobile && (
-          <>
-            <Group justify="flex-end" pos={"absolute"} right={"5%"} top={"5%"}>
-              <Button
-                c={"black"}
-                color={isMobile ? "buttonColor" : "customWhite"}
-                onClick={() => router.push("/booking-history")}
-                radius={"lg"}
-                size="xs"
-                type="button"
-              >
-                {isMobile ? "History" : "Trip History"}
-              </Button>
-              <Login />
-              <MenuButton />
-            </Group>
-          </>
+          <Group justify="flex-end" pos={"absolute"} right={"5%"} top={"5%"}>
+            <Button
+              c={"black"}
+              color={isMobile ? "buttonColor" : "customWhite"}
+              onClick={() => router.push("/booking-history")}
+              radius={"lg"}
+              size="xs"
+              type="button"
+            >
+              {isMobile ? "History" : "Trip History"}
+            </Button>
+            <Login />
+            <MenuButton />
+          </Group>
         )}
       </Flex>
 

@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { checkPickUpTime } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import { bookings } from "~/server/db/schema";
 import { BookingStatus, PaymentMethods } from "~/types/types";
@@ -13,7 +14,7 @@ export const bookingsRouter = createTRPCRouter({
       const result = await db.select().from(bookings);
 
       return result;
-    } catch (error) {
+    } catch {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to get bookings",
@@ -23,7 +24,7 @@ export const bookingsRouter = createTRPCRouter({
   create: publicProcedure
     .input(
       z.object({
-        pickupTime: z.string(),
+        pickupTime: z.string().nullable(),
         pickupAddr: z.string(),
         destAddr: z.string(),
         name: z.string(),
@@ -35,6 +36,21 @@ export const bookingsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       //TODO: add proper auth
       //todo: add rate limiting?
+
+      //--Input checking--
+      //todo finish
+      const pickupTimeCheck = checkPickUpTime(input.pickupTime);
+      let pickupTime = undefined as undefined | Date;
+      if (pickupTimeCheck.isProper) {
+        pickupTime = pickupTimeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupTimeCheck.errorMessage,
+        });
+      }
+      //------------------
+
       try {
         const [insertedBooking] = await db
           .insert(bookings)
@@ -42,7 +58,7 @@ export const bookingsRouter = createTRPCRouter({
             pickupAddr: input.pickupAddr,
             destAddr: input.destAddr,
             name: input.name,
-            pickupTime: input.pickupTime,
+            pickupTime: pickupTime,
             tripReason: input.tripReason,
             payment: input.payment,
             reminders: input.reminders,
@@ -51,7 +67,7 @@ export const bookingsRouter = createTRPCRouter({
           .returning();
 
         return insertedBooking;
-      } catch (error) {
+      } catch {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create booking",
@@ -62,7 +78,7 @@ export const bookingsRouter = createTRPCRouter({
     .input(
       z.object({
         bookingId: z.number(),
-        pickupTime: z.string(),
+        pickupTime: z.string().nullable(),
         pickupAddr: z.string(),
         destAddr: z.string(),
         name: z.string(),
@@ -71,12 +87,27 @@ export const bookingsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       //TODO: add proper auth
+
+      //--Input checking--
+      //todo finish
+      const pickupTimeCheck = checkPickUpTime(input.pickupTime);
+      let pickupTime = undefined as undefined | Date;
+      if (pickupTimeCheck.isProper) {
+        pickupTime = pickupTimeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupTimeCheck.errorMessage,
+        });
+      }
+      //------------------
+
       try {
         const [result] = await db
           .update(bookings)
           .set({
             pickupAddr: input.pickupAddr,
-            pickupTime: input.pickupTime,
+            pickupTime: pickupTime,
             destAddr: input.destAddr,
             name: input.name,
             tripReason: input.tripReason,

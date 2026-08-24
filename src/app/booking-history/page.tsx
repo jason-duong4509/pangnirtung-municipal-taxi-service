@@ -35,8 +35,18 @@ import {
   XCircleIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { type JSX, useState } from "react";
-import { formatDate, formatString } from "~/lib/helpers";
+import { type JSX, useEffect, useState } from "react";
+import {
+  dbTimeToLocalTime,
+  dbTimeToPrettyString,
+  formatString,
+} from "~/lib/helpers";
+import {
+  checkAddress,
+  checkName,
+  checkPickUpTime,
+  checkTripReason,
+} from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
 import { BookingStatus } from "~/types/types";
@@ -70,7 +80,7 @@ export default function BookingHistoryPage() {
 
   //Configure booking form
   const bookingForm = useForm<{
-    pickupTime: string | null;
+    pickupTime: string | null | Date;
     pickupAddr: string;
     destAddr: string;
     name: string;
@@ -85,38 +95,53 @@ export default function BookingHistoryPage() {
     mode: "uncontrolled",
 
     //Frontend field checks
-    /*
     validate: {
-      pickupTime: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value !== null
-            ? null
-            : "Must select a pick-up time"
-          : null,
-      pickupAddr: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Must add a pick-up address"
-          : null,
-      destAddr: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Must add a destination address"
-          : null,
-      name: (value) =>
-        formState === BookingUIStates.About_You ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Field cannot be blank"
-          : null,
+      pickupTime: (value) => {
+        const result = checkPickUpTime(value as string | null);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+      pickupAddr: (value) => {
+        const result = checkAddress(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+      destAddr: (value) => {
+        const result = checkAddress(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+      name: (value) => {
+        const result = checkName(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+      reasonForTrip: (value) => {
+        const result = checkTripReason(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
     },
-    */
   });
 
   const getBookingsQuery = api.bookings.get.useQuery(undefined, {
@@ -158,12 +183,16 @@ export default function BookingHistoryPage() {
     },
   });
 
-  if (!getBookingsQuery.isLoading && getBookingsQuery.error) {
-    showNotifications.error(
-      getBookingsQuery.error.message ??
-        "An error occurred while fetching booking data",
-    );
-  } else if (!getBookingsQuery.isLoading && getBookingsQuery.data) {
+  useEffect(() => {
+    if (!getBookingsQuery.isLoading && getBookingsQuery.error) {
+      showNotifications.error(
+        getBookingsQuery.error.message ??
+          "An error occurred while fetching booking data",
+      );
+    }
+  }, [getBookingsQuery.error, getBookingsQuery.isLoading]);
+
+  if (!getBookingsQuery.isLoading && getBookingsQuery.data) {
     //For each booking, make a jsx element for it
     for (const booking of getBookingsQuery.data) {
       //Put the booking in its own jsx element
@@ -195,7 +224,10 @@ export default function BookingHistoryPage() {
 
             //--Prefill mantine form with booking data--
             bookingForm.setInitialValues({
-              pickupTime: booking.pickupTime,
+              pickupTime:
+                booking.status === BookingStatus.PENDING
+                  ? dbTimeToLocalTime(booking.pickupTime)
+                  : booking.pickupTime,
               pickupAddr: booking.pickupAddr,
               destAddr: booking.destAddr,
               name: booking.name,
@@ -208,7 +240,10 @@ export default function BookingHistoryPage() {
               updatedAt: booking.updatedAt,
             });
             bookingForm.setValues({
-              pickupTime: booking.pickupTime,
+              pickupTime:
+                booking.status === BookingStatus.PENDING
+                  ? dbTimeToLocalTime(booking.pickupTime)
+                  : booking.pickupTime,
               pickupAddr: booking.pickupAddr,
               destAddr: booking.destAddr,
               name: booking.name,
@@ -245,7 +280,7 @@ export default function BookingHistoryPage() {
               />
             </Table.Td>
           )}
-          <Table.Td>{formatDate(booking.pickupTime)}</Table.Td>
+          <Table.Td>{dbTimeToPrettyString(booking.pickupTime)}</Table.Td>
           {!isSuperSmall && <Table.Td>{booking.pickupAddr}</Table.Td>}
           <Table.Td>{booking.destAddr}</Table.Td>
           {!isMobile && (
@@ -272,15 +307,17 @@ export default function BookingHistoryPage() {
 
   //Handle booking edit/update behaviors
   const handleFormOnSubmit = async (values: typeof bookingForm.values) => {
+    if (formSubmitting) {
+      //If form is already submitting
+      return;
+    }
     setFormSubmitting(true);
 
     updateBookingMutation.mutate({
       pickupAddr: values.pickupAddr,
       destAddr: values.destAddr,
       name: values.name,
-      pickupTime:
-        values.pickupTime ??
-        `${new Date().toLocaleDateString("en-CA")} ${new Date().toLocaleTimeString(undefined, { hour12: false })}`, //Generate a date string for the immediate date/time if user did not provide one,
+      pickupTime: values.pickupTime as string | null,
       bookingId: values.id,
       tripReason: values.reasonForTrip,
     });
@@ -392,8 +429,8 @@ export default function BookingHistoryPage() {
               {bookingForm.values.status !== "Pending" && (
                 <>
                   <TextInput
-                    defaultValue={formatDate(
-                      bookingForm.values.pickupTime ?? "",
+                    defaultValue={dbTimeToPrettyString(
+                      bookingForm.values.pickupTime as Date,
                     )}
                     label={"Pick-up Time"}
                     leftSection={<CalendarBlankIcon size={20} />}
@@ -437,13 +474,17 @@ export default function BookingHistoryPage() {
                 variant="unstyled"
               />
               <TextInput
-                defaultValue={formatDate(bookingForm.values.createdAt)}
+                defaultValue={dbTimeToPrettyString(
+                  bookingForm.values.createdAt,
+                )}
                 label="Created On"
                 readOnly
                 variant="unstyled"
               />
               <TextInput
-                defaultValue={formatDate(bookingForm.values.updatedAt)}
+                defaultValue={dbTimeToPrettyString(
+                  bookingForm.values.updatedAt,
+                )}
                 label="Last Updated"
                 readOnly
                 variant="unstyled"
@@ -468,7 +509,7 @@ export default function BookingHistoryPage() {
                     <Button
                       c={bookingForm.isDirty() ? "black" : undefined}
                       color="buttonColor"
-                      disabled={bookingForm.isDirty() ? false : true}
+                      disabled={!bookingForm.isDirty()}
                       form="booking-form"
                       p={0}
                       size="compact-sm"
