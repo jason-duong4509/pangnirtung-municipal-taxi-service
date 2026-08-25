@@ -78,7 +78,7 @@ export default function ResetAccountPage() {
     <Flex
       align={"center"}
       bg={"backgroundColor"}
-      h={"100vh"}
+      h={"100dvh"}
       justify={"center"}
     >
       <ScrollArea.Autosize

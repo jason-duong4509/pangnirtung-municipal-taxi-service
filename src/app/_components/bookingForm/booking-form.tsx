@@ -4,9 +4,9 @@ import {
   Button,
   Center,
   Checkbox,
-  Combobox,
   Grid,
   Group,
+  Loader,
   MantineProvider,
   Paper,
   Radio,
@@ -17,15 +17,12 @@ import {
   TextInput,
   Title,
   Transition,
-  useCombobox,
   useMantineTheme,
 } from "@mantine/core";
-import { DateTimePicker } from "@mantine/dates";
 import { type UseFormReturnType, useForm } from "@mantine/form";
 import { useMediaQuery } from "@mantine/hooks";
 import {
   ArrowLeftIcon,
-  CalendarBlankIcon,
   CurrencyCircleDollarIcon,
   MapPinLineIcon,
   PaperPlaneTiltIcon,
@@ -34,14 +31,19 @@ import {
   ShieldCheckIcon,
   UserIcon,
 } from "@phosphor-icons/react";
-import dayjs from "dayjs";
+import { type Dispatch, type JSX, type SetStateAction, useState } from "react";
+import { formatString } from "~/lib/helpers";
 import {
-  type Dispatch,
-  type JSX,
-  type ReactNode,
-  type SetStateAction,
-  useState,
-} from "react";
+  checkAddress,
+  checkName,
+  checkPickUpTime,
+  checkTripReason,
+} from "~/lib/input-checkers";
+import { showNotifications } from "~/lib/mantine-notifications-system";
+import { api } from "~/trpc/react";
+import { PaymentMethods } from "~/types/types";
+import AddressDropdown from "./booking-form-components/address-drop-down-field";
+import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 
 //Enum constants to denote what UI is displayed to the user
 const BookingUIStates = {
@@ -56,88 +58,6 @@ const BookingUIStates = {
   End: "End", //successfully booked trip
 } as const;
 type BookingUIStates = (typeof BookingUIStates)[keyof typeof BookingUIStates];
-
-//Pick-up and drop-off location options
-const suggestedLocations = ["Grocery Store", "Airport"];
-
-//Locally reused component for pickup/dest addr fields
-const DropdownField = ({
-  fieldName,
-  fieldValue,
-  changeValue,
-  ariaLabel,
-  placeholder,
-  icon,
-  form,
-}: {
-  fieldName: string;
-  fieldValue: string;
-  changeValue: Dispatch<SetStateAction<string>>;
-  ariaLabel: string;
-  placeholder: string;
-  icon: ReactNode;
-  form: UseFormReturnType<any>;
-}) => {
-  const comboBox = useCombobox();
-
-  //Location filter behavior based on user input
-  const filteredLocations =
-    fieldValue.length === 0
-      ? suggestedLocations
-      : suggestedLocations.filter((location) => {
-          return location
-            .toLowerCase()
-            .includes(fieldValue.toLowerCase().trim());
-        });
-
-  //Make options that appear in pickup/dest fields
-  const options = filteredLocations.map((location) => (
-    <Combobox.Option key={location} value={location}>
-      {location}
-    </Combobox.Option>
-  ));
-
-  return (
-    <Combobox
-      onOptionSubmit={(selectedOption) => {
-        changeValue(selectedOption);
-        form.setFieldValue(fieldName, selectedOption);
-        comboBox.closeDropdown();
-      }}
-      store={comboBox}
-    >
-      <Combobox.Target>
-        <TextInput
-          aria-label={ariaLabel}
-          error={form.errors[fieldName] ?? ""}
-          leftSection={icon}
-          onBlur={() => {
-            comboBox.closeDropdown();
-          }}
-          onChange={(event) => {
-            changeValue(event.currentTarget.value);
-            form.setFieldValue(fieldName, event.currentTarget.value);
-            comboBox.openDropdown();
-          }}
-          onClick={() => {
-            comboBox.openDropdown();
-          }}
-          onFocus={() => {
-            comboBox.openDropdown();
-          }}
-          placeholder={placeholder}
-          value={fieldValue}
-        />
-      </Combobox.Target>
-
-      <Combobox.Dropdown hidden={options.length === 0}>
-        <Combobox.Options>
-          <Combobox.Group label="Suggested Locations">{options}</Combobox.Group>
-        </Combobox.Options>
-      </Combobox.Dropdown>
-    </Combobox>
-  );
-};
 
 //Locally reused component for UIs in the booking process
 const FormUI = ({
@@ -155,6 +75,7 @@ const FormUI = ({
   body,
   changePrevFormState,
   isMobile,
+  formSubmitting,
 }: {
   form: UseFormReturnType<any>;
   currentFormState: BookingUIStates;
@@ -170,6 +91,7 @@ const FormUI = ({
   body: JSX.Element;
   changePrevFormState: Dispatch<SetStateAction<BookingUIStates | null>>;
   isMobile: boolean | undefined;
+  formSubmitting?: boolean;
 }) => {
   return (
     <Transition
@@ -218,13 +140,12 @@ const FormUI = ({
             </Group>
             <form
               onSubmit={form.onSubmit(() => {
-                if (nextUIType) {
+                if (handleSubmit) {
+                  //Form submit function provided
+                  handleSubmit(form.values);
+                } else if (nextUIType) {
                   changePrevFormState(currentFormState);
                   changeFormState(nextUIType);
-                }
-                if (handleSubmit) {
-                  //Provided a submit form funct
-                  form.onSubmit(handleSubmit);
                 }
               })}
             >
@@ -242,7 +163,8 @@ const FormUI = ({
                   <Stack gap={"sm"}>{body}</Stack>
                 </ScrollArea.Autosize>
                 <Button c={"black"} color="buttonColor" type="submit">
-                  {nextButtonText}
+                  {!formSubmitting && nextButtonText}
+                  {formSubmitting && <Loader color="black" size={20} />}
                 </Button>
               </Stack>
             </form>
@@ -256,6 +178,7 @@ const FormUI = ({
 export default function BookingForm() {
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
+  const [formSubmitting, setFormSubmitting] = useState(false);
   const mantineTheme = useMantineTheme();
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
@@ -269,13 +192,26 @@ export default function BookingForm() {
     null,
   );
 
+  //Create booking mutation
+  const createBookingMutation = api.bookings.create.useMutation({
+    onSuccess: () => {
+      showNotifications.success("Booking created");
+      setFormSubmitting(false);
+      window.location.reload();
+    },
+    onError: (error) => {
+      showNotifications.error(error.message);
+      setFormSubmitting(false);
+    },
+  });
+
   //Configure booking form
   const bookingForm = useForm({
     mode: "uncontrolled",
 
     //Initial field values of form
     initialValues: {
-      pickupTime: null as Date | null,
+      pickupTime: null as string | null,
       pickupAddr: "",
       destAddr: "",
       name: "",
@@ -285,34 +221,86 @@ export default function BookingForm() {
 
     //Frontend field checks
     validate: {
-      pickupTime: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value !== null
-            ? null
-            : "Must select a pick-up time"
-          : null,
-      pickupAddr: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Must add a pick-up address"
-          : null,
-      destAddr: (value) =>
-        formState === BookingUIStates.Where_To ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Must add a destination address"
-          : null,
-      name: (value) =>
-        formState === BookingUIStates.About_You ||
-        formState === BookingUIStates.Confirm
-          ? value.length !== 0
-            ? null
-            : "Field cannot be blank"
-          : null,
+      pickupTime: (value) => {
+        if (
+          formState === BookingUIStates.Where_To ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkPickUpTime(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      pickupAddr: (value) => {
+        if (
+          formState === BookingUIStates.Where_To ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkAddress(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      destAddr: (value) => {
+        if (
+          formState === BookingUIStates.Where_To ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkAddress(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      name: (value) => {
+        if (
+          formState === BookingUIStates.About_You ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkName(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
+      reasonForTrip: (value) => {
+        if (
+          formState === BookingUIStates.About_You ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkTripReason(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
     },
   });
 
@@ -345,22 +333,26 @@ export default function BookingForm() {
 
   //Configure payment form
   const paymentForm = useForm<{
-    paymentType: "Pay with Credit Card" | "Pay with Rides" | "Redeem Code";
+    paymentType: PaymentMethods;
     enteredCode: string;
   }>({
     mode: "controlled",
 
     initialValues: {
-      paymentType: "Pay with Credit Card",
+      paymentType: PaymentMethods.CREDIT_CARD,
       enteredCode: "",
     },
 
     validate: {
       paymentType: (paymentType, formValues) => {
-        if (paymentType.length === 0) {
+        if (
+          paymentType !== PaymentMethods.REDEEM_CODE &&
+          paymentType !== PaymentMethods.CREDIT_CARD &&
+          paymentType !== PaymentMethods.RIDES
+        ) {
           return "A selection must be made";
         } else if (
-          paymentType === "Redeem Code" &&
+          paymentType === PaymentMethods.REDEEM_CODE &&
           formValues.enteredCode === ""
         ) {
           return "Must input a valid code";
@@ -369,6 +361,24 @@ export default function BookingForm() {
       },
     },
   });
+
+  //Functions that handles form submit behavior
+  const handleBookingSubmit = async (values: typeof bookingForm.values) => {
+    if (formSubmitting) {
+      return;
+    }
+    setFormSubmitting(true);
+
+    createBookingMutation.mutate({
+      pickupAddr: values.pickupAddr,
+      destAddr: values.destAddr,
+      name: values.name,
+      pickupTime: values.pickupTime,
+      tripReason: values.reasonForTrip,
+      payment: paymentForm.values.paymentType,
+      reminders: values.receiveReminders,
+    });
+  };
 
   return (
     <Center
@@ -380,26 +390,9 @@ export default function BookingForm() {
       <FormUI
         body={
           <>
-            <DateTimePicker
-              aria-label="Pick-up Time Selection"
-              clearable
-              leftSection={<CalendarBlankIcon size={19} />}
-              maxDate={dayjs().add(1, "month").toDate()}
-              minDate={new Date()}
-              placeholder="Pick-up Time"
-              presets={[
-                { value: dayjs().format("YYYY-MM-DD HH:mm:ss"), label: "Now" },
-              ]}
-              timePickerProps={{
-                withDropdown: true,
-                format: "12h",
-                popoverProps: { withinPortal: false },
-              }}
-              valueFormat={"ddd[,] MMM D [at] h:mm A"}
-              {...bookingForm.getInputProps("pickupTime")}
-            />
+            <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
 
-            <DropdownField
+            <AddressDropdown
               ariaLabel="Pick-up address field"
               changeValue={setPickupAddr}
               fieldName="pickupAddr"
@@ -408,7 +401,7 @@ export default function BookingForm() {
               icon={<MapPinLineIcon size={20} />}
               placeholder="Pick-up Address"
             />
-            <DropdownField
+            <AddressDropdown
               ariaLabel="Destination address field"
               changeValue={setDestAddr}
               fieldName="destAddr"
@@ -546,16 +539,17 @@ export default function BookingForm() {
               <Radio
                 color="buttonColor"
                 label="Pay with Credit Card"
-                value="Pay with Credit Card"
+                value={PaymentMethods.CREDIT_CARD}
               />
               <Radio
                 color="buttonColor"
                 label="Redeem Code"
-                value="Redeem Code"
+                value={PaymentMethods.REDEEM_CODE}
               />
-              {paymentForm.values.paymentType === "Redeem Code" && (
+              {paymentForm.values.paymentType ===
+                PaymentMethods.REDEEM_CODE && (
                 <TextInput
-                  aria-label="Text input field to redeem a code that covers a ride"
+                  aria-label="Redeem code text input"
                   error={paymentForm.errors.paymentType}
                   onChange={(event) => {
                     paymentForm.values.enteredCode = event.currentTarget.value;
@@ -568,9 +562,9 @@ export default function BookingForm() {
               <Radio
                 color="buttonColor"
                 label="Pay with Rides"
-                value="Pay with Rides"
+                value={PaymentMethods.RIDES}
               />
-              {paymentForm.values.paymentType === "Pay with Rides" && (
+              {paymentForm.values.paymentType === PaymentMethods.RIDES && (
                 <Text>
                   <Text span>
                     This trip costs 1 Ride. You will have 40 Rides remaining.{" "}
@@ -617,7 +611,7 @@ export default function BookingForm() {
                 <Text>Pick-up Address</Text>
               </Grid.Col>
               <Grid.Col span={6}>
-                <DropdownField
+                <AddressDropdown
                   ariaLabel="Text box with previously entered pick-up address"
                   changeValue={setPickupAddr}
                   fieldName="pickupAddr"
@@ -633,27 +627,7 @@ export default function BookingForm() {
                 <Text>Pick-up Time</Text>
               </Grid.Col>
               <Grid.Col span={6}>
-                <DateTimePicker
-                  aria-label="Text box with previously entered pick-up time"
-                  clearable
-                  leftSection={<CalendarBlankIcon size={19} />}
-                  maxDate={dayjs().add(1, "month").toDate()}
-                  minDate={new Date()}
-                  placeholder="Time and Date"
-                  presets={[
-                    {
-                      value: dayjs().format("YYYY-MM-DD HH:mm:ss"),
-                      label: "Now",
-                    },
-                  ]}
-                  timePickerProps={{
-                    withDropdown: true,
-                    format: "12h",
-                    popoverProps: { withinPortal: false },
-                  }}
-                  valueFormat={"ddd[,] MMM D [at] h:mm A"}
-                  {...bookingForm.getInputProps("pickupTime")}
-                />
+                <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
               </Grid.Col>
             </Grid>
             <Grid gutter={0}>
@@ -661,7 +635,7 @@ export default function BookingForm() {
                 <Text>Destination Address</Text>
               </Grid.Col>
               <Grid.Col span={6}>
-                <DropdownField
+                <AddressDropdown
                   ariaLabel="Text box with previously entered destination address"
                   changeValue={setDestAddr}
                   fieldName="destAddr"
@@ -700,7 +674,7 @@ export default function BookingForm() {
                   leftSection={<CurrencyCircleDollarIcon size={20} />}
                   minRows={1}
                   readOnly
-                  value={paymentForm.values.paymentType}
+                  value={formatString(paymentForm.values.paymentType)}
                 />
               </Grid.Col>
             </Grid>
@@ -728,6 +702,8 @@ export default function BookingForm() {
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={bookingForm}
+        formSubmitting={formSubmitting}
+        handleSubmit={handleBookingSubmit}
         isMobile={isMobile}
         nextButtonText={"Book"}
         nextUIType={BookingUIStates.End}
