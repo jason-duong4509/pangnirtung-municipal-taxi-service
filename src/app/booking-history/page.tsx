@@ -392,15 +392,15 @@ export default function BookingHistoryPage() {
                 placeholder="Your Name"
                 {...bookingForm.getInputProps("name")}
                 readOnly={bookingForm.values.status !== "Pending"}
-                required
+                withAsterisk
               />
               {bookingForm.values.status === "Pending" && (
                 <>
                   <PickupTimeInput
                     form={bookingForm}
                     formField={"pickupTime"}
-                    required
                     useLabel
+                    withAsterisk
                   />
                   <AddressDropdown
                     ariaLabel="Pick-up address field"
@@ -411,7 +411,7 @@ export default function BookingHistoryPage() {
                     icon={<MapPinLineIcon size={20} />}
                     label="Pick-up Address"
                     placeholder="Pick-up Address"
-                    required
+                    withAsterisk
                   />
                   <AddressDropdown
                     ariaLabel="Destination address field"
@@ -422,7 +422,7 @@ export default function BookingHistoryPage() {
                     icon={<PathIcon size={20} />}
                     label="Destination Address"
                     placeholder="Destination Address"
-                    required
+                    withAsterisk
                   />
                 </>
               )}

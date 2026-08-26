@@ -43,6 +43,17 @@ export const bookings = pgTable("bookings", {
   status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
 });
 
+export const appIssues = pgTable("app_issues", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  title: text("title").notNull(),
+  comments: text("comments").notNull(),
+  created_by: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  read: boolean("read").notNull().default(false),
+});
+
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
