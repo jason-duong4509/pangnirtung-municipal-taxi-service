@@ -8,7 +8,7 @@ import {
   useMantineTheme,
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
-import ReportAppIssueModal from "./report-app-issue";
+import ReportAppIssueModal from "../common/reportAppIssue/report-app-issue";
 
 export default function MenuButton() {
   const [burgerOpened, { toggle: toggleBurger }] = useDisclosure();
