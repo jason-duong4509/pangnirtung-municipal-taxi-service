@@ -33,6 +33,7 @@ export const bookings = pgTable("bookings", {
   tripReason: text("reason_for_trip").notNull(),
   payment: paymentMethod("payment_method").notNull(),
   reminders: boolean("receive_reminders").notNull().default(false),
+  requestVerification: boolean("request_verification").notNull().default(false),
   created_by: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .$defaultFn(() => /* @__PURE__ */ new Date())

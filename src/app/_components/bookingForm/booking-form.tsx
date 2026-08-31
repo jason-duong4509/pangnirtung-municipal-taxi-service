@@ -217,6 +217,7 @@ export default function BookingForm() {
       name: "",
       reasonForTrip: "",
       receiveReminders: false,
+      requestVerification: false,
     },
 
     //Frontend field checks
@@ -377,6 +378,7 @@ export default function BookingForm() {
       tripReason: values.reasonForTrip,
       payment: paymentForm.values.paymentType,
       reminders: values.receiveReminders,
+      requestVerification: values.requestVerification,
     });
   };
 
@@ -690,6 +692,24 @@ export default function BookingForm() {
                     key={bookingForm.key("receiveReminders")}
                     label="Yes"
                     {...bookingForm.getInputProps("receiveReminders", {
+                      type: "checkbox",
+                    })}
+                  />
+                </MantineProvider>
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Request Resident Verification?</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <MantineProvider theme={{ cursorType: "pointer" }}>
+                  <Checkbox
+                    aria-label="Request to undergo resident verification"
+                    color="buttonColor"
+                    key={bookingForm.key("requestVerification")}
+                    label="Yes"
+                    {...bookingForm.getInputProps("requestVerification", {
                       type: "checkbox",
                     })}
                   />

@@ -1,5 +1,7 @@
+import type { inferRouterOutputs } from "@trpc/server";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { bookingsRouter } from "./routers/bookings";
+import { profileRouter } from "./routers/profile";
 import { reportAppRouter } from "./routers/report-app-issue";
 
 /**
@@ -10,10 +12,12 @@ import { reportAppRouter } from "./routers/report-app-issue";
 export const appRouter = createTRPCRouter({
   bookings: bookingsRouter,
   reportApp: reportAppRouter,
+  profile: profileRouter,
 });
 
 // export type definition of API
 export type AppRouter = typeof appRouter;
+export type RouterOutputs = inferRouterOutputs<AppRouter>;
 
 /**
  * Create a server-side caller for the tRPC API.

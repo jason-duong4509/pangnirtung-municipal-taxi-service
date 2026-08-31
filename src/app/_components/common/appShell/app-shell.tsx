@@ -9,7 +9,7 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { ArrowsOutSimpleIcon } from "@phosphor-icons/react";
+import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
 import type { JSX } from "react";
 import PangSeal from "~/assets/icons/pang";
 import AsideButton from "./aside-button";
@@ -76,7 +76,13 @@ export default function CustomAppShell({
         <AppShell.Aside p="md">
           <Stack>
             <AsideButton
-              buttonIcon={<ArrowsOutSimpleIcon size={20} />}
+              buttonIcon={
+                expandAside ? (
+                  <ArrowsInSimpleIcon size={20} />
+                ) : (
+                  <ArrowsOutSimpleIcon size={20} />
+                )
+              }
               buttonText={"Collapse"}
               expandButton={expandAside}
               onClick={() => setExpandAside(!expandAside)}

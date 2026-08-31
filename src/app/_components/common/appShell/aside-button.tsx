@@ -15,6 +15,7 @@ export default function AsideButton({
 }) {
   return (
     <Button
+      aria-label={buttonText}
       c="black"
       justify={expandButton ? "flex-start" : "center"}
       onClick={onClick}

@@ -19,6 +19,7 @@ export default function AlertPopup({
   modalOpened,
   closeModal,
   isLoading,
+  hideCloseButton,
 }: {
   titleText: string;
   body: JSX.Element;
@@ -28,6 +29,7 @@ export default function AlertPopup({
   modalOpened: boolean;
   closeModal: () => void;
   isLoading: boolean;
+  hideCloseButton?: boolean;
 }) {
   return (
     <Modal
@@ -42,7 +44,7 @@ export default function AlertPopup({
       <Stack gap={"lg"} p={"md"}>
         <Group justify="space-between">
           <Title order={4}>{titleText}</Title>
-          <CloseButton onClick={closeModal} />
+          {!hideCloseButton && <CloseButton onClick={closeModal} />}
         </Group>
         {body}
         <Group grow>

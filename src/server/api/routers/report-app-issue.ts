@@ -57,7 +57,7 @@ export const reportAppRouter = createTRPCRouter({
       } catch {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create booking",
+          message: "Failed to create app issue entry",
         });
       }
     }),
