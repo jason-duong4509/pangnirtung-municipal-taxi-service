@@ -14,7 +14,7 @@ export default function AddressDropdown({
   icon,
   form,
   label,
-  required,
+  withAsterisk,
 }: {
   fieldName: string;
   fieldValue: string;
@@ -24,7 +24,7 @@ export default function AddressDropdown({
   icon: ReactNode;
   form: UseFormReturnType<any>;
   label?: string;
-  required?: boolean;
+  withAsterisk?: boolean;
 }) {
   const comboBox = useCombobox();
 
@@ -75,8 +75,8 @@ export default function AddressDropdown({
             comboBox.openDropdown();
           }}
           placeholder={placeholder}
-          required={required}
           value={fieldValue}
+          withAsterisk={withAsterisk}
         />
       </Combobox.Target>
 

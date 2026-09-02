@@ -301,3 +301,57 @@ export const checkRedeemedCode = (
     formattedInput: input.trim(),
   };
 };
+
+export const checkReportAppComments = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: string } => {
+  const trimmedInput = input.trim();
+
+  if (trimmedInput.length === 0) {
+    return {
+      isProper: false,
+      errorMessage: "Field cannot be blank",
+    };
+  }
+
+  if (trimmedInput.length > 1000) {
+    return {
+      isProper: false,
+      errorMessage: "Max 1,000 characters are accepted",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: trimmedInput,
+  };
+};
+
+export const checkReportAppTitle = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: string } => {
+  const trimmedInput = input.trim();
+
+  if (trimmedInput.length === 0) {
+    return {
+      isProper: false,
+      errorMessage: "Title cannot be blank",
+    };
+  }
+
+  if (trimmedInput.length > 100) {
+    return {
+      isProper: false,
+      errorMessage: "Max 100 characters are accepted",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: trimmedInput,
+  };
+};

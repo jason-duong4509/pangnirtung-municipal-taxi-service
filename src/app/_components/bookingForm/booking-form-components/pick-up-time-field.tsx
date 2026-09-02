@@ -7,12 +7,12 @@ export default function PickupTimeInput({
   form,
   formField,
   useLabel,
-  required,
+  withAsterisk,
 }: {
   form: UseFormReturnType<any>;
   formField: string;
   useLabel?: boolean;
-  required?: boolean;
+  withAsterisk?: boolean;
 }) {
   return (
     <DateTimePicker
@@ -31,7 +31,7 @@ export default function PickupTimeInput({
       valueFormat={"ddd[,] MMM D [at] h:mm A"}
       {...form.getInputProps(formField)}
       label={useLabel ? "Pick-up Time" : undefined}
-      required={required}
+      withAsterisk={withAsterisk}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { checkPickUpTime } from "~/lib/input-checkers";
 import { db } from "~/server/db";
@@ -31,6 +31,7 @@ export const bookingsRouter = createTRPCRouter({
         tripReason: z.string(),
         payment: z.nativeEnum(PaymentMethods),
         reminders: z.boolean(),
+        requestVerification: z.boolean(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -63,6 +64,7 @@ export const bookingsRouter = createTRPCRouter({
             payment: input.payment,
             reminders: input.reminders,
             created_by: ctx.session?.user.id ?? "eoirjg", //TODO: change this properly once auth is done and make schema a fk
+            requestVerification: input.requestVerification, //TODO: if user is already a resident, put false for this value
           })
           .returning();
 
@@ -140,24 +142,152 @@ export const bookingsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.bookingIds.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No trips selected",
+        });
+      }
       //TODO: add proper auth
       //add refund?
       try {
-        const [result] = await db
-          .update(bookings)
-          .set({
-            status: BookingStatus.CANCELLED,
-            updatedAt: new Date(),
-          })
-          .where(inArray(bookings.id, input.bookingIds))
-          .returning();
+        await db.transaction(async (tx) => {
+          const cancelledBookingIds = await tx
+            .update(bookings)
+            .set({
+              status: BookingStatus.CANCELLED,
+              updatedAt: new Date(),
+            })
+            .where(inArray(bookings.id, input.bookingIds))
+            .returning({ id: bookings.id });
 
-        if (!result) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "No bookings found to update",
-          });
+          if (cancelledBookingIds.length !== input.bookingIds.length) {
+            const cancelledBookingsList = cancelledBookingIds.map(
+              (obj) => obj.id,
+            );
+            const missingBookingIds = input.bookingIds.filter(
+              (id) => !cancelledBookingsList.includes(id),
+            );
+
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Booking IDs not found: ${missingBookingIds}`,
+            });
+          }
+        });
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
         }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update booking",
+          cause: error,
+        });
+      }
+    }),
+  accept: publicProcedure
+    .input(
+      z.object({
+        bookingIds: z.array(z.number()),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      //TODO: add proper auth
+      if (input.bookingIds.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No trips selected",
+        });
+      }
+      try {
+        await db.transaction(async (tx) => {
+          const updatedBookingIds = await tx
+            .update(bookings)
+            .set({
+              status: BookingStatus.IN_PROGRESS,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                inArray(bookings.id, input.bookingIds),
+                eq(bookings.status, BookingStatus.PENDING),
+              ),
+            )
+            .returning({ id: bookings.id });
+
+          if (updatedBookingIds.length !== input.bookingIds.length) {
+            const updatedBookingsList = updatedBookingIds.map((obj) => obj.id);
+            const missingBookingIds = input.bookingIds.filter(
+              (id) => !updatedBookingsList.includes(id),
+            );
+
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Booking IDs not found or not pending: ${missingBookingIds}`,
+            });
+          }
+        });
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update booking",
+          cause: error,
+        });
+      }
+    }),
+  complete: publicProcedure
+    .input(
+      z.object({
+        bookingIds: z.array(z.number()),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      //TODO: add proper auth
+      if (input.bookingIds.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No trips selected",
+        });
+      }
+
+      try {
+        const updatedUsers = await db.transaction(async (tx) => {
+          const updatedBookingIds = await tx
+            .update(bookings)
+            .set({
+              status: BookingStatus.COMPLETED,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                inArray(bookings.id, input.bookingIds),
+                eq(bookings.status, BookingStatus.IN_PROGRESS),
+              ),
+            )
+            .returning();
+
+          if (updatedBookingIds.length !== input.bookingIds.length) {
+            const updatedBookingsList = updatedBookingIds.map((obj) => obj.id);
+            const missingBookingIds = input.bookingIds.filter(
+              (id) => !updatedBookingsList.includes(id),
+            );
+
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Booking IDs not found or not in progress: ${missingBookingIds}`,
+            });
+          }
+          return updatedBookingIds;
+        });
+
+        const requestedVerification = updatedUsers.filter(
+          (user) => user.requestVerification === true,
+        );
+        return requestedVerification;
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
