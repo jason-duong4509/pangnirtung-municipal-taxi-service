@@ -16,6 +16,7 @@ import { useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   CheckSquareIcon,
+  ListChecksIcon,
   SelectionIcon,
   SelectionSlashIcon,
   XSquareIcon,
@@ -64,7 +65,7 @@ export default function DriverPage() {
   const [confirmResidencyData, setConfirmResidencyData] =
     useState<verifiedResidents>([]);
 
-  //--Holds all bookings, separated into 4 tables--
+  //--Holds all bookings, separated into 2 tables--
   let pendingBookings = [] as JSX.Element[];
   let acceptedBookings = [] as JSX.Element[];
   //-----------------------------------------------
@@ -85,12 +86,7 @@ export default function DriverPage() {
     mode: "uncontrolled",
   });
 
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    //Ensure that the query automatically runs but does so exactly once
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
+  const getBookingsQuery = api.bookings.get.useQuery();
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {
@@ -413,7 +409,7 @@ export default function DriverPage() {
               {viewAcceptedTrips && isSelecting && (
                 <>
                   <AsideButton
-                    buttonIcon={<CheckSquareIcon size={20} />}
+                    buttonIcon={<ListChecksIcon size={20} />}
                     buttonText={"Complete Trips"}
                     expandButton={expandAside}
                     onClick={() => {
@@ -477,7 +473,8 @@ export default function DriverPage() {
                     setAlertTitleText("Accept trips");
                     setAlertBodyComponent(
                       <Text>
-                        All selected trips will be accepted. Are you sure?
+                        All selected trips will be accepted and marked as in
+                        progress. Are you sure?
                       </Text>,
                     );
                     setOnModalSubmit(() => () => {

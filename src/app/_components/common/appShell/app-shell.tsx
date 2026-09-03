@@ -8,7 +8,7 @@ import {
   Stack,
   Title,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { ArrowsInSimpleIcon, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
 import type { JSX } from "react";
 import PangSeal from "~/assets/icons/pang";
@@ -30,6 +30,7 @@ export default function CustomAppShell({
   setExpandAside?: (_: boolean) => void;
 }) {
   const [opened, { toggle }] = useDisclosure();
+  const alwaysShowNav = !useMediaQuery("(max-width: 1000px)");
 
   return (
     <AppShell
@@ -46,12 +47,17 @@ export default function CustomAppShell({
       navbar={{
         width: 200,
         breakpoint: "xs",
-        collapsed: { mobile: !opened, desktop: !opened },
+        collapsed: {
+          mobile: !opened,
+          desktop: alwaysShowNav ? false : !opened,
+        },
       }}
     >
       <AppShell.Header>
         <Group h="100%" px="md">
-          <Burger onClick={toggle} opened={opened} size="sm" />
+          {!alwaysShowNav && (
+            <Burger onClick={toggle} opened={opened} size="sm" />
+          )}
           <PangSeal height={"35px"} width={"35px"} />
           <Title order={3}>{headerText}</Title>
         </Group>

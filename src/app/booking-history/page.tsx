@@ -7,7 +7,6 @@ import {
   Drawer,
   Flex,
   Group,
-  Loader,
   Paper,
   SegmentedControl,
   Skeleton,
@@ -62,14 +61,17 @@ export default function BookingHistoryPage() {
   const [table, setTable] = useState("pending");
   const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
     useDisclosure(false);
-  const [modalOpened, { open: openModal, close: closeModal }] =
+  const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
     useDisclosure(false);
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<number[]>([]); //Each element is a booking's ID
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const [cancellingBookings, setCancellingBookings] = useState(false);
+  const [isMutating, setIsMutating] = useState(false);
+  const [alertBodyComponent, setAlertBodyComponent] = useState(
+    <Text>Are you sure?</Text>,
+  );
+  const [onModalSubmit, setOnModalSubmit] = useState<() => void>(() => {});
 
   //--Holds all bookings, separated into 4 tables--
   let pendingBookings = [] as JSX.Element[];
@@ -144,24 +146,20 @@ export default function BookingHistoryPage() {
     },
   });
 
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    //Ensure that the query automatically runs but does so exactly once
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
+  const getBookingsQuery = api.bookings.get.useQuery();
 
   //Update booking mutation
   const updateBookingMutation = api.bookings.update.useMutation({
     onSuccess: () => {
       showNotifications.success("Booking updated");
-      setFormSubmitting(false);
+      setIsMutating(false);
       getBookingsQuery.refetch();
       closeDrawer();
+      closeAlertModal();
     },
     onError: (error) => {
       showNotifications.error(error.message);
-      setFormSubmitting(false);
+      setIsMutating(false);
     },
   });
 
@@ -169,17 +167,16 @@ export default function BookingHistoryPage() {
   const cancelBookingMutation = api.bookings.cancel.useMutation({
     onSuccess: () => {
       showNotifications.success("Cancelled successfully");
-      setCancellingBookings(false);
+      setIsMutating(false);
       getBookingsQuery.refetch();
       closeDrawer();
-      closeModal();
+      closeAlertModal();
       setIsDeleting(false);
       setSelectedRows([]);
     },
     onError: (error) => {
       showNotifications.error(error.message);
-      setFormSubmitting(false);
-      setCancellingBookings(false);
+      setIsMutating(false);
     },
   });
 
@@ -307,11 +304,11 @@ export default function BookingHistoryPage() {
 
   //Handle booking edit/update behaviors
   const handleFormOnSubmit = async (values: typeof bookingForm.values) => {
-    if (formSubmitting) {
+    if (isMutating) {
       //If form is already submitting
       return;
     }
-    setFormSubmitting(true);
+    setIsMutating(true);
 
     updateBookingMutation.mutate({
       pickupAddr: values.pickupAddr,
@@ -334,24 +331,12 @@ export default function BookingHistoryPage() {
       <aside>
         <AlertPopup
           abortButtonText={"Back"}
-          body={
-            <>
-              <Text>
-                A refund will be provided to trips that are still pending
-              </Text>
-              <Text>This action cannot be undone!</Text>
-            </>
-          }
-          closeModal={closeModal}
+          body={alertBodyComponent}
+          closeModal={closeAlertModal}
           confirmButtonText={"Confirm"}
-          isLoading={cancellingBookings}
-          modalOpened={modalOpened}
-          onConfirm={() => {
-            setCancellingBookings(true);
-            cancelBookingMutation.mutate({
-              bookingIds: selectedRows,
-            });
-          }}
+          isLoading={isMutating}
+          modalOpened={alertModalOpened}
+          onConfirm={() => onModalSubmit()}
           titleText={"Are you Sure?"}
         />
         <Drawer
@@ -496,8 +481,22 @@ export default function BookingHistoryPage() {
                       c={"black"}
                       color="buttonColor"
                       onClick={() => {
-                        setSelectedRows([bookingForm.values.id]);
-                        openModal();
+                        openAlertModal();
+                        setAlertBodyComponent(
+                          <>
+                            <Text>
+                              A refund will be provided to trips that are still
+                              pending
+                            </Text>
+                            <Text>This action cannot be undone!</Text>
+                          </>,
+                        );
+                        setOnModalSubmit(() => () => {
+                          setIsMutating(true);
+                          cancelBookingMutation.mutate({
+                            bookingIds: [bookingForm.values.id],
+                          });
+                        });
                       }}
                       p={0}
                       size="compact-sm"
@@ -511,13 +510,23 @@ export default function BookingHistoryPage() {
                       color="buttonColor"
                       disabled={!bookingForm.isDirty()}
                       form="booking-form"
+                      onClick={() => {
+                        openAlertModal();
+                        setAlertBodyComponent(
+                          <Text>
+                            Trip information will be changed. Are you sure?
+                          </Text>,
+                        );
+                        setOnModalSubmit(() => () => {
+                          handleFormOnSubmit(bookingForm.values);
+                        });
+                      }}
                       p={0}
                       size="compact-sm"
-                      type="submit"
+                      type="button"
                       variant="filled"
                     >
-                      {!formSubmitting && "Update Trip"}
-                      {formSubmitting && <Loader color="black" size={20} />}
+                      Update Trip
                     </Button>
                   </Group>
                 </Stack>
@@ -607,7 +616,22 @@ export default function BookingHistoryPage() {
                       setIsDeleting(!isDeleting);
                     } else {
                       //already in delete mode
-                      openModal();
+                      openAlertModal();
+                      setAlertBodyComponent(
+                        <>
+                          <Text>
+                            A refund will be provided to trips that are still
+                            pending
+                          </Text>
+                          <Text>This action cannot be undone!</Text>
+                        </>,
+                      );
+                      setOnModalSubmit(() => () => {
+                        setIsMutating(true);
+                        cancelBookingMutation.mutate({
+                          bookingIds: selectedRows,
+                        });
+                      });
                     }
                   }}
                   variant="outline"
