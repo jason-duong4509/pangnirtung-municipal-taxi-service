@@ -1,306 +1,242 @@
 "use client";
 import {
   Button,
-  CloseButton,
   Group,
+  Loader,
   Modal,
-  PasswordInput,
   Stack,
-  Text,
   TextInput,
   Title,
-  useMantineTheme,
-  useModalsStack,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { useMediaQuery } from "@mantine/hooks";
-import {
-  LockSimpleIcon,
-  PaperPlaneTiltIcon,
-  ShieldCheckIcon,
-  UserIcon,
-} from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
+import { useDisclosure } from "@mantine/hooks";
+import { DeviceMobileIcon, ShieldCheckIcon } from "@phosphor-icons/react";
+import dayjs from "dayjs";
+import { useEffect, useState } from "react";
+import { checkOTP, checkPhoneNumber } from "~/lib/input-checkers";
+import { showNotifications } from "~/lib/mantine-notifications-system";
+import { authClient } from "~/server/better-auth/client";
 
-export default function Login() {
-  const router = useRouter();
-  const mantineTheme = useMantineTheme();
-  const isMobile = useMediaQuery(
-    `(max-width: ${mantineTheme.breakpoints.smMd})`,
-  );
-  const modalStack = useModalsStack([
-    "login",
-    "verify",
-    "notice",
-    "forgot_pass_1",
-    "forgot_pass_2",
-  ]); //notice state to be moved and controlled by server result later
+const MAX_COOLDOWN_SEC = 60;
 
-  //Mantine forms, each submitted to the server at various steps as the user navigates the page
-  const loginForm = useForm({
+export default function LoginModal({
+  loginModalOpened,
+  closeLoginModal,
+}: {
+  loginModalOpened: boolean;
+  closeLoginModal: () => void;
+}) {
+  const [isMutating, setIsMutating] = useState(false);
+  const [
+    verifyModalOpened,
+    { open: openVerifyModal, close: closeVerifyModal },
+  ] = useDisclosure(false);
+  const [newOTPCooldown, setNewOTPCooldown] = useState(0);
+  const [cooldownEndAt, setCooldownEndAt] = useState<dayjs.Dayjs | null>(null);
+
+  //use effect that decrements cooldown
+  useEffect(() => {
+    if (!cooldownEndAt) {
+      //no cooldown to decrement
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      const timeDifference = cooldownEndAt.diff(dayjs(), "second"); //Get the difference in seconds from the cooldown end to now
+
+      if (timeDifference <= 0) {
+        //cooldown done
+        setNewOTPCooldown(0);
+        setCooldownEndAt(null);
+      } else {
+        setNewOTPCooldown(timeDifference);
+      }
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [cooldownEndAt]);
+
+  const loginForm = useForm<{
+    phoneNumber: string;
+  }>({
     mode: "uncontrolled",
 
     initialValues: {
-      username: "",
-      password: "",
+      phoneNumber: "",
     },
 
     validate: {
-      username: (value) => (value.length === 0 ? "Username required" : null),
-      password: (value) => (value.length === 0 ? "Password required" : null),
+      phoneNumber: (value) => {
+        const result = checkPhoneNumber(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
     },
   });
-  const oneTimeCodeForm = useForm({
+
+  const otpForm = useForm<{
+    phoneNumber: string;
+    otp: string;
+  }>({
     mode: "uncontrolled",
 
     initialValues: {
-      code: "",
+      phoneNumber: "",
+      otp: "",
     },
 
     validate: {
-      code: (value) => (value.length === 0 ? "Code required" : null),
-    },
-  });
-  const resetAccountForm = useForm({
-    mode: "uncontrolled",
+      otp: (value) => {
+        const result = checkOTP(value);
 
-    initialValues: {
-      emailOrPhone: "",
-    },
-
-    validate: {
-      emailOrPhone: (value) => (value.length === 0 ? "Cannot be blank" : null),
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
     },
   });
 
-  //Functions that handles form submit behavior
   const handleLoginSubmit = async (values: typeof loginForm.values) => {
-    console.log(values);
+    const resubmitOnCooldown =
+      values.phoneNumber === otpForm.values.phoneNumber && newOTPCooldown > 0;
+    if (resubmitOnCooldown) {
+      closeLoginModal();
+      openVerifyModal();
+      loginForm.reset();
+      return;
+    } else if (loginModalOpened) {
+      setIsMutating(true);
+      //Normalize the input
+      const result = checkPhoneNumber(values.phoneNumber);
+
+      if (result.isProper) {
+        values.phoneNumber = result.formattedInput;
+      } else {
+        showNotifications.error(result.errorMessage);
+        return;
+      }
+    }
+
+    const { error } = await authClient.phoneNumber.sendOtp({
+      phoneNumber: loginModalOpened
+        ? values.phoneNumber
+        : otpForm.values.phoneNumber,
+    });
+
+    if (error) {
+      showNotifications.error(error?.message ?? "An error occurred on login");
+      setCooldownEndAt(null);
+      setNewOTPCooldown(0);
+    } else if (loginModalOpened) {
+      closeLoginModal();
+      otpForm.setValues({ phoneNumber: values.phoneNumber });
+      loginForm.reset();
+      openVerifyModal();
+      setCooldownEndAt(dayjs().add(MAX_COOLDOWN_SEC, "second"));
+      setNewOTPCooldown(MAX_COOLDOWN_SEC);
+    }
+    setIsMutating(false);
   };
-  const handleCodeSubmit = async (values: typeof oneTimeCodeForm.values) => {
-    console.log(values);
-  };
-  const handleResetAccountSubmit = async (
-    values: typeof resetAccountForm.values,
-  ) => {
-    console.log(values);
+
+  const handleCodeSubmit = async (values: typeof otpForm.values) => {
+    setIsMutating(true);
+
+    const { error } = await authClient.phoneNumber.verify({
+      phoneNumber: values.phoneNumber,
+      code: values.otp,
+    });
+
+    if (error) {
+      showNotifications.error(
+        error?.message ?? "An error occurred when validating OTP",
+      );
+    } else {
+      closeVerifyModal();
+      otpForm.reset();
+      showNotifications.success("Successfully logged in");
+    }
+    setIsMutating(false);
   };
 
   return (
     <>
-      <Button
-        c={"black"}
-        color={isMobile ? "buttonColor" : "customWhite"}
-        onClick={() => modalStack.open("login")}
+      <Modal
+        centered
+        onClose={closeLoginModal}
+        opened={loginModalOpened}
         radius={"lg"}
-        size="xs"
-        type="button"
+        size={"sm"}
+        withCloseButton={false}
       >
-        Log in
-      </Button>
-
-      <Modal.Stack>
-        <Modal
-          centered
-          radius={"lg"}
-          size={"sm"}
-          withCloseButton={false}
-          {...modalStack.register("login")}
-        >
-          <form onSubmit={loginForm.onSubmit(handleLoginSubmit)}>
-            <Stack gap={"lg"} p={"md"}>
-              <Group justify="space-between">
-                <Title order={4}>Login</Title>
-                <Button
-                  c={"black"}
-                  fw={"normal"}
-                  onClick={() => router.push("/register")}
-                  p={0}
-                  size="compact-sm"
-                  style={{ textDecoration: "underline" }}
-                  variant="transparent"
-                >
-                  Sign-Up
-                </Button>
-              </Group>
-              <Stack>
-                <TextInput
-                  aria-label="Username input field"
-                  key={loginForm.key("username")}
-                  leftSection={<UserIcon size={20} />}
-                  {...loginForm.getInputProps("username")}
-                  placeholder="Username"
-                />
-                <PasswordInput
-                  aria-label="Password input field"
-                  key={loginForm.key("password")}
-                  leftSection={<LockSimpleIcon size={20} />}
-                  {...loginForm.getInputProps("password")}
-                  placeholder="Password"
-                />
-                <Group align="flex-start">
-                  <Button
-                    c={"black"}
-                    fw={"normal"}
-                    onClick={() => modalStack.open("forgot_pass_1")}
-                    p={0}
-                    size="compact-sm"
-                    style={{ textDecoration: "underline" }}
-                    type="button"
-                    variant="transparent"
-                  >
-                    Forgot Username or Password
-                  </Button>
-                </Group>
-              </Stack>
-              <Button
-                c={"black"}
-                color="buttonColor"
-                onClick={() => {
-                  modalStack.closeAll();
-                  modalStack.open("verify");
-                }}
-                type="submit"
-              >
-                Log in
-              </Button>
-            </Stack>
-          </form>
-        </Modal>
-        <Modal
-          centered
-          radius={"lg"}
-          size={"sm"}
-          withCloseButton={false}
-          {...modalStack.register("verify")}
-        >
-          <form onSubmit={oneTimeCodeForm.onSubmit(handleCodeSubmit)}>
-            <Stack gap={"lg"} p={"md"}>
-              <Group justify="space-between">
-                <Title order={4}>Verify</Title>
-              </Group>
-              <Stack>
-                <TextInput
-                  aria-label="One-Time Code Input Field"
-                  key={oneTimeCodeForm.key("code")}
-                  leftSection={<ShieldCheckIcon size={20} />}
-                  {...oneTimeCodeForm.getInputProps("code")}
-                  description="Enter the code sent to this account's [email/phone number via SMS]"
-                  placeholder="Enter One-Time Code"
-                />
-                <Group align="flex-start">
-                  <Button
-                    c={"black"}
-                    fw={"normal"}
-                    p={0}
-                    size="compact-sm"
-                    style={{ textDecoration: "underline" }}
-                    type="button"
-                    variant="transparent"
-                  >
-                    Request new code
-                  </Button>
-                </Group>
-              </Stack>
-              <Button
-                c={"black"}
-                color="buttonColor"
-                onClick={() => {
-                  modalStack.closeAll();
-                  modalStack.open("notice");
-                }}
-                type="submit"
-              >
-                Submit
-              </Button>
-            </Stack>
-          </form>
-        </Modal>
-        <Modal
-          centered
-          radius={"lg"}
-          size={"sm"}
-          withCloseButton={false}
-          {...modalStack.register("notice")}
-        >
+        <form onSubmit={loginForm.onSubmit(handleLoginSubmit)}>
           <Stack gap={"lg"} p={"md"}>
-            <Group justify="space-between">
-              <Title order={4}>Note</Title>
-            </Group>
-            <Stack>
-              <Text>You have successfully logged in</Text>
-              <Text>
-                Your residency status is still under review. This account cannot
-                access discounted rides until residency has been verified
-              </Text>
-            </Stack>
-            <Button
-              c={"black"}
-              color="buttonColor"
-              onClick={() => {
-                modalStack.closeAll();
-              }}
-              type="button"
-            >
-              I understand
+            <Title order={4}>Login</Title>
+            <TextInput
+              aria-label="Enter your phone number"
+              key={loginForm.key("phoneNumber")}
+              leftSection={<DeviceMobileIcon size={20} />}
+              {...loginForm.getInputProps("phoneNumber")}
+              placeholder="123-456-7890"
+            />
+            <Button c={"black"} color="buttonColor" type="submit">
+              {!isMutating && "Log in"}
+              {isMutating && <Loader color="black" size={20} />}
             </Button>
           </Stack>
-        </Modal>
-        <Modal
-          centered
-          radius={"lg"}
-          size={"sm"}
-          withCloseButton={false}
-          {...modalStack.register("forgot_pass_1")}
-        >
-          <form onSubmit={resetAccountForm.onSubmit(handleResetAccountSubmit)}>
-            <Stack gap={"lg"} p={"md"}>
-              <Group justify="space-between">
-                <Title order={4}>Enter Email or Phone Number</Title>
-              </Group>
-              <TextInput
-                aria-label="Input Field"
-                key={resetAccountForm.key("emailOrPhone")}
-                leftSection={<PaperPlaneTiltIcon size={20} />}
-                {...resetAccountForm.getInputProps("emailOrPhone")}
-                description="Instructions will be sent to the email address or phone number below"
-                placeholder="Email or Phone Number"
-              />
+        </form>
+      </Modal>
+      <Modal
+        centered
+        onClose={closeVerifyModal}
+        opened={verifyModalOpened}
+        radius={"lg"}
+        size={"sm"}
+        withCloseButton={false}
+      >
+        <form onSubmit={otpForm.onSubmit(handleCodeSubmit)}>
+          <Stack gap={"lg"} p={"md"}>
+            <Title order={4}>Verify</Title>
+            <TextInput
+              aria-label="Enter one-time code"
+              key={otpForm.key("otp")}
+              leftSection={<ShieldCheckIcon size={20} />}
+              {...otpForm.getInputProps("otp")}
+              description="Enter the code sent to this phone number via SMS"
+              placeholder="One-Time Code"
+            />
+            <Group align="flex-start">
               <Button
                 c={"black"}
-                color="buttonColor"
+                fw={"normal"}
                 onClick={() => {
-                  modalStack.closeAll();
-                  modalStack.open("forgot_pass_2");
+                  if (newOTPCooldown <= 0) {
+                    handleLoginSubmit(loginForm.values);
+                    setCooldownEndAt(dayjs().add(MAX_COOLDOWN_SEC, "second"));
+                    setNewOTPCooldown(MAX_COOLDOWN_SEC);
+                  }
                 }}
-                type="submit"
+                p={0}
+                size="compact-sm"
+                style={{ textDecoration: "underline" }}
+                type="button"
+                variant="transparent"
               >
-                Continue
+                {newOTPCooldown <= 0 && "Request new code"}
+                {newOTPCooldown > 0 && `Cooldown (${newOTPCooldown})`}
               </Button>
-            </Stack>
-          </form>
-        </Modal>
-        <Modal
-          centered
-          radius={"lg"}
-          size={"sm"}
-          withCloseButton={false}
-          {...modalStack.register("forgot_pass_2")}
-        >
-          <Stack gap={"lg"} p={"md"}>
-            <Group justify="space-between">
-              <Title order={4}>Success</Title>
-              <CloseButton onClick={() => modalStack.closeAll()} />
             </Group>
-            <Stack>
-              <Text>
-                Instructions for resetting your account have been sent if the
-                email or phone number provided matches our records
-              </Text>
-            </Stack>
+            <Button c={"black"} color="buttonColor" type="submit">
+              {!isMutating && "Submit"}
+              {isMutating && <Loader color="black" size={20} />}
+            </Button>
           </Stack>
-        </Modal>
-      </Modal.Stack>
+        </form>
+      </Modal>
     </>
   );
 }

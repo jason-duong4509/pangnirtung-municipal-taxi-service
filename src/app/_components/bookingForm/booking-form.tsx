@@ -25,10 +25,8 @@ import {
   ArrowLeftIcon,
   CurrencyCircleDollarIcon,
   MapPinLineIcon,
-  PaperPlaneTiltIcon,
   PathIcon,
   QuestionIcon,
-  ShieldCheckIcon,
   UserIcon,
 } from "@phosphor-icons/react";
 import { type Dispatch, type JSX, type SetStateAction, useState } from "react";
@@ -40,6 +38,7 @@ import {
   checkTripReason,
 } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
+import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
 import { PaymentMethods } from "~/types/types";
 import AddressDropdown from "./booking-form-components/address-drop-down-field";
@@ -48,8 +47,6 @@ import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 //Enum constants to denote what UI is displayed to the user
 const BookingUIStates = {
   Where_To: "Where_to", //pickup time, to/from locations
-  Enter_Email_Phone: "Enter_Email_Phone", //non-logged in verify 1
-  Verify: "Verify", //non-logged in verify 2
   About_You: "About_You", //name + reason for trip
   Payment: "Payment", //payment options screen
   Buy_Rides: "Buy_Rides", //buy more rides screen (USES NEW COMPONENT)
@@ -76,6 +73,7 @@ const FormUI = ({
   changePrevFormState,
   isMobile,
   formSubmitting,
+  openLoginModal,
 }: {
   form: UseFormReturnType<any>;
   currentFormState: BookingUIStates;
@@ -92,90 +90,113 @@ const FormUI = ({
   changePrevFormState: Dispatch<SetStateAction<BookingUIStates | null>>;
   isMobile: boolean | undefined;
   formSubmitting?: boolean;
+  openLoginModal: () => void;
 }) => {
+  const { data: session, isPending } = authClient.useSession();
+  const [firstRender, setFirstRender] = useState(true);
+
+  if (!isPending && firstRender) {
+    setFirstRender(false);
+  }
+
   return (
-    <Transition
-      duration={1000}
-      mounted={currentFormState === uiType}
-      timingFunction="ease"
-      transition={
-        prevUIType === null || prevFormState === nextUIType
-          ? "slide-right"
-          : currentFormState === uiType || currentFormState === prevUIType
-            ? "slide-left"
-            : "slide-right"
-      }
-    >
-      {(transitionStyle) => (
-        <Paper
-          bg={"primaryColor"}
-          mah={{ base: "350px", smMd: "400px" }}
-          p={"xl"}
-          pos={"absolute"}
-          radius="lg"
-          shadow="xl"
-          style={transitionStyle}
-          w={{ base: "350px", smMd: "400px" }}
-        >
-          <Stack gap={"lg"}>
-            <Group gap={"xs"}>
-              {showBackButton && (
-                <ActionIcon
-                  aria-label="Go back button"
-                  color="black"
-                  onClick={() => {
-                    if (prevUIType) {
+    <>
+      <Transition
+        duration={1000}
+        mounted={currentFormState === uiType}
+        timingFunction="ease"
+        transition={
+          prevUIType === null || prevFormState === nextUIType
+            ? "slide-right"
+            : currentFormState === uiType || currentFormState === prevUIType
+              ? "slide-left"
+              : "slide-right"
+        }
+      >
+        {(transitionStyle) => (
+          <Paper
+            bg={"primaryColor"}
+            mah={{ base: "350px", smMd: "400px" }}
+            p={"xl"}
+            pos={"absolute"}
+            radius="lg"
+            shadow="xl"
+            style={transitionStyle}
+            w={{ base: "350px", smMd: "400px" }}
+          >
+            <Stack gap={"lg"}>
+              <Group gap={"xs"}>
+                {showBackButton && (
+                  <ActionIcon
+                    aria-label="Go back button"
+                    color="black"
+                    onClick={() => {
+                      if (prevUIType) {
+                        changePrevFormState(currentFormState);
+                        changeFormState(prevUIType);
+                      }
+                      form.clearErrors();
+                    }}
+                    size={"xs"}
+                    variant="transparent"
+                  >
+                    <ArrowLeftIcon size={20} />
+                  </ActionIcon>
+                )}
+                <Title order={4}>{title}</Title>
+              </Group>
+              <form
+                onSubmit={form.onSubmit(() => {
+                  if (session) {
+                    if (handleSubmit) {
+                      //Form submit function provided
+                      handleSubmit(form.values);
+                    } else if (nextUIType) {
                       changePrevFormState(currentFormState);
-                      changeFormState(prevUIType);
+                      changeFormState(nextUIType);
                     }
-                    form.clearErrors();
-                  }}
-                  size={"xs"}
-                  variant="transparent"
-                >
-                  <ArrowLeftIcon size={20} />
-                </ActionIcon>
-              )}
-              <Title order={4}>{title}</Title>
-            </Group>
-            <form
-              onSubmit={form.onSubmit(() => {
-                if (handleSubmit) {
-                  //Form submit function provided
-                  handleSubmit(form.values);
-                } else if (nextUIType) {
-                  changePrevFormState(currentFormState);
-                  changeFormState(nextUIType);
-                }
-              })}
-            >
-              <Stack gap={"lg"}>
-                <ScrollArea.Autosize
-                  mah={isMobile ? "170px" : "220px"}
-                  scrollbars={
-                    isMobile
-                      ? "y"
-                      : currentFormState === BookingUIStates.Confirm
-                        ? "y"
-                        : false
+                  } else {
+                    openLoginModal();
                   }
-                >
-                  <Stack gap={"sm"}>{body}</Stack>
-                </ScrollArea.Autosize>
-                <Button c={"black"} color="buttonColor" type="submit">
-                  {!formSubmitting && nextButtonText}
-                  {formSubmitting && <Loader color="black" size={20} />}
-                </Button>
-              </Stack>
-            </form>
-          </Stack>
-        </Paper>
-      )}
-    </Transition>
+                })}
+              >
+                <Stack gap={"lg"}>
+                  <ScrollArea.Autosize
+                    mah={isMobile ? "170px" : "220px"}
+                    scrollbars={
+                      isMobile
+                        ? "y"
+                        : currentFormState === BookingUIStates.Confirm
+                          ? "y"
+                          : false
+                    }
+                  >
+                    <Stack gap={"sm"}>{body}</Stack>
+                  </ScrollArea.Autosize>
+                  <Button
+                    c={"black"}
+                    color="buttonColor"
+                    disabled={firstRender}
+                    type="submit"
+                  >
+                    {!formSubmitting && nextButtonText}
+                    {formSubmitting && <Loader color="black" size={20} />}
+                  </Button>
+                </Stack>
+              </form>
+            </Stack>
+          </Paper>
+        )}
+      </Transition>
+    </>
   );
 };
 
-export default function BookingForm() {
+export default function BookingForm({
+  openLoginModal,
+}: {
+  openLoginModal: () => void;
+}) {
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
@@ -305,33 +326,6 @@ export default function BookingForm() {
     },
   });
 
-  //Configure verification form (used for not logged in users)
-  const verificationForm = useForm({
-    mode: "uncontrolled",
-
-    //Initial field values of form
-    initialValues: {
-      emailOrPhone: "",
-      oneTimeCode: "",
-    },
-
-    //Frontend field checks
-    validate: {
-      emailOrPhone: (value) =>
-        formState === BookingUIStates.Enter_Email_Phone
-          ? value.length !== 0
-            ? null
-            : "Field cannot be blank"
-          : null,
-      oneTimeCode: (value) =>
-        formState === BookingUIStates.Verify
-          ? value.length !== 0
-            ? null
-            : "Field cannot be blank"
-          : null,
-    },
-  });
-
   //Configure payment form
   const paymentForm = useForm<{
     paymentType: PaymentMethods;
@@ -420,77 +414,13 @@ export default function BookingForm() {
         form={bookingForm}
         isMobile={isMobile}
         nextButtonText={"Continue"}
-        nextUIType={BookingUIStates.Enter_Email_Phone}
+        nextUIType={BookingUIStates.About_You}
+        openLoginModal={openLoginModal}
         prevFormState={prevFormState}
         prevUIType={null}
         showBackButton={false}
         title={"Where to?"}
         uiType={BookingUIStates.Where_To}
-      />
-
-      <FormUI
-        body={
-          <TextInput
-            aria-label="Enter email or phone number"
-            description="Verify that you're human. Enter an email or phone number that we can contact you with"
-            key={verificationForm.key("emailOrPhone")}
-            leftSection={<PaperPlaneTiltIcon size={20} />}
-            {...verificationForm.getInputProps("emailOrPhone")}
-            placeholder="Email or Phone Number"
-          />
-        }
-        changeFormState={setFormState}
-        changePrevFormState={setPrevFormState}
-        currentFormState={formState}
-        form={verificationForm}
-        isMobile={isMobile}
-        nextButtonText={"Continue"}
-        nextUIType={BookingUIStates.Verify}
-        prevFormState={prevFormState}
-        prevUIType={BookingUIStates.Where_To}
-        showBackButton={true}
-        title={"Enter Email/Phone"}
-        uiType={BookingUIStates.Enter_Email_Phone}
-      />
-
-      <FormUI
-        body={
-          <>
-            <TextInput
-              aria-label="Enter one-time code"
-              description="A code was sent to this [email/phone number via SMS]. Enter the code below"
-              key={verificationForm.key("oneTimeCode")}
-              leftSection={<ShieldCheckIcon size={20} />}
-              {...verificationForm.getInputProps("oneTimeCode")}
-              placeholder="One-Time Code"
-            />
-            <Group align="flex-start">
-              <Button
-                c={"black"}
-                fw={"normal"}
-                p={0}
-                size="compact-sm"
-                style={{ textDecoration: "underline" }}
-                type="button"
-                variant="transparent"
-              >
-                Request new code
-              </Button>
-            </Group>
-          </>
-        }
-        changeFormState={setFormState}
-        changePrevFormState={setPrevFormState}
-        currentFormState={formState}
-        form={verificationForm}
-        isMobile={isMobile}
-        nextButtonText={"Continue"}
-        nextUIType={BookingUIStates.About_You}
-        prevFormState={prevFormState}
-        prevUIType={BookingUIStates.Enter_Email_Phone}
-        showBackButton={true}
-        title={"Verify"}
-        uiType={BookingUIStates.Verify}
       />
 
       <FormUI
@@ -522,8 +452,9 @@ export default function BookingForm() {
         isMobile={isMobile}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Payment}
+        openLoginModal={openLoginModal}
         prevFormState={prevFormState}
-        prevUIType={BookingUIStates.Verify}
+        prevUIType={BookingUIStates.Where_To}
         showBackButton={true}
         title={"About You"}
         uiType={BookingUIStates.About_You}
@@ -584,6 +515,7 @@ export default function BookingForm() {
         isMobile={isMobile}
         nextButtonText={"Continue"}
         nextUIType={BookingUIStates.Confirm}
+        openLoginModal={openLoginModal}
         prevFormState={prevFormState}
         prevUIType={BookingUIStates.About_You}
         showBackButton={true}
@@ -727,6 +659,7 @@ export default function BookingForm() {
         isMobile={isMobile}
         nextButtonText={"Book"}
         nextUIType={BookingUIStates.End}
+        openLoginModal={openLoginModal}
         prevFormState={prevFormState}
         prevUIType={BookingUIStates.Payment}
         showBackButton={true}
