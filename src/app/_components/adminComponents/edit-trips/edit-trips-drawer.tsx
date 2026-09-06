@@ -74,7 +74,7 @@ export default function EditTripsDrawer({
   });
 
   const bookingForm = useForm<{
-    pickupTime: string | null | Date;
+    pickupTime: string | null;
     pickupAddr: string;
     destAddr: string;
     name: string;
@@ -150,10 +150,7 @@ export default function EditTripsDrawer({
 
     //--Prefill mantine form with booking data--
     bookingForm.setInitialValues({
-      pickupTime:
-        drawerContents.status === BookingStatus.PENDING
-          ? dbTimeToLocalTime(drawerContents.pickupTime)
-          : drawerContents.pickupTime,
+      pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
       pickupAddr: drawerContents.pickupAddr,
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
@@ -167,10 +164,7 @@ export default function EditTripsDrawer({
       requestedVerification: drawerContents.requestVerification,
     });
     bookingForm.setValues({
-      pickupTime:
-        drawerContents.status === BookingStatus.PENDING
-          ? dbTimeToLocalTime(drawerContents.pickupTime)
-          : drawerContents.pickupTime,
+      pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
       pickupAddr: drawerContents.pickupAddr,
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
@@ -234,7 +228,7 @@ export default function EditTripsDrawer({
           id="booking-form"
           onSubmit={bookingForm.onSubmit(handleFormOnSubmit)}
         >
-          <Stack h={"calc(100dvh - 90px)"}>
+          <Stack h={"calc(100dvh - 75px)"}>
             <TextInput
               defaultValue={bookingForm.values.status}
               label="Trip Status"
@@ -253,7 +247,6 @@ export default function EditTripsDrawer({
               leftSection={<UserIcon size={20} />}
               placeholder="Your Name"
               {...bookingForm.getInputProps("name")}
-              readOnly={bookingForm.values.status !== "Pending"}
               withAsterisk
             />
             <PickupTimeInput
@@ -302,7 +295,6 @@ export default function EditTripsDrawer({
               maxRows={4}
               minRows={1}
               placeholder="Optional"
-              readOnly={bookingForm.values.status !== "Pending"}
             />
             <TextInput
               aria-label="Payment method"
@@ -334,7 +326,12 @@ export default function EditTripsDrawer({
                   color="buttonColor"
                   disabled={!bookingForm.isDirty()}
                   form="booking-form"
-                  onClick={() => openModal()}
+                  onClick={() => {
+                    bookingForm.validate();
+                    if (bookingForm.isValid()) {
+                      openModal();
+                    }
+                  }}
                   p={0}
                   size="compact-sm"
                   type="button"

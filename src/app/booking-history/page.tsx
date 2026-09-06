@@ -357,7 +357,7 @@ export default function BookingHistoryPage() {
             id="booking-form"
             onSubmit={bookingForm.onSubmit(handleFormOnSubmit)}
           >
-            <Stack h={"calc(100dvh - 90px)"}>
+            <Stack h={"calc(100dvh - 75px)"}>
               <TextInput
                 defaultValue={bookingForm.values.status}
                 label="Trip Status"
@@ -511,15 +511,18 @@ export default function BookingHistoryPage() {
                       disabled={!bookingForm.isDirty()}
                       form="booking-form"
                       onClick={() => {
-                        openAlertModal();
-                        setAlertBodyComponent(
-                          <Text>
-                            Trip information will be changed. Are you sure?
-                          </Text>,
-                        );
-                        setOnModalSubmit(() => () => {
-                          handleFormOnSubmit(bookingForm.values);
-                        });
+                        bookingForm.validate();
+                        if (bookingForm.isValid()) {
+                          openAlertModal();
+                          setAlertBodyComponent(
+                            <Text>
+                              Trip information will be changed. Are you sure?
+                            </Text>,
+                          );
+                          setOnModalSubmit(() => () => {
+                            handleFormOnSubmit(bookingForm.values);
+                          });
+                        }
                       }}
                       p={0}
                       size="compact-sm"

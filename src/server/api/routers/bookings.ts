@@ -4,8 +4,8 @@ import { z } from "zod";
 import { checkPickUpTime } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import { bookings } from "~/server/db/schema";
-import { BookingStatus, PaymentMethods } from "~/types/types";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
 export const bookingsRouter = createTRPCRouter({
   get: publicProcedure.query(async ({ ctx }) => {
@@ -21,7 +21,7 @@ export const bookingsRouter = createTRPCRouter({
       });
     }
   }),
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
         pickupTime: z.string().nullable(),
@@ -35,8 +35,13 @@ export const bookingsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //TODO: add proper auth
       //todo: add rate limiting?
+      if (ctx.session.user.role === UserRoles.DRIVER) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Drivers are not allowed to create trips",
+        });
+      }
 
       //--Input checking--
       //todo finish
@@ -63,7 +68,7 @@ export const bookingsRouter = createTRPCRouter({
             tripReason: input.tripReason,
             payment: input.payment,
             reminders: input.reminders,
-            created_by: ctx.session?.user.id ?? "eoirjg", //TODO: change this properly once auth is done and make schema a fk
+            created_by: ctx.session.user.id,
             requestVerification: input.requestVerification, //TODO: if user is already a resident, put false for this value
           })
           .returning();

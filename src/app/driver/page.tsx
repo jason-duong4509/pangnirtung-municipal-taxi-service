@@ -263,7 +263,7 @@ export default function DriverPage() {
           styles={{ body: { paddingBottom: 0 } }}
           title={"View Trip"}
         >
-          <Stack h={"calc(100dvh - 90px)"}>
+          <Stack h={"calc(100dvh - 75px)"}>
             <TextInput
               defaultValue={form.values.id}
               label="Booking ID"
@@ -301,7 +301,11 @@ export default function DriverPage() {
               variant="unstyled"
             />
             <TextInput
-              defaultValue={form.values.reasonForTrip}
+              defaultValue={
+                form.values.reasonForTrip === ""
+                  ? "None Given"
+                  : form.values.reasonForTrip
+              }
               label="Reason for Trip"
               readOnly
               variant="unstyled"

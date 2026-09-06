@@ -8,15 +8,11 @@ import {
   Stack,
   Text,
   Textarea,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useState } from "react";
-import {
-  checkReportAppComments,
-  checkReportAppTitle,
-} from "~/lib/input-checkers";
+import { checkReportAppComments } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
 
@@ -31,28 +27,17 @@ export default function ReportAppIssueModal({
 
   //Configure form
   const form = useForm<{
-    title: string;
     comments: string;
   }>({
     mode: "uncontrolled",
 
     //Initial field values of form
     initialValues: {
-      title: "",
       comments: "",
     },
 
     //Frontend field checks
     validate: {
-      title: (value) => {
-        const result = checkReportAppTitle(value);
-
-        if (result.isProper) {
-          return null;
-        } else {
-          return result.errorMessage;
-        }
-      },
       comments: (value) => {
         const result = checkReportAppComments(value);
 
@@ -71,6 +56,7 @@ export default function ReportAppIssueModal({
       showNotifications.success("Successfully sent");
       setFormSubmitting(false);
       form.reset();
+      closeModal();
     },
     onError: (error) => {
       showNotifications.error(error.message);
@@ -86,7 +72,6 @@ export default function ReportAppIssueModal({
     setFormSubmitting(true);
 
     createIssuesMutation.mutate({
-      title: values.title,
       comments: values.comments,
     });
   };
@@ -114,13 +99,6 @@ export default function ReportAppIssueModal({
                 Found an issue with the app? Want to suggest new features or
                 changes? Send them our way below!
               </Text>
-              <TextInput
-                key={form.key("title")}
-                label="Title"
-                {...form.getInputProps("title")}
-                placeholder="Max. 100 characters"
-                withAsterisk
-              />
               <Textarea
                 key={form.key("comments")}
                 label="Comments"
