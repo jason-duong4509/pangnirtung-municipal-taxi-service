@@ -2,8 +2,8 @@
 import { Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
+  CheckCircleIcon,
   CheckSquareIcon,
-  ListChecksIcon,
   SelectionIcon,
   SelectionSlashIcon,
   XSquareIcon,
@@ -186,7 +186,7 @@ export default function EditTripsAsideBar({
             }}
           />
           <AsideButton
-            buttonIcon={<ListChecksIcon size={20} />}
+            buttonIcon={<CheckCircleIcon size={20} />}
             buttonText={"Complete Trips"}
             expandButton={expandAside}
             onClick={() => {

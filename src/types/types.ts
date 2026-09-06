@@ -10,3 +10,36 @@ export enum PaymentMethods {
   REDEEM_CODE = "redeem_code",
   RIDES = "rides",
 }
+
+export enum UserRoles {
+  ADMIN = "admin",
+  DRIVER = "driver",
+  MEMBER = "member",
+}
+
+export const ReportAppIssueChipTypes = [
+  {
+    chip_color: "grape",
+    label: "Read",
+  },
+  {
+    chip_color: "red",
+    label: "Complaint",
+  },
+  {
+    chip_color: "cyan",
+    label: "Suggestion",
+  },
+  {
+    chip_color: "yellow",
+    label: "In Progress",
+  },
+  {
+    chip_color: "pink",
+    label: "To Do",
+  },
+  {
+    chip_color: "green",
+    label: "Done",
+  },
+];

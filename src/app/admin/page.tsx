@@ -1,20 +1,20 @@
 "use client";
 import { AppShell, Paper, Stack } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { useState } from "react";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
 import EditTripsTable from "../_components/adminComponents/edit-trips/edit-trips-table";
+import ViewAppIssuesAsideBar from "../_components/adminComponents/view-app-issues/view-app-issues-aside-bar";
+import ViewAppIssuesTable from "../_components/adminComponents/view-app-issues/view-app-issues-table";
 import CustomAppShell from "../_components/common/appShell/app-shell";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
+import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
 
 enum PageView { //Enum string values double as app shell header text
-  Trips,
-  AddUsers,
-  EditUsers,
-  ViewAppIssues,
-  ManageAccount,
-  LogOut,
-  ReportAppIssue,
+  Trips = "- Trips",
+  EditUsers = "- Edit Users",
+  ViewAppIssues = "- App Issues",
 }
 
 export default function AdminPage() {
@@ -22,6 +22,11 @@ export default function AdminPage() {
   const [expandAside, setExpandAside] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  const [
+    reportAppModalOpened,
+    { open: openReportAppModal, close: closeReportAppModal },
+  ] = useDisclosure(false);
+  const [issuesTableFilters, setIssuesTableFilters] = useState([]);
 
   return (
     <CustomAppShell
@@ -36,13 +41,25 @@ export default function AdminPage() {
               setSelectedRows={setSelectedRows}
             />
           )}
-          {pageView === PageView.AddUsers && <Paper></Paper>}
+          {pageView === PageView.ViewAppIssues && (
+            <ViewAppIssuesAsideBar
+              expandAside={expandAside}
+              isSelecting={isSelecting}
+              selectedRows={selectedRows}
+              setIsSelecting={setIsSelecting}
+              setSelectedRows={setSelectedRows}
+            />
+          )}
         </>
       }
       expandAside={expandAside}
-      headerText={`Municipal Taxi Service ${pageView === PageView.Trips ? "- Trips" : pageView === PageView.EditUsers ? "- Edit Users" : pageView === PageView.ViewAppIssues ? "- App Issues" : ""}`}
+      headerText={`Municipal Taxi Service ${pageView}`}
       mainComponent={
         <>
+          <ReportAppIssueModal
+            closeModal={closeReportAppModal}
+            modalOpened={reportAppModalOpened}
+          />
           {pageView === PageView.Trips && (
             <EditTripsTable
               isSelecting={isSelecting}
@@ -50,7 +67,13 @@ export default function AdminPage() {
               setSelectedRows={setSelectedRows}
             />
           )}
-          {pageView === PageView.AddUsers && <Paper></Paper>}
+          {pageView === PageView.ViewAppIssues && (
+            <ViewAppIssuesTable
+              isSelecting={isSelecting}
+              selectedRows={selectedRows}
+              setSelectedRows={setSelectedRows}
+            />
+          )}
         </>
       }
       navbarComponent={
@@ -64,10 +87,7 @@ export default function AdminPage() {
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"Users"} />
-            <NavbarOption
-              onClick={() => setPageView(PageView.AddUsers)}
-              text={"Add Users"}
-            />
+            <NavbarOption onClick={() => {}} text={"Add Users"} />
             <NavbarOption
               onClick={() => setPageView(PageView.EditUsers)}
               text={"Edit Users"}
@@ -82,19 +102,13 @@ export default function AdminPage() {
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"Account"} />
-            <NavbarOption
-              onClick={() => setPageView(PageView.ManageAccount)}
-              text={"Manage Account"}
-            />
-            <NavbarOption
-              onClick={() => setPageView(PageView.LogOut)}
-              text={"Log Out"}
-            />
+            <NavbarOption onClick={() => {}} text={"Manage Account"} />
+            <NavbarOption onClick={() => {}} text={"Log Out"} />
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"Miscellaneous"} />
             <NavbarOption
-              onClick={() => setPageView(PageView.ReportAppIssue)}
+              onClick={() => openReportAppModal()}
               text={"Report App Issue"}
             />
           </AppShell.Section>

@@ -11,6 +11,7 @@ import {
   pickupTimeRegex,
   usernameRegex,
 } from "~/types/constants";
+import { ReportAppIssueChipTypes } from "~/types/types";
 
 //--Add UTC and timezone conversion features for dayjs--
 dayjs.extend(utc);
@@ -336,13 +337,6 @@ export const checkReportAppTitle = (
   | { isProper: true; formattedInput: string } => {
   const trimmedInput = input.trim();
 
-  if (trimmedInput.length === 0) {
-    return {
-      isProper: false,
-      errorMessage: "Title cannot be blank",
-    };
-  }
-
   if (trimmedInput.length > 100) {
     return {
       isProper: false,
@@ -353,5 +347,54 @@ export const checkReportAppTitle = (
   return {
     isProper: true,
     formattedInput: trimmedInput,
+  };
+};
+
+export const checkReportAppPriority = (
+  input: number,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: number } => {
+  if (input === 1 || input === 2 || input === 3 || input === 4 || input === 5) {
+    return {
+      isProper: true,
+      formattedInput: input,
+    };
+  } else {
+    return {
+      isProper: false,
+      errorMessage: "Invalid priority value",
+    };
+  }
+};
+
+export const checkReportAppTags = (
+  input: string[],
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: string[] } => {
+  if (input.length > ReportAppIssueChipTypes.length) {
+    return {
+      isProper: false,
+      errorMessage: "Input has more tags than possible",
+    };
+  }
+
+  for (const tag of input) {
+    const matchingChip = ReportAppIssueChipTypes.filter(
+      (chipType) => chipType.label === tag,
+    );
+
+    if (matchingChip.length !== 1) {
+      return {
+        isProper: false,
+        errorMessage: `Tag ${tag} is not a valid tag`,
+      };
+    }
+  }
+
+  return {
+    isProper: true,
+    formattedInput: input,
   };
 };
