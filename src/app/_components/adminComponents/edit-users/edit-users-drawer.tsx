@@ -2,57 +2,67 @@
 
 import {
   Button,
-  Chip,
   Drawer,
   Group,
-  Input,
-  Rating,
+  Select,
   Stack,
   Text,
-  Textarea,
   TextInput,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import { useEffect, useState } from "react";
 import { dbTimeToPrettyString } from "~/lib/helpers";
-import {
-  checkReportAppPriority,
-  checkReportAppTags,
-  checkReportAppTitle,
-} from "~/lib/input-checkers";
+import { checkEmail, checkName, checkPhoneNumber } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api, type RouterOutputs } from "~/trpc/react";
-import { ReportAppIssueChipTypes } from "~/types/types";
+import { UserRoles } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 
-type issuesData = RouterOutputs["reportApp"]["get"][0];
+type usersData = RouterOutputs["users"]["getAll"][0];
 
-export default function ViewAppIssuesDrawer({
+export default function EditUsersDrawer({
   drawerOpened,
   closeDrawer,
   drawerContents,
 }: {
   drawerOpened: boolean;
   closeDrawer: () => void;
-  drawerContents: issuesData | undefined;
+  drawerContents: usersData | undefined;
 }) {
   const [formSubmitting, setFormSubmitting] = useState(false);
-  const [modalOpened, { open: openModal, close: closeModal }] =
+  const [alertTitle, setAlertTitle] = useState("Are you sure?");
+  const [alertBody, setAlertBody] = useState(<Text>Are you sure?</Text>);
+  const [alertOnConfirm, setAlertOnConfirm] = useState<() => void>(() => {});
+  const [alertOpened, { open: openAlert, close: closeAlert }] =
     useDisclosure(false);
 
-  const getIssuesQuery = api.reportApp.get.useQuery(undefined, {
+  const getUsersQuery = api.users.getAll.useQuery(undefined, {
     //Forces manual fetching
     enabled: false,
   });
 
-  const updateIssueMutation = api.reportApp.update.useMutation({
+  const updateUserMutation = api.users.update.useMutation({
     onSuccess: () => {
-      showNotifications.success("Issue updated");
+      showNotifications.success("User updated");
       setFormSubmitting(false);
-      getIssuesQuery.refetch();
+      getUsersQuery.refetch();
       closeDrawer();
-      closeModal();
+      closeAlert();
+    },
+    onError: (error) => {
+      showNotifications.error(error.message);
+      setFormSubmitting(false);
+    },
+  });
+
+  const deleteUserMutation = api.users.delete.useMutation({
+    onSuccess: () => {
+      showNotifications.success("Deleted successfully");
+      setFormSubmitting(false);
+      getUsersQuery.refetch();
+      closeDrawer();
+      closeAlert();
     },
     onError: (error) => {
       showNotifications.error(error.message);
@@ -61,24 +71,25 @@ export default function ViewAppIssuesDrawer({
   });
 
   const form = useForm<{
-    title: string;
-    priority: number;
-    tags: string[];
-    id: number;
+    id: string;
+    name: string;
+    email: string;
+    phoneNumber: string;
+    role: UserRoles;
   }>({
     mode: "uncontrolled",
 
     initialValues: {
-      title: "",
-      priority: 1,
-      tags: [],
-      id: 0,
+      id: "0",
+      name: "",
+      email: "",
+      phoneNumber: "",
+      role: UserRoles.MEMBER,
     },
 
-    //Frontend field checks
     validate: {
-      title: (value) => {
-        const result = checkReportAppTitle(value);
+      name: (value) => {
+        const result = checkName(value);
 
         if (result.isProper) {
           return null;
@@ -86,8 +97,8 @@ export default function ViewAppIssuesDrawer({
           return result.errorMessage;
         }
       },
-      priority: (value) => {
-        const result = checkReportAppPriority(value);
+      email: (value) => {
+        const result = checkEmail(value);
 
         if (result.isProper) {
           return null;
@@ -95,8 +106,8 @@ export default function ViewAppIssuesDrawer({
           return result.errorMessage;
         }
       },
-      tags: (value) => {
-        const result = checkReportAppTags(value);
+      phoneNumber: (value) => {
+        const result = checkPhoneNumber(value);
 
         if (result.isProper) {
           return null;
@@ -112,27 +123,24 @@ export default function ViewAppIssuesDrawer({
       return;
     }
 
-    //Get tag data
-    const tagsList = drawerContents.appIssuesHasTags;
-    let usedTags = [] as string[];
-    for (const tag of tagsList) {
-      usedTags = [...usedTags, tag.appIssuesTags.name];
-    }
-
-    //--Prefill mantine form with issue data--
     form.setInitialValues({
-      title: drawerContents.title,
-      priority: drawerContents.priority,
-      tags: usedTags,
       id: drawerContents.id,
+      name: drawerContents.name,
+      email: drawerContents.email,
+      phoneNumber:
+        drawerContents.phoneNumber ??
+        "ERROR: User does not have a phone number",
+      role: drawerContents.role,
     });
     form.setValues({
-      title: drawerContents.title,
-      priority: drawerContents.priority,
-      tags: usedTags,
       id: drawerContents.id,
+      name: drawerContents.name,
+      email: drawerContents.email,
+      phoneNumber:
+        drawerContents.phoneNumber ??
+        "ERROR: User does not have a phone number",
+      role: drawerContents.role,
     });
-    //----------------------------------------
 
     form.resetDirty();
   }, [drawerContents, form.setValues, form.setInitialValues, form.resetDirty]);
@@ -144,11 +152,12 @@ export default function ViewAppIssuesDrawer({
     }
     setFormSubmitting(true);
 
-    updateIssueMutation.mutate({
-      title: values.title,
-      priority: values.priority,
-      tags: values.tags,
-      id: values.id,
+    updateUserMutation.mutate({
+      id: form.values.id,
+      name: form.values.name,
+      email: form.values.email,
+      phoneNumber: form.values.phoneNumber,
+      role: form.values.role,
     });
   };
 
@@ -156,13 +165,13 @@ export default function ViewAppIssuesDrawer({
     <>
       <AlertPopup
         abortButtonText={"Back"}
-        body={<Text>Changes will be made. Are you sure?</Text>}
-        closeModal={closeModal}
+        body={alertBody}
+        closeModal={closeAlert}
         confirmButtonText={"Confirm"}
         isLoading={formSubmitting}
-        modalOpened={modalOpened}
-        onConfirm={() => handleFormOnSubmit(form.values)}
-        titleText={"Confirm Action"}
+        modalOpened={alertOpened}
+        onConfirm={alertOnConfirm}
+        titleText={alertTitle}
       />
       <Drawer
         offset={8}
@@ -170,66 +179,39 @@ export default function ViewAppIssuesDrawer({
         opened={drawerOpened}
         radius="md"
         styles={{ body: { paddingBottom: 0 } }}
-        title={"View Issue"}
+        title={"View User"}
       >
-        <form onSubmit={form.onSubmit(handleFormOnSubmit)}>
+        <form>
           <Stack h={"calc(100dvh - 75px)"}>
             <TextInput
               defaultValue={form.values.id}
-              label="App Issue ID"
+              label="User ID"
               readOnly
               variant="unstyled"
             />
             <TextInput
-              label={"Title"}
-              placeholder="Max 100 characters"
-              {...form.getInputProps("title")}
-              defaultValue={form.values.title}
+              label={"Name on Account"}
+              placeholder="Name"
+              {...form.getInputProps("name")}
+              defaultValue={form.values.name}
             />
-            <Input.Wrapper label="Priority Rating">
-              <Stack gap={"xs"}>
-                <Rating
-                  defaultValue={form.values.priority}
-                  {...form.getInputProps("priority")}
-                />
-                <Input.Error>{form.errors.priority}</Input.Error>
-              </Stack>
-            </Input.Wrapper>
-            <Input.Wrapper label="Tags">
-              <Stack gap={"xs"}>
-                <Chip.Group
-                  defaultValue={form.values.tags}
-                  multiple
-                  {...form.getInputProps("tags")}
-                >
-                  <Group justify="flex-start" mt="md">
-                    {ReportAppIssueChipTypes.map((chipType) => (
-                      <Chip
-                        color={chipType.chip_color}
-                        key={chipType.label}
-                        value={chipType.label}
-                      >
-                        {chipType.label}
-                      </Chip>
-                    ))}
-                  </Group>
-                </Chip.Group>
-                <Input.Error>{form.errors.tags}</Input.Error>
-              </Stack>
-            </Input.Wrapper>
-            <Textarea
-              autosize
-              defaultValue={
-                drawerContents
-                  ? drawerContents.comments
-                  : "Unable to fetch data"
-              }
-              label="Comments"
-              maxRows={10}
-              minRows={1}
-              readOnly
-              resize="vertical"
-              variant="unstyled"
+            <TextInput
+              label={"Primary Phone Number"}
+              placeholder="123-456-7890"
+              {...form.getInputProps("phoneNumber")}
+              defaultValue={form.values.phoneNumber}
+            />
+            <TextInput
+              label={"Email"}
+              placeholder="someone@email.com"
+              {...form.getInputProps("email")}
+              defaultValue={form.values.email}
+            />
+            <Select
+              data={Object.values(UserRoles)}
+              defaultValue={form.values.role}
+              label="User Role"
+              placeholder="Select Role"
             />
             <TextInput
               defaultValue={
@@ -256,13 +238,27 @@ export default function ViewAppIssuesDrawer({
                 <Button
                   c={"black"}
                   color="buttonColor"
-                  onClick={() => closeDrawer()}
+                  onClick={() => {
+                    setAlertTitle("Delete User");
+                    setAlertBody(
+                      <Text>
+                        Delete this user? This action cannot be undone!
+                      </Text>,
+                    );
+                    setAlertOnConfirm(() => () => {
+                      setFormSubmitting(true);
+                      deleteUserMutation.mutate({
+                        ids: [form.values.id],
+                      });
+                    });
+                    openAlert();
+                  }}
                   p={0}
                   size="compact-sm"
                   type="button"
                   variant="outline"
                 >
-                  Exit
+                  Delete User
                 </Button>
                 <Button
                   c={form.isDirty() ? "black" : undefined}
@@ -272,7 +268,12 @@ export default function ViewAppIssuesDrawer({
                   onClick={() => {
                     form.validate();
                     if (form.isValid()) {
-                      openModal();
+                      setAlertTitle("Update User");
+                      setAlertBody(<Text>Update this user?</Text>);
+                      setAlertOnConfirm(
+                        () => () => handleFormOnSubmit(form.values),
+                      );
+                      openAlert();
                     }
                   }}
                   p={0}
@@ -280,7 +281,7 @@ export default function ViewAppIssuesDrawer({
                   type="button"
                   variant="filled"
                 >
-                  Save Changes
+                  Update User
                 </Button>
               </Group>
             </Stack>

@@ -1,9 +1,11 @@
 "use client";
-import { AppShell, Paper, Stack } from "@mantine/core";
+import { AppShell, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useState } from "react";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
 import EditTripsTable from "../_components/adminComponents/edit-trips/edit-trips-table";
+import EditUsersAsideBar from "../_components/adminComponents/edit-users/edit-users-aside-bar";
+import EditUsersTable from "../_components/adminComponents/edit-users/edit-users-table";
 import ViewAppIssuesAsideBar from "../_components/adminComponents/view-app-issues/view-app-issues-aside-bar";
 import ViewAppIssuesTable from "../_components/adminComponents/view-app-issues/view-app-issues-table";
 import CustomAppShell from "../_components/common/appShell/app-shell";
@@ -22,6 +24,7 @@ export default function AdminPage() {
   const [expandAside, setExpandAside] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  const [selectedRowsString, setSelectedRowsString] = useState<string[]>([]);
   const [
     reportAppModalOpened,
     { open: openReportAppModal, close: closeReportAppModal },
@@ -52,6 +55,15 @@ export default function AdminPage() {
               setSelectedRows={setSelectedRows}
             />
           )}
+          {pageView === PageView.EditUsers && (
+            <EditUsersAsideBar
+              expandAside={expandAside}
+              isSelecting={isSelecting}
+              selectedRows={selectedRowsString}
+              setIsSelecting={setIsSelecting}
+              setSelectedRows={setSelectedRowsString}
+            />
+          )}
         </>
       }
       expandAside={expandAside}
@@ -75,6 +87,13 @@ export default function AdminPage() {
               issueFilters={issuesTableFilters}
               selectedRows={selectedRows}
               setSelectedRows={setSelectedRows}
+            />
+          )}
+          {pageView === PageView.EditUsers && (
+            <EditUsersTable
+              isSelecting={isSelecting}
+              selectedRows={selectedRowsString}
+              setSelectedRows={setSelectedRowsString}
             />
           )}
         </>
