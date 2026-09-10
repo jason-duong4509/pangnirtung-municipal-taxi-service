@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { generateId } from "better-auth";
 import { phoneNumberClient } from "better-auth/client/plugins";
 import { eq, getTableColumns, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -45,8 +46,8 @@ export const usersRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
-        name: z.string(),
-        email: z.string(),
+        name: z.string().optional(),
+        email: z.string().optional(),
         phoneNumber: z.string(),
         role: z.nativeEnum(UserRoles),
       }),
@@ -60,25 +61,29 @@ export const usersRouter = createTRPCRouter({
       }
 
       //--Input checking--
-      const nameCheck = checkName(input.name);
       let name = "" as string;
-      if (nameCheck.isProper) {
-        name = nameCheck.formattedInput;
-      } else {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: nameCheck.errorMessage,
-        });
+      if (input.name) {
+        const nameCheck = checkName(input.name);
+        if (nameCheck.isProper) {
+          name = nameCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: nameCheck.errorMessage,
+          });
+        }
       }
-      const emailCheck = checkEmail(input.email);
       let email = "" as string;
-      if (emailCheck.isProper) {
-        email = emailCheck.formattedInput;
-      } else {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: emailCheck.errorMessage,
-        });
+      if (input.email) {
+        const emailCheck = checkEmail(input.email);
+        if (emailCheck.isProper) {
+          email = emailCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: emailCheck.errorMessage,
+          });
+        }
       }
       const phoneNumberCheck = checkPhoneNumber(input.phoneNumber);
       let phoneNumber = "" as string;
@@ -97,8 +102,8 @@ export const usersRouter = createTRPCRouter({
           const [updatedUserId] = await tx
             .update(user)
             .set({
-              name: name,
-              email: email,
+              ...(input.name ? { name: name } : {}),
+              email: input.email ? email : `${phoneNumber}@no-email-given.pang`,
               phoneNumber: phoneNumber,
               updatedAt: new Date(),
             })
@@ -172,43 +177,60 @@ export const usersRouter = createTRPCRouter({
         });
       }
     }),
-  createIssue: publicProcedure
+  add: protectedProcedure
     .input(
       z.object({
-        comments: z.string(),
+        phoneNumber: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //todo: add rate limiting?
-      //todo: maybe make this a protected procedure?
+      if (ctx.session.user.role !== UserRoles.ADMIN) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only admins can add users",
+        });
+      }
 
       //--Input checking--
-      const reportAppCommentsCheck = checkReportAppComments(input.comments);
-      let comments = undefined as undefined | string;
-      if (reportAppCommentsCheck.isProper) {
-        comments = reportAppCommentsCheck.formattedInput;
+      const phoneNumberCheck = checkPhoneNumber(input.phoneNumber);
+      let phoneNumber = "" as string;
+      if (phoneNumberCheck.isProper) {
+        phoneNumber = phoneNumberCheck.formattedInput;
       } else {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: reportAppCommentsCheck.errorMessage,
+          message: phoneNumberCheck.errorMessage,
         });
       }
       //------------------
 
       try {
-        const [insertedIssue] = await db
-          .insert(appIssues)
+        const [insertedUser] = await db
+          .insert(user)
           .values({
-            comments: comments,
-            created_by: ctx.session?.user.id ?? null,
+            id: generateId(),
+            name: "no-name-given.pang",
+            email: `${phoneNumber}@no-email-given.pang`,
+            emailVerified: false,
+            image: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            phoneNumber: phoneNumber,
+            phoneNumberVerified: true,
+            role: UserRoles.MEMBER,
           })
           .returning();
 
-        return insertedIssue;
+        if (!insertedUser) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database unable to create user",
+          });
+        }
       } catch {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create app issue entry",
+          message: "Failed to create user entry",
         });
       }
     }),

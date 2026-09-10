@@ -89,6 +89,9 @@ export default function EditUsersDrawer({
 
     validate: {
       name: (value) => {
+        if (value === "no-name-given.pang") {
+          return null;
+        }
         const result = checkName(value);
 
         if (result.isProper) {
@@ -98,6 +101,9 @@ export default function EditUsersDrawer({
         }
       },
       email: (value) => {
+        if (value.includes("@no-email-given.pang")) {
+          return null;
+        }
         const result = checkEmail(value);
 
         if (result.isProper) {
@@ -153,11 +159,13 @@ export default function EditUsersDrawer({
     setFormSubmitting(true);
 
     updateUserMutation.mutate({
-      id: form.values.id,
-      name: form.values.name,
-      email: form.values.email,
-      phoneNumber: form.values.phoneNumber,
-      role: form.values.role,
+      id: values.id,
+      name: values.name === "no-name-given.pang" ? undefined : values.name,
+      email: values.email.includes("@no-email-given.pang")
+        ? undefined
+        : values.email,
+      phoneNumber: values.phoneNumber,
+      role: values.role,
     });
   };
 
@@ -212,6 +220,7 @@ export default function EditUsersDrawer({
               defaultValue={form.values.role}
               label="User Role"
               placeholder="Select Role"
+              {...form.getInputProps("role")}
             />
             <TextInput
               defaultValue={
@@ -264,14 +273,13 @@ export default function EditUsersDrawer({
                   c={form.isDirty() ? "black" : undefined}
                   color="buttonColor"
                   disabled={!form.isDirty()}
-                  form="booking-form"
                   onClick={() => {
                     form.validate();
                     if (form.isValid()) {
                       setAlertTitle("Update User");
                       setAlertBody(<Text>Update this user?</Text>);
                       setAlertOnConfirm(
-                        () => () => handleFormOnSubmit(form.values),
+                        () => () => form.onSubmit(handleFormOnSubmit)(),
                       );
                       openAlert();
                     }

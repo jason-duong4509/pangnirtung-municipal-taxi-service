@@ -2,6 +2,7 @@
 import { AppShell, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useState } from "react";
+import AddUsersModal from "../_components/adminComponents/add-users/add-users-modal";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
 import EditTripsTable from "../_components/adminComponents/edit-trips/edit-trips-table";
 import EditUsersAsideBar from "../_components/adminComponents/edit-users/edit-users-aside-bar";
@@ -28,6 +29,10 @@ export default function AdminPage() {
   const [
     reportAppModalOpened,
     { open: openReportAppModal, close: closeReportAppModal },
+  ] = useDisclosure(false);
+  const [
+    addUserModalOpened,
+    { open: openAddUserModal, close: closeAddUserModal },
   ] = useDisclosure(false);
   const [issuesTableFilters, setIssuesTableFilters] = useState<string[]>([]);
 
@@ -74,6 +79,10 @@ export default function AdminPage() {
             closeModal={closeReportAppModal}
             modalOpened={reportAppModalOpened}
           />
+          <AddUsersModal
+            closeModal={closeAddUserModal}
+            modalOpened={addUserModalOpened}
+          />
           {pageView === PageView.Trips && (
             <EditTripsTable
               isSelecting={isSelecting}
@@ -109,7 +118,10 @@ export default function AdminPage() {
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"Users"} />
-            <NavbarOption onClick={() => {}} text={"Add Users"} />
+            <NavbarOption
+              onClick={() => openAddUserModal()}
+              text={"Add Users"}
+            />
             <NavbarOption
               onClick={() => setPageView(PageView.EditUsers)}
               text={"Edit Users"}

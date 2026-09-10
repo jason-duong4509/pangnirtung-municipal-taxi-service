@@ -21,7 +21,7 @@ export const auth = betterAuth({
       signUpOnVerification: {
         getTempEmail: (phoneNumber) => `${phoneNumber}@no-email-given.pang`,
 
-        getTempName: (phoneNumber) => phoneNumber,
+        getTempName: () => "no-name-given.pang",
       },
     }),
   ],

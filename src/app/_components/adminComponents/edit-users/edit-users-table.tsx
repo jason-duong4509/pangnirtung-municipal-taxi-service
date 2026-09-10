@@ -2,6 +2,7 @@
 
 import {
   Checkbox,
+  Flex,
   Group,
   Input,
   Paper,
@@ -141,83 +142,89 @@ export default function EditUsersTable({
         drawerContents={drawerContents}
         drawerOpened={drawerOpened}
       />
-      <section>
-        <Group grow>
-          <Select
-            aria-label="Column Filter"
-            data={[
-              TableColumnNames.ACCOUNT_NAME,
-              TableColumnNames.PHONE_NUM,
-              TableColumnNames.RESIDENT,
-              TableColumnNames.USER_ROLE,
-            ]}
-            onChange={(value) => {
-              setColumnFilter(value);
-              setFilterKeyword("");
-            }}
-            placeholder="Select Column Filters"
-            value={columnFilter}
-          />
-          {columnFilter === TableColumnNames.ACCOUNT_NAME && (
-            <TextInput
-              aria-label="Keyword filter"
-              onChange={(event) => setFilterKeyword(event.currentTarget.value)}
-              placeholder="Filter Keyword"
-              value={filterKeyword}
-            />
-          )}
-          {columnFilter === TableColumnNames.PHONE_NUM && (
-            <Input
-              component={IMaskInput}
-              mask="(000) 000-0000"
-              onChange={(event) => setFilterKeyword(event.currentTarget.value)}
-              placeholder="Filter Keyword"
-              value={filterKeyword}
-            />
-          )}
-          {columnFilter === TableColumnNames.RESIDENT && (
+      <Flex direction={"column"} h={"100%"}>
+        <section>
+          <Group grow>
             <Select
-              aria-label="Is Resident Selection Menu"
-              data={["Yes", "No"]}
+              aria-label="Column Filter"
+              data={[
+                TableColumnNames.ACCOUNT_NAME,
+                TableColumnNames.PHONE_NUM,
+                TableColumnNames.RESIDENT,
+                TableColumnNames.USER_ROLE,
+              ]}
               onChange={(value) => {
-                if (value) {
-                  setFilterKeyword(value);
-                }
+                setColumnFilter(value);
+                setFilterKeyword("");
               }}
-              placeholder="Yes/No"
-              value={filterKeyword}
+              placeholder="Select Column Filters"
+              value={columnFilter}
             />
-          )}
-          {columnFilter === TableColumnNames.USER_ROLE && (
-            <Select
-              aria-label="User Role Selection Menu"
-              data={[UserRoles.ADMIN, UserRoles.DRIVER, UserRoles.MEMBER]}
-              onChange={(value) => {
-                if (value) {
-                  setFilterKeyword(value);
+            {columnFilter === TableColumnNames.ACCOUNT_NAME && (
+              <TextInput
+                aria-label="Keyword filter"
+                onChange={(event) =>
+                  setFilterKeyword(event.currentTarget.value)
                 }
-              }}
-              placeholder="Role Selection"
-              value={filterKeyword}
-            />
-          )}
-        </Group>
-      </section>
-      <Table.ScrollContainer minWidth={0} style={{ flex: 1, minHeight: 0 }}>
-        <Table highlightOnHover stickyHeader>
-          <Table.Thead>
-            <Table.Tr>
-              {isSelecting && <Table.Th></Table.Th>}
-              <Table.Th>Name On Account</Table.Th>
-              <Table.Th>Primary Phone Number</Table.Th>
-              <Table.Th>Resident?</Table.Th>
-              <Table.Th>User Role</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>{usersList}</Table.Tbody>
-        </Table>
-        {getUsersQuery.isLoading && <TripLoading />}
-      </Table.ScrollContainer>
+                placeholder="Filter Keyword"
+                value={filterKeyword}
+              />
+            )}
+            {columnFilter === TableColumnNames.PHONE_NUM && (
+              <Input
+                component={IMaskInput}
+                mask="(000) 000-0000"
+                onChange={(event) =>
+                  setFilterKeyword(event.currentTarget.value)
+                }
+                placeholder="Filter Keyword"
+                value={filterKeyword}
+              />
+            )}
+            {columnFilter === TableColumnNames.RESIDENT && (
+              <Select
+                aria-label="Is Resident Selection Menu"
+                data={["Yes", "No"]}
+                onChange={(value) => {
+                  if (value) {
+                    setFilterKeyword(value);
+                  }
+                }}
+                placeholder="Yes/No"
+                value={filterKeyword}
+              />
+            )}
+            {columnFilter === TableColumnNames.USER_ROLE && (
+              <Select
+                aria-label="User Role Selection Menu"
+                data={[UserRoles.ADMIN, UserRoles.DRIVER, UserRoles.MEMBER]}
+                onChange={(value) => {
+                  if (value) {
+                    setFilterKeyword(value);
+                  }
+                }}
+                placeholder="Role Selection"
+                value={filterKeyword}
+              />
+            )}
+          </Group>
+        </section>
+        <Table.ScrollContainer minWidth={0} style={{ flex: 1, minHeight: 0 }}>
+          <Table highlightOnHover stickyHeader>
+            <Table.Thead>
+              <Table.Tr>
+                {isSelecting && <Table.Th></Table.Th>}
+                <Table.Th>Name On Account</Table.Th>
+                <Table.Th>Primary Phone Number</Table.Th>
+                <Table.Th>Resident?</Table.Th>
+                <Table.Th>User Role</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>{usersList}</Table.Tbody>
+          </Table>
+          {getUsersQuery.isLoading && <TripLoading />}
+        </Table.ScrollContainer>
+      </Flex>
     </Paper>
   );
 }
