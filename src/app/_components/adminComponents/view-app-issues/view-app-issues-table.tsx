@@ -85,9 +85,6 @@ export default function ViewAppIssuesTable({
         );
         if (tagInfo.length !== 1) {
           //Should only have one returned tag
-          showNotifications.error(
-            `Could not generate tag ${tag.appIssuesTags.name} for issue ${issue.id}`,
-          );
           continue; //Skip this one if otherwise
         }
         badges = [

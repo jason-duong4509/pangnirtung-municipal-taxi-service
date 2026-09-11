@@ -112,7 +112,12 @@ export default function AdminPage() {
           <AppShell.Section>
             <NavbarHeader text={"Trips"} />
             <NavbarOption
-              onClick={() => setPageView(PageView.Trips)}
+              onClick={() => {
+                setPageView(PageView.Trips);
+                setSelectedRows([]);
+                setSelectedRowsString([]);
+                setIsSelecting(false);
+              }}
               text={"Edit Trips"}
             />
           </AppShell.Section>
@@ -123,14 +128,24 @@ export default function AdminPage() {
               text={"Add Users"}
             />
             <NavbarOption
-              onClick={() => setPageView(PageView.EditUsers)}
+              onClick={() => {
+                setPageView(PageView.EditUsers);
+                setSelectedRows([]);
+                setSelectedRowsString([]);
+                setIsSelecting(false);
+              }}
               text={"Edit Users"}
             />
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"User Feedback"} />
             <NavbarOption
-              onClick={() => setPageView(PageView.ViewAppIssues)}
+              onClick={() => {
+                setPageView(PageView.ViewAppIssues);
+                setSelectedRows([]);
+                setSelectedRowsString([]);
+                setIsSelecting(false);
+              }}
               text={"View App Issues"}
             />
           </AppShell.Section>

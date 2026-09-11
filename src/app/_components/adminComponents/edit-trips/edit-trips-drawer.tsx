@@ -32,7 +32,6 @@ import {
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
-import { BookingStatus } from "~/types/types";
 import AddressDropdown from "../../bookingForm/booking-form-components/address-drop-down-field";
 import PickupTimeInput from "../../bookingForm/booking-form-components/pick-up-time-field";
 import AlertPopup from "../../common/alert/alert";
@@ -230,15 +229,15 @@ export default function EditTripsDrawer({
         >
           <Stack h={"calc(100dvh - 75px)"}>
             <TextInput
-              defaultValue={bookingForm.values.status}
               label="Trip Status"
               readOnly
+              value={bookingForm.getValues().status}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={bookingForm.values.id}
               label="Booking ID"
               readOnly
+              value={bookingForm.getValues().id}
               variant="unstyled"
             />
             <TextInput
@@ -247,6 +246,7 @@ export default function EditTripsDrawer({
               leftSection={<UserIcon size={20} />}
               placeholder="Your Name"
               {...bookingForm.getInputProps("name")}
+              key={bookingForm.key("name")}
               withAsterisk
             />
             <PickupTimeInput
@@ -278,11 +278,11 @@ export default function EditTripsDrawer({
               withAsterisk
             />
             <TextInput
-              defaultValue={
-                bookingForm.values.requestedVerification ? "Yes" : "No"
-              }
               label="Resident Verification Requested?"
               readOnly
+              value={
+                bookingForm.getValues().requestedVerification ? "Yes" : "No"
+              }
               variant="unstyled"
             />
             <Textarea
@@ -298,25 +298,25 @@ export default function EditTripsDrawer({
             />
             <TextInput
               aria-label="Payment method"
-              defaultValue={
-                bookingForm.values.paymentMethod === "Redeem Code"
-                  ? `Code (${bookingForm.values.paymentCode ?? "unable to retrieve code"})`
-                  : bookingForm.values.paymentMethod
-              }
               label="Payment Method"
               readOnly
+              value={
+                bookingForm.getValues().paymentMethod === "Redeem Code"
+                  ? `Code (${bookingForm.getValues().paymentCode ?? "unable to retrieve code"})`
+                  : bookingForm.getValues().paymentMethod
+              }
               variant="unstyled"
             />
             <TextInput
-              defaultValue={dbTimeToPrettyString(bookingForm.values.createdAt)}
               label="Created On"
               readOnly
+              value={dbTimeToPrettyString(bookingForm.getValues().createdAt)}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={dbTimeToPrettyString(bookingForm.values.updatedAt)}
               label="Last Updated"
               readOnly
+              value={dbTimeToPrettyString(bookingForm.getValues().updatedAt)}
               variant="unstyled"
             />
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>

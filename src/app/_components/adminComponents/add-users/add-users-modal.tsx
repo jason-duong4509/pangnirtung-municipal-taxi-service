@@ -24,17 +24,7 @@ export default function AddUsersModal({
   closeModal: () => void;
 }) {
   const [isMutating, setIsMutating] = useState(false);
-
-  const createUserMutation = api.users.add.useMutation({
-    onSuccess: () => {
-      showNotifications.success("User created successfully");
-      setIsMutating(false);
-    },
-    onError: (error) => {
-      showNotifications.error(error.message);
-      setIsMutating(false);
-    },
-  });
+  const utils = api.useUtils();
 
   const form = useForm<{
     phoneNumber: string;
@@ -55,6 +45,25 @@ export default function AddUsersModal({
           return result.errorMessage;
         }
       },
+    },
+  });
+
+  const getUsersQuery = api.users.getAll.useQuery(undefined, {
+    //Forces manual fetching
+    enabled: false,
+  });
+
+  const createUserMutation = api.users.add.useMutation({
+    onSuccess: () => {
+      showNotifications.success("User created successfully");
+      setIsMutating(false);
+      getUsersQuery.refetch();
+      form.reset();
+      void utils.users.getAll.invalidate(); //Forces the get users table to refetch its data if opened
+    },
+    onError: (error) => {
+      showNotifications.error(error.message);
+      setIsMutating(false);
     },
   });
 
@@ -91,6 +100,7 @@ export default function AddUsersModal({
             description="Enter the user's phone number"
             placeholder="123-456-7890"
             {...form.getInputProps("phoneNumber")}
+            key={form.key("phoneNumber")}
           />
         </Stack>
         <Group grow>

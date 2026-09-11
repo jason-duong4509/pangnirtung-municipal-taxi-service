@@ -16,7 +16,7 @@ async function main() {
   }
 
   console.log("Done seeding");
-  process.exit(1);
+  process.exit(0);
 }
 
 main();

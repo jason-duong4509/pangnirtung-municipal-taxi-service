@@ -20,7 +20,7 @@ import {
 } from "react";
 import { IMaskInput } from "react-imask";
 import { showNotifications } from "~/lib/mantine-notifications-system";
-import { api } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
 import { UserRoles } from "~/types/types";
 import TripLoading from "../../common/trips/trip-loading";
 import EditUsersDrawer from "./edit-users-drawer";
@@ -31,6 +31,8 @@ enum TableColumnNames {
   RESIDENT = "Resident?",
   USER_ROLE = "User Role",
 }
+
+type usersData = RouterOutputs["users"]["getAll"][0];
 
 export default function EditUsersTable({
   isSelecting,
@@ -43,7 +45,9 @@ export default function EditUsersTable({
 }) {
   const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
     useDisclosure(false);
-  const [drawerContents, setDrawerContents] = useState<any>(undefined);
+  const [drawerContents, setDrawerContents] = useState<usersData | undefined>(
+    undefined,
+  );
   const [columnFilter, setColumnFilter] = useState<string | null>(null);
   const [filterKeyword, setFilterKeyword] = useState<string>("");
 
@@ -105,7 +109,9 @@ export default function EditUsersTable({
               />
             </Table.Td>
           )}
-          <Table.Td>{user.name}</Table.Td>
+          <Table.Td>
+            {user.name === "no-name-given.pang" ? "" : user.name}
+          </Table.Td>
           <Table.Td>{user.phoneNumber}</Table.Td>
           <Table.Td>USER RESIDENCY STATUS NOT ADDED</Table.Td>
           <Table.Td>{user.role}</Table.Td>

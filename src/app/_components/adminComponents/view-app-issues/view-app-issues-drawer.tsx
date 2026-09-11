@@ -161,7 +161,7 @@ export default function ViewAppIssuesDrawer({
         confirmButtonText={"Confirm"}
         isLoading={formSubmitting}
         modalOpened={modalOpened}
-        onConfirm={() => handleFormOnSubmit(form.values)}
+        onConfirm={() => form.onSubmit(handleFormOnSubmit)()}
         titleText={"Confirm Action"}
       />
       <Drawer
@@ -175,21 +175,21 @@ export default function ViewAppIssuesDrawer({
         <form onSubmit={form.onSubmit(handleFormOnSubmit)}>
           <Stack h={"calc(100dvh - 75px)"}>
             <TextInput
-              defaultValue={form.values.id}
               label="App Issue ID"
               readOnly
+              value={form.getValues().id}
               variant="unstyled"
             />
             <TextInput
               label={"Title"}
               placeholder="Max 100 characters"
               {...form.getInputProps("title")}
-              defaultValue={form.values.title}
+              key={form.key("title")}
             />
             <Input.Wrapper label="Priority Rating">
               <Stack gap={"xs"}>
                 <Rating
-                  defaultValue={form.values.priority}
+                  key={form.key("priority")}
                   {...form.getInputProps("priority")}
                 />
                 <Input.Error>{form.errors.priority}</Input.Error>
@@ -198,7 +198,7 @@ export default function ViewAppIssuesDrawer({
             <Input.Wrapper label="Tags">
               <Stack gap={"xs"}>
                 <Chip.Group
-                  defaultValue={form.values.tags}
+                  key={form.key("tags")}
                   multiple
                   {...form.getInputProps("tags")}
                 >
@@ -219,36 +219,36 @@ export default function ViewAppIssuesDrawer({
             </Input.Wrapper>
             <Textarea
               autosize
-              defaultValue={
-                drawerContents
-                  ? drawerContents.comments
-                  : "Unable to fetch data"
-              }
               label="Comments"
               maxRows={10}
               minRows={1}
               readOnly
               resize="vertical"
+              value={
+                drawerContents
+                  ? drawerContents.comments
+                  : "Unable to fetch data"
+              }
               variant="unstyled"
             />
             <TextInput
-              defaultValue={
+              label="Created On"
+              readOnly
+              value={
                 drawerContents
                   ? dbTimeToPrettyString(drawerContents.createdAt)
                   : "Unable to fetch data"
               }
-              label="Created On"
-              readOnly
               variant="unstyled"
             />
             <TextInput
-              defaultValue={
+              label="Last Updated"
+              readOnly
+              value={
                 drawerContents
                   ? dbTimeToPrettyString(drawerContents.updatedAt)
                   : "Unable to fetch data"
               }
-              label="Last Updated"
-              readOnly
               variant="unstyled"
             />
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
@@ -268,7 +268,6 @@ export default function ViewAppIssuesDrawer({
                   c={form.isDirty() ? "black" : undefined}
                   color="buttonColor"
                   disabled={!form.isDirty()}
-                  form="booking-form"
                   onClick={() => {
                     form.validate();
                     if (form.isValid()) {

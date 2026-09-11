@@ -89,7 +89,7 @@ export default function EditUsersDrawer({
 
     validate: {
       name: (value) => {
-        if (value === "no-name-given.pang") {
+        if (value === "") {
           return null;
         }
         const result = checkName(value);
@@ -101,7 +101,7 @@ export default function EditUsersDrawer({
         }
       },
       email: (value) => {
-        if (value.includes("@no-email-given.pang")) {
+        if (value === "") {
           return null;
         }
         const result = checkEmail(value);
@@ -131,8 +131,11 @@ export default function EditUsersDrawer({
 
     form.setInitialValues({
       id: drawerContents.id,
-      name: drawerContents.name,
-      email: drawerContents.email,
+      name:
+        drawerContents.name === "no-name-given.pang" ? "" : drawerContents.name,
+      email: drawerContents.email.includes("@no-email-given.pang")
+        ? ""
+        : drawerContents.email,
       phoneNumber:
         drawerContents.phoneNumber ??
         "ERROR: User does not have a phone number",
@@ -140,8 +143,11 @@ export default function EditUsersDrawer({
     });
     form.setValues({
       id: drawerContents.id,
-      name: drawerContents.name,
-      email: drawerContents.email,
+      name:
+        drawerContents.name === "no-name-given.pang" ? "" : drawerContents.name,
+      email: drawerContents.email.includes("@no-email-given.pang")
+        ? ""
+        : drawerContents.email,
       phoneNumber:
         drawerContents.phoneNumber ??
         "ERROR: User does not have a phone number",
@@ -160,10 +166,8 @@ export default function EditUsersDrawer({
 
     updateUserMutation.mutate({
       id: values.id,
-      name: values.name === "no-name-given.pang" ? undefined : values.name,
-      email: values.email.includes("@no-email-given.pang")
-        ? undefined
-        : values.email,
+      name: values.name,
+      email: values.email,
       phoneNumber: values.phoneNumber,
       role: values.role,
     });
@@ -192,54 +196,54 @@ export default function EditUsersDrawer({
         <form>
           <Stack h={"calc(100dvh - 75px)"}>
             <TextInput
-              defaultValue={form.values.id}
               label="User ID"
               readOnly
+              value={form.getValues().id}
               variant="unstyled"
             />
             <TextInput
               label={"Name on Account"}
               placeholder="Name"
               {...form.getInputProps("name")}
-              defaultValue={form.values.name}
+              key={form.key("name")}
             />
             <TextInput
               label={"Primary Phone Number"}
               placeholder="123-456-7890"
               {...form.getInputProps("phoneNumber")}
-              defaultValue={form.values.phoneNumber}
+              key={form.key("phoneNumber")}
             />
             <TextInput
               label={"Email"}
               placeholder="someone@email.com"
               {...form.getInputProps("email")}
-              defaultValue={form.values.email}
+              key={form.key("email")}
             />
             <Select
               data={Object.values(UserRoles)}
-              defaultValue={form.values.role}
+              key={form.key("role")}
               label="User Role"
               placeholder="Select Role"
               {...form.getInputProps("role")}
             />
             <TextInput
-              defaultValue={
+              label="Created On"
+              readOnly
+              value={
                 drawerContents
                   ? dbTimeToPrettyString(drawerContents.createdAt)
                   : "Unable to fetch data"
               }
-              label="Created On"
-              readOnly
               variant="unstyled"
             />
             <TextInput
-              defaultValue={
+              label="Last Updated"
+              readOnly
+              value={
                 drawerContents
                   ? dbTimeToPrettyString(drawerContents.updatedAt)
                   : "Unable to fetch data"
               }
-              label="Last Updated"
-              readOnly
               variant="unstyled"
             />
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
@@ -257,7 +261,7 @@ export default function EditUsersDrawer({
                     setAlertOnConfirm(() => () => {
                       setFormSubmitting(true);
                       deleteUserMutation.mutate({
-                        ids: [form.values.id],
+                        ids: [form.getValues().id],
                       });
                     });
                     openAlert();

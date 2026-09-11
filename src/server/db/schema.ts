@@ -86,7 +86,7 @@ export const appIssues = pgTable(
 
 export const appIssuesTags = pgTable("app_issues_tags", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
 });
 
 export const appIssuesHasTags = pgTable("app_issues_has_tags", {

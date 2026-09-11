@@ -383,6 +383,7 @@ export const checkReportAppTags = (
     };
   }
 
+  let listOfTags = [] as string[];
   for (const tag of input) {
     const matchingChip = ReportAppIssueChipTypes.filter(
       (chipType) => chipType.label === tag,
@@ -393,11 +394,17 @@ export const checkReportAppTags = (
         isProper: false,
         errorMessage: `Tag ${tag} is not a valid tag`,
       };
+    } else if (listOfTags.includes(tag)) {
+      return {
+        isProper: false,
+        errorMessage: `Duplicate tag ${tag} found`,
+      };
     }
+    listOfTags = [...listOfTags, tag];
   }
 
   return {
     isProper: true,
-    formattedInput: input,
+    formattedInput: listOfTags,
   };
 };

@@ -1,26 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { generateId } from "better-auth";
-import { phoneNumberClient } from "better-auth/client/plugins";
-import { eq, getTableColumns, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import {
-  checkEmail,
-  checkName,
-  checkPhoneNumber,
-  checkReportAppComments,
-  checkReportAppPriority,
-  checkReportAppTags,
-  checkReportAppTitle,
-} from "~/lib/input-checkers";
+import { checkEmail, checkName, checkPhoneNumber } from "~/lib/input-checkers";
 import { db } from "~/server/db";
-import {
-  appIssues,
-  appIssuesHasTags,
-  appIssuesTags,
-  user,
-} from "~/server/db/schema";
+import { user } from "~/server/db/schema";
 import { UserRoles } from "~/types/types";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const usersRouter = createTRPCRouter({
   getAll: protectedProcedure.query(async ({ ctx }) => {
@@ -35,10 +21,14 @@ export const usersRouter = createTRPCRouter({
       const result = await db.select().from(user);
 
       return result;
-    } catch {
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error;
+      }
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to get user data",
+        cause: error,
       });
     }
   }),
@@ -46,8 +36,8 @@ export const usersRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
-        name: z.string().optional(),
-        email: z.string().optional(),
+        name: z.string(),
+        email: z.string(),
         phoneNumber: z.string(),
         role: z.nativeEnum(UserRoles),
       }),
@@ -61,8 +51,8 @@ export const usersRouter = createTRPCRouter({
       }
 
       //--Input checking--
-      let name = "" as string;
-      if (input.name) {
+      let name = "no-name-given.pang" as string;
+      if (input.name !== "") {
         const nameCheck = checkName(input.name);
         if (nameCheck.isProper) {
           name = nameCheck.formattedInput;
@@ -70,18 +60,6 @@ export const usersRouter = createTRPCRouter({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: nameCheck.errorMessage,
-          });
-        }
-      }
-      let email = "" as string;
-      if (input.email) {
-        const emailCheck = checkEmail(input.email);
-        if (emailCheck.isProper) {
-          email = emailCheck.formattedInput;
-        } else {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: emailCheck.errorMessage,
           });
         }
       }
@@ -95,6 +73,18 @@ export const usersRouter = createTRPCRouter({
           message: phoneNumberCheck.errorMessage,
         });
       }
+      let email = `${phoneNumber}@no-email-given.pang` as string;
+      if (input.email !== "") {
+        const emailCheck = checkEmail(input.email);
+        if (emailCheck.isProper) {
+          email = emailCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: emailCheck.errorMessage,
+          });
+        }
+      }
       //------------------
 
       try {
@@ -102,9 +92,10 @@ export const usersRouter = createTRPCRouter({
           const [updatedUserId] = await tx
             .update(user)
             .set({
-              ...(input.name ? { name: name } : {}),
-              email: input.email ? email : `${phoneNumber}@no-email-given.pang`,
+              name: name,
+              email: email,
               phoneNumber: phoneNumber,
+              role: input.role,
               updatedAt: new Date(),
             })
             .where(eq(user.id, input.id))
@@ -227,10 +218,14 @@ export const usersRouter = createTRPCRouter({
             message: "Database unable to create user",
           });
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create user entry",
+          cause: error,
         });
       }
     }),
