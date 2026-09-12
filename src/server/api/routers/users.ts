@@ -229,4 +229,97 @@ export const usersRouter = createTRPCRouter({
         });
       }
     }),
+  getSelf: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const result = await db.select().from(user).where(eq(user.id, ctx.session.user.id));
+
+      return result;
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get user data",
+        cause: error,
+      });
+    }
+  }),
+  updateSelf: protectedProcedure
+    .input(
+      z.object({
+        name: z.string(),
+        email: z.string(),
+        phoneNumber: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      //--Input checking--
+      let name = "no-name-given.pang" as string;
+      if (input.name !== "") {
+        const nameCheck = checkName(input.name);
+        if (nameCheck.isProper) {
+          name = nameCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: nameCheck.errorMessage,
+          });
+        }
+      }
+      const phoneNumberCheck = checkPhoneNumber(input.phoneNumber);
+      let phoneNumber = "" as string;
+      if (phoneNumberCheck.isProper) {
+        phoneNumber = phoneNumberCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: phoneNumberCheck.errorMessage,
+        });
+      }
+      let email = `${phoneNumber}@no-email-given.pang` as string;
+      if (input.email !== "") {
+        const emailCheck = checkEmail(input.email);
+        if (emailCheck.isProper) {
+          email = emailCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: emailCheck.errorMessage,
+          });
+        }
+      }
+      //------------------
+
+      try {
+        await db.transaction(async (tx) => {
+          const [updatedUserId] = await tx
+            .update(user)
+            .set({
+              name: name,
+              email: email,
+              phoneNumber: phoneNumber,
+              updatedAt: new Date(),
+            })
+            .where(eq(user.id, ctx.session.user.id))
+            .returning({ id: user.id });
+
+          if (!updatedUserId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Could not update user information`,
+            });
+          }
+        });
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update user",
+          cause: error,
+        });
+      }
+    }),
 });
