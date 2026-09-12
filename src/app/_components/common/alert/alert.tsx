@@ -62,11 +62,10 @@ export default function AlertPopup({
           <Button
             c={"black"}
             color="buttonColor"
-            form="register-form"
             onClick={onConfirm}
             p={0}
             size="compact-sm"
-            type="submit"
+            type="button"
             variant="filled"
           >
             {!isLoading && confirmButtonText}

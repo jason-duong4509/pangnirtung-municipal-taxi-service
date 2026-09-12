@@ -21,7 +21,7 @@ export const auth = betterAuth({
       signUpOnVerification: {
         getTempEmail: (phoneNumber) => `${phoneNumber}@no-email-given.pang`,
 
-        getTempName: (phoneNumber) => phoneNumber,
+        getTempName: () => "no-name-given.pang",
       },
     }),
   ],
@@ -30,6 +30,16 @@ export const auth = betterAuth({
       clientId: env.BETTER_AUTH_GITHUB_CLIENT_ID,
       clientSecret: env.BETTER_AUTH_GITHUB_CLIENT_SECRET,
       redirectURI: "http://localhost:3000/api/auth/callback/github",
+    },
+  },
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        required: false,
+        input: false,
+        returned: true,
+      },
     },
   },
 });

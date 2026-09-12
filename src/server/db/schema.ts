@@ -1,6 +1,7 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgEnum,
@@ -9,7 +10,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { BookingStatus, PaymentMethods } from "~/types/types";
+import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
 
 export const bookingStatus = pgEnum("bookingStatus", [
   BookingStatus.PENDING,
@@ -24,6 +25,12 @@ export const paymentMethod = pgEnum("paymentMethod", [
   PaymentMethods.REDEEM_CODE,
 ]);
 
+export const userRoles = pgEnum("userRoles", [
+  UserRoles.ADMIN,
+  UserRoles.DRIVER,
+  UserRoles.MEMBER,
+]);
+
 export const bookings = pgTable("bookings", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   pickupTime: timestamp("pick_up_time", { withTimezone: true })
@@ -36,7 +43,9 @@ export const bookings = pgTable("bookings", {
   payment: paymentMethod("payment_method").notNull(),
   reminders: boolean("receive_reminders").notNull().default(false),
   requestVerification: boolean("request_verification").notNull().default(false),
-  created_by: text("created_by").notNull(),
+  created_by: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
@@ -46,15 +55,48 @@ export const bookings = pgTable("bookings", {
   status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
 });
 
-export const appIssues = pgTable("app_issues", {
+export const appIssues = pgTable(
+  "app_issues",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    title: text("title")
+      .$defaultFn(() => "")
+      .notNull(),
+    comments: text("comments").notNull(),
+    created_by: text("created_by").references(() => user.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .$defaultFn(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .$defaultFn(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    priority: integer("priority")
+      .$defaultFn(() => 1)
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "rating_range",
+      sql`${table.priority} >= 1 AND ${table.priority} <= 5`,
+    ),
+  ],
+);
+
+export const appIssuesTags = pgTable("app_issues_tags", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  title: text("title").notNull(),
-  comments: text("comments").notNull(),
-  created_by: text("created_by").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .$defaultFn(() => /* @__PURE__ */ new Date())
-    .notNull(),
-  read: boolean("read").notNull().default(false),
+  name: text("name").notNull().unique(),
+});
+
+export const appIssuesHasTags = pgTable("app_issues_has_tags", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  issueId: integer("issue_id")
+    .notNull()
+    .references(() => appIssues.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id")
+    .notNull()
+    .references(() => appIssuesTags.id, { onDelete: "cascade" }),
 });
 
 export const user = pgTable("user", {
@@ -73,6 +115,7 @@ export const user = pgTable("user", {
     .notNull(),
   phoneNumber: text("phone_number").unique(),
   phoneNumberVerified: boolean("phone_number_verified"),
+  role: userRoles("role").notNull().default(UserRoles.MEMBER),
 });
 
 export const session = pgTable(
@@ -154,3 +197,25 @@ export const accountRelations = relations(account, ({ one }) => ({
 export const sessionRelations = relations(session, ({ one }) => ({
   user: one(user, { fields: [session.userId], references: [user.id] }),
 }));
+
+export const issueRelations = relations(appIssues, ({ many }) => ({
+  appIssuesHasTags: many(appIssuesHasTags),
+}));
+
+export const tagsRelations = relations(appIssuesTags, ({ many }) => ({
+  appIssuesHasTags: many(appIssuesHasTags),
+}));
+
+export const issuesHaveTagsRelations = relations(
+  appIssuesHasTags,
+  ({ one }) => ({
+    appIssues: one(appIssues, {
+      fields: [appIssuesHasTags.issueId],
+      references: [appIssues.id],
+    }),
+    appIssuesTags: one(appIssuesTags, {
+      fields: [appIssuesHasTags.tagId],
+      references: [appIssuesTags.id],
+    }),
+  }),
+);

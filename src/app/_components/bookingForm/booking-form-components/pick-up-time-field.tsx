@@ -30,6 +30,7 @@ export default function PickupTimeInput({
       }}
       valueFormat={"ddd[,] MMM D [at] h:mm A"}
       {...form.getInputProps(formField)}
+      key={form.key(formField)}
       label={useLabel ? "Pick-up Time" : undefined}
       withAsterisk={withAsterisk}
     />
