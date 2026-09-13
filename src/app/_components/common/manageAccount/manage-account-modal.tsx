@@ -1,32 +1,35 @@
 "use client";
 
 import {
+  Accordion,
   Button,
   CloseButton,
+  Flex,
   Group,
+  Input,
   Modal,
   Stack,
+  Text,
   TextInput,
   Title,
-  Text,
-  Accordion,
-  Flex,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { LockSimpleIcon, MoneyWavyIcon, UserIcon } from "@phosphor-icons/react";
-import { useEffect, useState, type JSX } from "react";
+import { type JSX, useCallback, useEffect, useState } from "react";
+import { IMaskInput } from "react-imask";
 import { checkEmail, checkName, checkPhoneNumber } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
 import { UserRoles } from "~/types/types";
 import AlertPopup from "../alert/alert";
+import ChangePhoneNumberModal from "../changePhoneNumber/change-phone-number";
 
 function AccordionLabel({
   label,
   icon,
   description,
-}:{
+}: {
   label: string;
   icon: JSX.Element;
   description: string;
@@ -36,7 +39,7 @@ function AccordionLabel({
       {icon}
       <div>
         <Text>{label}</Text>
-        <Text size="sm" c="dimmed" fw={400}>
+        <Text c="dimmed" fw={400} size="sm">
           {description}
         </Text>
       </div>
@@ -54,7 +57,14 @@ export default function ManageAccountModal({
   const [isMutating, setIsMutating] = useState(false);
   const isTablet = useMediaQuery("(max-width: 900px)");
   const isPhone = useMediaQuery("(max-width: 500px)");
-  const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] = useDisclosure(false);
+  const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
+    useDisclosure(false);
+  const [
+    changePhoneModalOpened,
+    { open: openChangePhoneModal, close: closeChangePhoneModal },
+  ] = useDisclosure(false);
+  const [changePhoneSuccess, setChangePhoneSuccess] = useState(false);
+  const utils = api.useUtils();
 
   const getUsersQuery = api.users.getSelf.useQuery(undefined, {
     //Forces manual fetching
@@ -65,7 +75,7 @@ export default function ManageAccountModal({
     onSuccess: () => {
       showNotifications.success("Updated successfully");
       setIsMutating(false);
-      getUsersQuery.refetch();
+      void utils.users.getAll.invalidate(); //Forces the get users table to refetch its data if opened
       closeModal();
       closeAlertModal();
     },
@@ -76,14 +86,35 @@ export default function ManageAccountModal({
   });
 
   useEffect(() => {
-    if (modalOpened){
-      getUsersQuery.refetch()
+    if (modalOpened) {
+      getUsersQuery.refetch();
     }
-  }, [modalOpened]);
+  }, [modalOpened, getUsersQuery.refetch]);
+
+  const phoneForm = useForm<{
+    phoneNumber: string;
+  }>({
+    mode: "uncontrolled",
+
+    initialValues: {
+      phoneNumber: "",
+    },
+
+    validate: {
+      phoneNumber: (value) => {
+        const result = checkPhoneNumber(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+    },
+  });
 
   const form = useForm<{
     name: string;
-    phoneNumber: string;
     email: string;
     role: UserRoles;
   }>({
@@ -91,14 +122,13 @@ export default function ManageAccountModal({
 
     initialValues: {
       name: "",
-      phoneNumber: "",
       email: "",
       role: UserRoles.MEMBER,
     },
 
     validate: {
       name: (value) => {
-        if (value === ""){
+        if (value === "") {
           return null;
         }
         const result = checkName(value);
@@ -109,17 +139,8 @@ export default function ManageAccountModal({
           return result.errorMessage;
         }
       },
-      phoneNumber: (value) => {
-        const result = checkPhoneNumber(value);
-
-        if (result.isProper) {
-          return null;
-        } else {
-          return result.errorMessage;
-        }
-      },
       email: (value) => {
-        if (value === ""){
+        if (value === "") {
           return null;
         }
         const result = checkEmail(value);
@@ -139,92 +160,143 @@ export default function ManageAccountModal({
         getUsersQuery.error.message ??
           "An error occurred while fetching user data",
       );
-    } else if (!getUsersQuery.isFetching && getUsersQuery.data && getUsersQuery.data[0]) {
-      const user = getUsersQuery.data[0]
+    } else if (
+      !getUsersQuery.isFetching &&
+      getUsersQuery.data &&
+      getUsersQuery.data[0]
+    ) {
+      const user = getUsersQuery.data[0];
 
       form.setInitialValues({
         name: user.name === "no-name-given.pang" ? "" : user.name,
-        phoneNumber: user.phoneNumber!,
         email: user.email.includes("@no-email-given.pang") ? "" : user.email,
         role: user.role,
       });
       form.setValues({
         name: user.name === "no-name-given.pang" ? "" : user.name,
-        phoneNumber: user.phoneNumber!,
         email: user.email.includes("@no-email-given.pang") ? "" : user.email,
         role: user.role,
       });
+      phoneForm.setInitialValues({
+        phoneNumber: user.phoneNumber ?? "",
+      });
+      phoneForm.setValues({
+        phoneNumber: user.phoneNumber ?? "",
+      });
+      phoneForm.reset();
+      form.reset();
     }
-  }, [getUsersQuery.error, getUsersQuery.isFetching]);
+  }, [
+    getUsersQuery.error,
+    getUsersQuery.isFetching,
+    getUsersQuery.data,
+    form.setInitialValues,
+    phoneForm.setInitialValues,
+    form.setValues,
+    phoneForm.setValues,
+    phoneForm.reset,
+    form.reset,
+  ]);
 
-  const handleFormOnSubmit = async (values: typeof form.values) => {
-    if (isMutating) {
-      //If form is already submitting
-      return;
+  const handleFormOnSubmit = useCallback(
+    async (values: typeof form.values) => {
+      if (isMutating) {
+        //If form is already submitting
+        return;
+      }
+      setIsMutating(true);
+
+      updateUserMutation.mutate({
+        name: values.name,
+        email: values.email,
+      });
+    },
+    [updateUserMutation.mutate, isMutating],
+  );
+
+  useEffect(() => {
+    if (changePhoneSuccess) {
+      setChangePhoneSuccess(false);
+      if (form.isDirty()) {
+        openAlertModal();
+        form.onSubmit(handleFormOnSubmit)(); //Call the form submit to change the other values
+      } else {
+        void utils.users.getAll.invalidate(); //Forces the get users table to refetch its data if opened
+        closeModal();
+      }
     }
-    setIsMutating(true);
-
-    updateUserMutation.mutate({
-      name: values.name,
-      phoneNumber: values.phoneNumber,
-      email: values.email,
-    });
-  };
+  }, [
+    changePhoneSuccess,
+    form.isDirty,
+    openAlertModal,
+    utils.users.getAll.invalidate,
+    form.onSubmit,
+    closeModal,
+    handleFormOnSubmit,
+  ]);
 
   const accordianSections = [
     {
-      id: 'about_you',
+      id: "about_you",
       icon: <UserIcon size={20} />,
-      label: 'About You',
-      description: 'Name, residency status, and user role',
+      label: "About You",
+      description: "Name, residency status, and user role",
       content: (
         <Stack>
           <TextInput
+            description={
+              "If set, will be used to pre-fill the name section in future booking forms"
+            }
             label={"Name on Account"}
-            description={"If set, will be used to pre-fill the name section in future booking forms"}
             placeholder="Name"
             {...form.getInputProps("name")}
             key={form.key("name")}
           />
-          <Flex gap={"md"} direction={isPhone ? "column" : "row"}>
+          <Flex direction={isPhone ? "column" : "row"} gap={"md"}>
             <TextInput
+              flex={1}
               label={"Residency Status"}
               readOnly
-              variant="unstyled"
               value={"Not a resident"}
-              flex={1}
+              variant="unstyled"
             />
             <TextInput
+              flex={1}
               label={"User Role"}
               readOnly
-              variant="unstyled"
               value={form.getValues().role}
-              flex={1}
+              variant="unstyled"
             />
           </Flex>
         </Stack>
       ),
     },
     {
-      id: 'account_information',
+      id: "account_information",
       icon: <LockSimpleIcon size={20} />,
-      label: 'Account Information',
-      description: 'Phone number and email address',
+      label: "Account Information",
+      description: "Phone number and email address",
       content: (
-        <Flex gap={"md"} direction={isPhone ? "column" : "row"}>
-          <TextInput
-            label={"Phone Number"}
-            description={"Used to log into this account"}
-            placeholder="123-456-7890"
+        <Flex direction={isPhone ? "column" : "row"} gap={"md"}>
+          <Input.Wrapper
+            description="Used to log into this account"
+            error={form.errors.phoneNumber}
             flex={1}
-            {...form.getInputProps("phoneNumber")}
-            key={form.key("phoneNumber")}
-          />
+            label="Phone Number"
+          >
+            <Input
+              component={IMaskInput}
+              key={phoneForm.key("phoneNumber")}
+              mask="(000) 000-0000"
+              placeholder="(123)-456-7890"
+              {...phoneForm.getInputProps("phoneNumber")}
+            />
+          </Input.Wrapper>
           <TextInput
-            label={"Email Address"}
             description={"For communication via email"}
-            placeholder="someone@gmail.com"
             flex={1}
+            label={"Email Address"}
+            placeholder="someone@gmail.com"
             {...form.getInputProps("email")}
             key={form.key("email")}
           />
@@ -232,18 +304,24 @@ export default function ManageAccountModal({
       ),
     },
     {
-      id: 'payment',
+      id: "payment",
       icon: <MoneyWavyIcon size={20} />,
-      label: 'Payment & Rides',
-      description: 'Change credit card information and view Rides credit',
+      label: "Payment & Rides",
+      description: "Change credit card information and view Rides credit",
       content: (
-        <Flex gap={"md"} direction={isTablet ? "column" : "row"}>
-          <Flex justify="space-between" flex={1} wrap="wrap" align={isPhone ? "flex-start" : "stretch"} direction={isPhone ? "column" : "row"}>
+        <Flex direction={isTablet ? "column" : "row"} gap={"md"}>
+          <Flex
+            align={isPhone ? "flex-start" : "stretch"}
+            direction={isPhone ? "column" : "row"}
+            flex={1}
+            justify="space-between"
+            wrap="wrap"
+          >
             <TextInput
-              label={"Credit Card"}
-              description={"Used to pay for rides within the app"}
-              readOnly
               defaultValue={"Not Registered"}
+              description={"Used to pay for rides within the app"}
+              label={"Credit Card"}
+              readOnly
               variant="unstyled"
             />
             <Stack justify="flex-end" pb={"xs"}>
@@ -259,12 +337,18 @@ export default function ManageAccountModal({
               </Button>
             </Stack>
           </Flex>
-          <Flex justify="space-between" flex={1} wrap="wrap" align={isPhone ? "flex-start" : "stretch"} direction={isPhone ? "column" : "row"}>
+          <Flex
+            align={isPhone ? "flex-start" : "stretch"}
+            direction={isPhone ? "column" : "row"}
+            flex={1}
+            justify="space-between"
+            wrap="wrap"
+          >
             <TextInput
-              label={"Ride Credits"}
-              description={"To cover trip costs"}
-              readOnly
               defaultValue={"60 Rides"}
+              description={"To cover trip costs"}
+              label={"Ride Credits"}
+              readOnly
               variant="unstyled"
             />
             <Stack justify="flex-end" pb={"xs"}>
@@ -287,161 +371,93 @@ export default function ManageAccountModal({
 
   return (
     <>
-    <AlertPopup
-      abortButtonText={"Back"}
-      body={<Text>Account information will be changed. Are you sure?</Text>}
-      closeModal={closeAlertModal}
-      confirmButtonText={"Confirm"}
-      isLoading={isMutating}
-      modalOpened={alertModalOpened}
-      onConfirm={() => form.onSubmit(handleFormOnSubmit)()}
-      titleText={"Are you sure?"}
-    />
-    <Modal
-      centered
-      onClose={closeModal}
-      opened={modalOpened}
-      radius={"lg"}
-      size={"xl"}
-      withCloseButton={false}
-    >
-      <Stack gap={"lg"} p={"md"}>
-        <Group justify="space-between">
-          <Title order={4}>Manage Account</Title>
-          <CloseButton onClick={closeModal} />
-        </Group>
-        <Accordion chevronPosition="right" variant="contained" radius="md">
-          {accordianSections.map((section) => (
-            <Accordion.Item value={section.id} key={section.label}>
-              <Accordion.Control aria-label={section.label}>
-                <AccordionLabel label={section.label} icon={section.icon} description={section.description}/>
-              </Accordion.Control>
-              <Accordion.Panel>
-                {section.content}
-              </Accordion.Panel>
-            </Accordion.Item>
-          ))}
-        </Accordion>
-        <Group grow>
-          <Button
-            c={"black"}
-            color="buttonColor"
-            onClick={closeModal}
-            p={0}
-            size="compact-sm"
-            type="button"
-            variant="outline"
-          >
-            Close
-          </Button>
-          <Button
-            c={form.isDirty() ? "black" : undefined}
-            color="buttonColor"
-            disabled={!form.isDirty()}
-            onClick={() => {
-              form.validate();
-              if (form.isValid()) {
-                openAlertModal()
-              } else{
-                showNotifications.error("Invalid information given. Please correct the information and try again")
-              }
-            }}
-            p={0}
-            size="compact-sm"
-            type="button"
-            variant="filled"
-          >
-            Save Changes
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
+      <ChangePhoneNumberModal
+        closeModal={closeChangePhoneModal}
+        modalOpened={changePhoneModalOpened}
+        newPhoneNumber={phoneForm.getValues().phoneNumber}
+        setChangeSuccess={setChangePhoneSuccess}
+      />
+      <AlertPopup
+        abortButtonText={"Back"}
+        body={<Text>Account information will be changed. Are you sure?</Text>}
+        closeModal={closeAlertModal}
+        confirmButtonText={"Confirm"}
+        isLoading={isMutating}
+        modalOpened={alertModalOpened}
+        onConfirm={() => {
+          if (phoneForm.isDirty()) {
+            //phone number has changed
+            openChangePhoneModal();
+            closeAlertModal();
+          } else {
+            form.onSubmit(handleFormOnSubmit)();
+          }
+        }}
+        titleText={"Are you sure?"}
+      />
+      <Modal
+        centered
+        onClose={closeModal}
+        opened={modalOpened}
+        radius={"lg"}
+        size={"xl"}
+        withCloseButton={false}
+      >
+        <Stack gap={"lg"} p={"md"}>
+          <Group justify="space-between">
+            <Title order={4}>Manage Account</Title>
+            <CloseButton onClick={closeModal} />
+          </Group>
+          <Accordion chevronPosition="right" radius="md" variant="contained">
+            {accordianSections.map((section) => (
+              <Accordion.Item key={section.label} value={section.id}>
+                <Accordion.Control aria-label={section.label}>
+                  <AccordionLabel
+                    description={section.description}
+                    icon={section.icon}
+                    label={section.label}
+                  />
+                </Accordion.Control>
+                <Accordion.Panel>{section.content}</Accordion.Panel>
+              </Accordion.Item>
+            ))}
+          </Accordion>
+          <Group grow>
+            <Button
+              c={"black"}
+              color="buttonColor"
+              onClick={closeModal}
+              p={0}
+              size="compact-sm"
+              type="button"
+              variant="outline"
+            >
+              Close
+            </Button>
+            <Button
+              c={form.isDirty() || phoneForm.isDirty() ? "black" : undefined}
+              color="buttonColor"
+              disabled={!form.isDirty() && !phoneForm.isDirty()}
+              onClick={() => {
+                const { hasErrors } = form.validate();
+                if (!hasErrors) {
+                  openAlertModal();
+                } else {
+                  showNotifications.error(
+                    "Invalid information given. Please correct the information and try again",
+                  );
+                }
+              }}
+              p={0}
+              size="compact-sm"
+              type="button"
+              variant="filled"
+            >
+              Save Changes
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </>
   );
 }
-
-/*
-<Drawer title="Manage Account Information" size="100%" opened={modalOpened} onClose={closeModal} offset={8} radius={"md"} transitionProps={{transition: "fade-down", timingFunction: "ease", duration: 250}}>
-      
-      
-    </Drawer>
-*/
-
-/*
-
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      <Accordion>
-        <section>
-          <Accordion.Item key={"About You"} value={"About You"}>
-            <Accordion.Control>About You</Accordion.Control>
-            <Accordion.Panel>
-              <Stack>
-                <TextInput
-                  label={"Name on Account"}
-                  description={"If set, will be used to pre-fill the name section in future booking forms"}
-                  placeholder="Name"
-                  w={"50%"}
-                />
-                <Group grow>
-                  <TextInput
-                    label={"Residency Status"}
-                    readOnly
-                    variant="unstyled"
-                    value={"Not a resident"}
-                  />
-                  <TextInput
-                    label={"User Role"}
-                    readOnly
-                    variant="unstyled"
-                    value={"Member"}
-                  />
-                </Group>
-              </Stack>
-            </Accordion.Panel>
-          </Accordion.Item>
-        </section>
-      </Accordion>
-      
-      <section>
-        <Divider my="xs" label="About You" labelPosition="left" />
-        <Stack>
-          <Text>name and residency status and role</Text>
-          <TextInput
-            label={"Name on Account"}
-            description={"If set, will be used to pre-fill the name section in future booking forms"}
-            placeholder="Name"
-            w={"50%"}
-          />
-          <Group grow>
-            <TextInput
-              label={"Residency Status"}
-              readOnly
-              variant="unstyled"
-              value={"Not a resident"}
-            />
-            <TextInput
-              label={"User Role"}
-              readOnly
-              variant="unstyled"
-              value={"Member"}
-            />
-          </Group>
-        </Stack>
-      </section>
-      
-      <Divider my="xs" label="Account Information" labelPosition="left" />
-      <Text>insert phone #, option for other phone numbers.. maybe? and email</Text>
-      <Divider my="xs" label="Payment & Rides" labelPosition="left" />
-      <Text>insert option where its like: credit card: registered/not registered. if registered, add a button thatll eventually take you to stripe to change credit card info</Text>
-      <Text>also add num of credits</Text>
-      */

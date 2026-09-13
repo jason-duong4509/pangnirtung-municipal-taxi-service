@@ -2,6 +2,7 @@
 import {
   Button,
   Group,
+  Input,
   Loader,
   Modal,
   Stack,
@@ -13,6 +14,7 @@ import { useDisclosure } from "@mantine/hooks";
 import { DeviceMobileIcon, ShieldCheckIcon } from "@phosphor-icons/react";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
+import { IMaskInput } from "react-imask";
 import { checkOTP, checkPhoneNumber } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { authClient } from "~/server/better-auth/client";
@@ -176,13 +178,19 @@ export default function LoginModal({
         <form onSubmit={loginForm.onSubmit(handleLoginSubmit)}>
           <Stack gap={"lg"} p={"md"}>
             <Title order={4}>Login</Title>
-            <TextInput
+            <Input.Wrapper
               aria-label="Enter your phone number"
-              key={loginForm.key("phoneNumber")}
-              leftSection={<DeviceMobileIcon size={20} />}
-              {...loginForm.getInputProps("phoneNumber")}
-              placeholder="123-456-7890"
-            />
+              error={loginForm.errors.phoneNumber}
+            >
+              <Input
+                component={IMaskInput}
+                key={loginForm.key("phoneNumber")}
+                mask="(000) 000-0000"
+                placeholder="(123)-456-7890"
+                {...loginForm.getInputProps("phoneNumber")}
+                leftSection={<DeviceMobileIcon size={20} />}
+              />
+            </Input.Wrapper>
             <Button c={"black"} color="buttonColor" type="submit">
               {!isMutating && "Log in"}
               {isMutating && <Loader color="black" size={20} />}
