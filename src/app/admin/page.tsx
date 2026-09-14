@@ -13,6 +13,7 @@ import CustomAppShell from "../_components/common/appShell/app-shell";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
+import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 
 enum PageView { //Enum string values double as app shell header text
   Trips = "- Trips",
@@ -33,6 +34,10 @@ export default function AdminPage() {
   const [
     addUserModalOpened,
     { open: openAddUserModal, close: closeAddUserModal },
+  ] = useDisclosure(false);
+  const [
+    manageAccountModalOpened,
+    { open: openManageAccountModal, close: closeManageAccountModal },
   ] = useDisclosure(false);
   const [issuesTableFilters, setIssuesTableFilters] = useState<string[]>([]);
 
@@ -82,6 +87,10 @@ export default function AdminPage() {
           <AddUsersModal
             closeModal={closeAddUserModal}
             modalOpened={addUserModalOpened}
+          />
+          <ManageAccountModal
+            closeModal={closeManageAccountModal}
+            modalOpened={manageAccountModalOpened}
           />
           {pageView === PageView.Trips && (
             <EditTripsTable
@@ -151,7 +160,7 @@ export default function AdminPage() {
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"Account"} />
-            <NavbarOption onClick={() => {}} text={"Manage Account"} />
+            <NavbarOption onClick={() => openManageAccountModal()} text={"Manage Account"} />
             <NavbarOption onClick={() => {}} text={"Log Out"} />
           </AppShell.Section>
           <AppShell.Section>
