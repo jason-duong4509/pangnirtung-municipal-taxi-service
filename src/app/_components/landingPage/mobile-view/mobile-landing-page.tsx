@@ -100,7 +100,7 @@ export default function MobileLandingPage({
           w={"100vw"}
         >
           <Flex align={"center"} h={"100%"} justify={"flex-end"} pr={"lg"}>
-            <MenuButton />
+            <MenuButton openLoginModal={openLoginModal} />
           </Flex>
         </Paper>
       </Flex>

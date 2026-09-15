@@ -8,9 +8,15 @@ import {
   useMantineTheme,
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
+import { authClient } from "~/server/better-auth/client";
+import ManageAccountModal from "../common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../common/reportAppIssue/report-app-issue";
 
-export default function MenuButton() {
+export default function MenuButton({
+  openLoginModal,
+}: {
+  openLoginModal: () => void;
+}) {
   const [burgerOpened, { toggle: toggleBurger }] = useDisclosure();
   const [reportAppOpened, { open: openReportApp, close: closeReportApp }] =
     useDisclosure();
@@ -18,6 +24,11 @@ export default function MenuButton() {
   const isMobile = useMediaQuery(
     `(max-width: ${mantineTheme.breakpoints.smMd})`,
   );
+  const [
+    manageAccountModalOpened,
+    { open: openManageAccountModal, close: closeManageAccountModal },
+  ] = useDisclosure(false);
+  const { data: session } = authClient.useSession();
 
   return (
     <Box pos={"relative"}>
@@ -25,6 +36,10 @@ export default function MenuButton() {
         <ReportAppIssueModal
           closeModal={closeReportApp}
           modalOpened={reportAppOpened}
+        />
+        <ManageAccountModal
+          closeModal={closeManageAccountModal}
+          modalOpened={manageAccountModalOpened}
         />
       </aside>
       <Burger
@@ -42,7 +57,19 @@ export default function MenuButton() {
           top={!isMobile ? "150%" : undefined}
         >
           <Stack>
-            <Button c={"black"} color="customWhite" radius="lg" size="xs">
+            <Button
+              c={"black"}
+              color="customWhite"
+              onClick={() => {
+                if (session) {
+                  openManageAccountModal();
+                } else {
+                  openLoginModal();
+                }
+              }}
+              radius="lg"
+              size="xs"
+            >
               Manage Account
             </Button>
             <Button

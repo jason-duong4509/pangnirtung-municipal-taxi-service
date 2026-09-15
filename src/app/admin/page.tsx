@@ -1,7 +1,10 @@
 "use client";
 import { AppShell, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { authClient } from "~/server/better-auth/client";
+import { UserRoles } from "~/types/types";
 import AddUsersModal from "../_components/adminComponents/add-users/add-users-modal";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
 import EditTripsTable from "../_components/adminComponents/edit-trips/edit-trips-table";
@@ -12,8 +15,10 @@ import ViewAppIssuesTable from "../_components/adminComponents/view-app-issues/v
 import CustomAppShell from "../_components/common/appShell/app-shell";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
-import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
+import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
+import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
+import LogOutModal from "../_components/logout/logout";
 
 enum PageView { //Enum string values double as app shell header text
   Trips = "- Trips",
@@ -39,7 +44,29 @@ export default function AdminPage() {
     manageAccountModalOpened,
     { open: openManageAccountModal, close: closeManageAccountModal },
   ] = useDisclosure(false);
+  const [
+    logoutModalOpened,
+    { open: openLogoutModal, close: closeLogoutModal },
+  ] = useDisclosure(false);
   const [issuesTableFilters, setIssuesTableFilters] = useState<string[]>([]);
+  const { data: session, isPending } = authClient.useSession();
+  const [showLoadingUI, setShowLoadingUI] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (session && session.user.role === UserRoles.ADMIN && showLoadingUI) {
+      setShowLoadingUI(false);
+    } else if (
+      (session && session.user.role !== UserRoles.ADMIN) ||
+      (!isPending && !session)
+    ) {
+      router.replace("/");
+    }
+  }, [session, showLoadingUI, router, isPending]);
+
+  if (showLoadingUI) {
+    return <LoadingScreen />;
+  }
 
   return (
     <CustomAppShell
@@ -80,6 +107,7 @@ export default function AdminPage() {
       headerText={`Municipal Taxi Service ${pageView}`}
       mainComponent={
         <>
+          <LogOutModal onClose={closeLogoutModal} opened={logoutModalOpened} />
           <ReportAppIssueModal
             closeModal={closeReportAppModal}
             modalOpened={reportAppModalOpened}
@@ -160,8 +188,11 @@ export default function AdminPage() {
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"Account"} />
-            <NavbarOption onClick={() => openManageAccountModal()} text={"Manage Account"} />
-            <NavbarOption onClick={() => {}} text={"Log Out"} />
+            <NavbarOption
+              onClick={() => openManageAccountModal()}
+              text={"Manage Account"}
+            />
+            <NavbarOption onClick={() => openLogoutModal()} text={"Log Out"} />
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"Miscellaneous"} />

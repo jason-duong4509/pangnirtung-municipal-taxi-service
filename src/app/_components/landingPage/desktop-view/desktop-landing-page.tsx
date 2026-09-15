@@ -83,7 +83,7 @@ export default function DesktopLandingPage({
               {!session && "Log in"}
               {session && "Log out"}
             </Button>
-            <MenuButton />
+            <MenuButton openLoginModal={openLoginModal} />
           </Group>
         </Flex>
       </Flex>
