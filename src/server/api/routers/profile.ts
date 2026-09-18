@@ -1,16 +1,26 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { UserRoles } from "~/types/types";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const profileRouter = createTRPCRouter({
-  verifyResident: publicProcedure
+  verifyResident: protectedProcedure
     .input(
       z.object({
         bookingIds: z.array(z.number()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //TODO: add proper auth
+      if (
+        ctx.session.user.role !== UserRoles.ADMIN &&
+        ctx.session.user.role !== UserRoles.DRIVER
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not allowed to verify an account's residency",
+        });
+      }
+
       if (input.bookingIds.length === 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",

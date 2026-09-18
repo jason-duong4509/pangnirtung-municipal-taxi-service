@@ -1,6 +1,6 @@
 "use client";
 import { AppShell, Stack } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "~/server/better-auth/client";
@@ -52,6 +52,7 @@ export default function AdminPage() {
   const { data: session, isPending } = authClient.useSession();
   const [showLoadingUI, setShowLoadingUI] = useState(true);
   const router = useRouter();
+  const isMobile = useMediaQuery("(max-width: 500px)");
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.ADMIN && showLoadingUI) {
@@ -104,7 +105,9 @@ export default function AdminPage() {
         </>
       }
       expandAside={expandAside}
-      headerText={`Municipal Taxi Service ${pageView}`}
+      headerText={
+        isMobile ? `${pageView}` : `Municipal Taxi Service ${pageView}`
+      }
       mainComponent={
         <>
           <LogOutModal onClose={closeLogoutModal} opened={logoutModalOpened} />

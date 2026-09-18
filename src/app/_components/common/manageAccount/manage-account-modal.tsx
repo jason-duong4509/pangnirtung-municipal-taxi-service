@@ -116,14 +116,14 @@ export default function ManageAccountModal({
   const form = useForm<{
     name: string;
     email: string;
-    role: UserRoles;
+    role: UserRoles | undefined;
   }>({
     mode: "uncontrolled",
 
     initialValues: {
       name: "",
       email: "",
-      role: UserRoles.MEMBER,
+      role: undefined,
     },
 
     validate: {
@@ -253,7 +253,9 @@ export default function ManageAccountModal({
         <Stack>
           <TextInput
             description={
-              "If set, will be used to pre-fill the name section in future booking forms"
+              form.getValues().role === UserRoles.MEMBER
+                ? "If set, will be used to pre-fill the name section in future booking forms"
+                : "Add a name to this account for identification purposes"
             }
             label={"Name on Account"}
             placeholder="Name"
@@ -272,7 +274,7 @@ export default function ManageAccountModal({
               flex={1}
               label={"User Role"}
               readOnly
-              value={form.getValues().role}
+              value={form.getValues().role ?? "Unknown"}
               variant="unstyled"
             />
           </Flex>
@@ -312,7 +314,10 @@ export default function ManageAccountModal({
         </Flex>
       ),
     },
-    {
+  ];
+
+  if (form.getValues().role === UserRoles.MEMBER) {
+    accordianSections.push({
       id: "payment",
       icon: <MoneyWavyIcon size={20} />,
       label: "Payment & Rides",
@@ -375,8 +380,8 @@ export default function ManageAccountModal({
           </Flex>
         </Flex>
       ),
-    },
-  ];
+    });
+  }
 
   return (
     <>

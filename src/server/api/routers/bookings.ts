@@ -1,19 +1,44 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
-import { checkPickUpTime } from "~/lib/input-checkers";
+import {
+  checkAddress,
+  checkName,
+  checkPickUpTime,
+  checkTripReason,
+} from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import { bookings } from "~/server/db/schema";
 import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const bookingsRouter = createTRPCRouter({
-  get: publicProcedure.query(async ({ ctx }) => {
-    //TODO: add proper auth
+  get: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const result = await db.select().from(bookings);
+      if (ctx.session.user.role === UserRoles.ADMIN) {
+        const result = await db.select().from(bookings);
 
-      return result;
+        return result;
+      } else if (ctx.session.user.role === UserRoles.DRIVER) {
+        const result = await db
+          .select()
+          .from(bookings)
+          .where(
+            or(
+              eq(bookings.status, BookingStatus.PENDING),
+              eq(bookings.status, BookingStatus.IN_PROGRESS),
+            ),
+          );
+
+        return result;
+      } else {
+        const result = await db
+          .select()
+          .from(bookings)
+          .where(eq(bookings.created_by, ctx.session.user.id));
+
+        return result;
+      }
     } catch {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -35,7 +60,6 @@ export const bookingsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //todo: add rate limiting?
       if (ctx.session.user.role === UserRoles.DRIVER) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -44,7 +68,6 @@ export const bookingsRouter = createTRPCRouter({
       }
 
       //--Input checking--
-      //todo finish
       const pickupTimeCheck = checkPickUpTime(input.pickupTime);
       let pickupTime = undefined as undefined | Date;
       if (pickupTimeCheck.isProper) {
@@ -55,17 +78,57 @@ export const bookingsRouter = createTRPCRouter({
           message: pickupTimeCheck.errorMessage,
         });
       }
+      const pickupAddrCheck = checkAddress(input.pickupAddr);
+      let pickupAddr = "" as string;
+      if (pickupAddrCheck.isProper) {
+        pickupAddr = pickupAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupAddrCheck.errorMessage,
+        });
+      }
+      const destAddrCheck = checkAddress(input.destAddr);
+      let destAddr = "" as string;
+      if (destAddrCheck.isProper) {
+        destAddr = destAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: destAddrCheck.errorMessage,
+        });
+      }
+      const nameCheck = checkName(input.name);
+      let name = "" as string;
+      if (nameCheck.isProper) {
+        name = nameCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: nameCheck.errorMessage,
+        });
+      }
+      const tripReasonCheck = checkTripReason(input.tripReason);
+      let tripReason = "" as string;
+      if (tripReasonCheck.isProper) {
+        tripReason = tripReasonCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: tripReasonCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
         const [insertedBooking] = await db
           .insert(bookings)
           .values({
-            pickupAddr: input.pickupAddr,
-            destAddr: input.destAddr,
-            name: input.name,
+            pickupAddr: pickupAddr,
+            destAddr: destAddr,
+            name: name,
             pickupTime: pickupTime,
-            tripReason: input.tripReason,
+            tripReason: tripReason,
             payment: input.payment,
             reminders: input.reminders,
             created_by: ctx.session.user.id,
@@ -81,7 +144,7 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         bookingId: z.number(),
@@ -89,14 +152,38 @@ export const bookingsRouter = createTRPCRouter({
         pickupAddr: z.string(),
         destAddr: z.string(),
         name: z.string(),
-        tripReason: z.string().optional(),
+        tripReason: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //TODO: add proper auth
+      if (ctx.session.user.role === UserRoles.DRIVER) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Drivers cannot update booking fields",
+        });
+      }
+
+      const [bookingToUpdate] = await db
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId));
+
+      if (!bookingToUpdate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Booking ID ${input.bookingId} not found`,
+        });
+      } else if (
+        ctx.session.user.role !== UserRoles.ADMIN &&
+        bookingToUpdate.created_by !== ctx.session.user.id
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only admins can edit bookings from other users",
+        });
+      }
 
       //--Input checking--
-      //todo finish
       const pickupTimeCheck = checkPickUpTime(input.pickupTime);
       let pickupTime = undefined as undefined | Date;
       if (pickupTimeCheck.isProper) {
@@ -107,17 +194,57 @@ export const bookingsRouter = createTRPCRouter({
           message: pickupTimeCheck.errorMessage,
         });
       }
+      const pickupAddrCheck = checkAddress(input.pickupAddr);
+      let pickupAddr = "" as string;
+      if (pickupAddrCheck.isProper) {
+        pickupAddr = pickupAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupAddrCheck.errorMessage,
+        });
+      }
+      const destAddrCheck = checkAddress(input.destAddr);
+      let destAddr = "" as string;
+      if (destAddrCheck.isProper) {
+        destAddr = destAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: destAddrCheck.errorMessage,
+        });
+      }
+      const nameCheck = checkName(input.name);
+      let name = "" as string;
+      if (nameCheck.isProper) {
+        name = nameCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: nameCheck.errorMessage,
+        });
+      }
+      const tripReasonCheck = checkTripReason(input.tripReason);
+      let tripReason = "" as string;
+      if (tripReasonCheck.isProper) {
+        tripReason = tripReasonCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: tripReasonCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
         const [result] = await db
           .update(bookings)
           .set({
-            pickupAddr: input.pickupAddr,
+            pickupAddr: pickupAddr,
             pickupTime: pickupTime,
-            destAddr: input.destAddr,
-            name: input.name,
-            tripReason: input.tripReason,
+            destAddr: destAddr,
+            name: name,
+            tripReason: tripReason,
             updatedAt: new Date(),
           })
           .where(eq(bookings.id, input.bookingId))
@@ -140,7 +267,7 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
-  cancel: publicProcedure
+  cancel: protectedProcedure
     .input(
       z.object({
         bookingIds: z.array(z.number()),
@@ -153,17 +280,24 @@ export const bookingsRouter = createTRPCRouter({
           message: "No trips selected",
         });
       }
-      //TODO: add proper auth
-      //add refund?
+      //TODO: add refund?
       try {
         await db.transaction(async (tx) => {
+          const whereClause =
+            ctx.session.user.role === UserRoles.MEMBER
+              ? and(
+                  eq(bookings.created_by, ctx.session.user.id),
+                  inArray(bookings.id, input.bookingIds),
+                )
+              : inArray(bookings.id, input.bookingIds);
+
           const cancelledBookingIds = await tx
             .update(bookings)
             .set({
               status: BookingStatus.CANCELLED,
               updatedAt: new Date(),
             })
-            .where(inArray(bookings.id, input.bookingIds))
+            .where(whereClause)
             .returning({ id: bookings.id });
 
           if (cancelledBookingIds.length !== input.bookingIds.length) {
@@ -191,34 +325,45 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
-  accept: publicProcedure
+  accept: protectedProcedure
     .input(
       z.object({
         bookingIds: z.array(z.number()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //TODO: add proper auth
-      if (input.bookingIds.length === 0) {
+      if (
+        ctx.session.user.role !== UserRoles.DRIVER &&
+        ctx.session.user.role !== UserRoles.ADMIN
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not allowed to accept trips and mark in progress",
+        });
+      } else if (input.bookingIds.length === 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "No trips selected",
         });
       }
+
       try {
         await db.transaction(async (tx) => {
+          const whereClause =
+            ctx.session.user.role === UserRoles.DRIVER
+              ? and(
+                  inArray(bookings.id, input.bookingIds),
+                  eq(bookings.status, BookingStatus.PENDING),
+                )
+              : inArray(bookings.id, input.bookingIds);
+
           const updatedBookingIds = await tx
             .update(bookings)
             .set({
               status: BookingStatus.IN_PROGRESS,
               updatedAt: new Date(),
             })
-            .where(
-              and(
-                inArray(bookings.id, input.bookingIds),
-                eq(bookings.status, BookingStatus.PENDING),
-              ),
-            )
+            .where(whereClause)
             .returning({ id: bookings.id });
 
           if (updatedBookingIds.length !== input.bookingIds.length) {
@@ -229,7 +374,7 @@ export const bookingsRouter = createTRPCRouter({
 
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Booking IDs not found or not pending: ${missingBookingIds}`,
+              message: `Booking IDs not found${ctx.session.user.role === UserRoles.DRIVER ? "or not pending" : ""}: ${missingBookingIds}`,
             });
           }
         });
@@ -244,15 +389,22 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
-  complete: publicProcedure
+  complete: protectedProcedure
     .input(
       z.object({
         bookingIds: z.array(z.number()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //TODO: add proper auth
-      if (input.bookingIds.length === 0) {
+      if (
+        ctx.session.user.role !== UserRoles.DRIVER &&
+        ctx.session.user.role !== UserRoles.ADMIN
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not allowed to complete trips",
+        });
+      } else if (input.bookingIds.length === 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "No trips selected",
@@ -261,18 +413,21 @@ export const bookingsRouter = createTRPCRouter({
 
       try {
         const updatedUsers = await db.transaction(async (tx) => {
+          const whereClause =
+            ctx.session.user.role === UserRoles.DRIVER
+              ? and(
+                  inArray(bookings.id, input.bookingIds),
+                  eq(bookings.status, BookingStatus.IN_PROGRESS),
+                )
+              : inArray(bookings.id, input.bookingIds);
+
           const updatedBookingIds = await tx
             .update(bookings)
             .set({
               status: BookingStatus.COMPLETED,
               updatedAt: new Date(),
             })
-            .where(
-              and(
-                inArray(bookings.id, input.bookingIds),
-                eq(bookings.status, BookingStatus.IN_PROGRESS),
-              ),
-            )
+            .where(whereClause)
             .returning();
 
           if (updatedBookingIds.length !== input.bookingIds.length) {
@@ -283,7 +438,7 @@ export const bookingsRouter = createTRPCRouter({
 
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Booking IDs not found or not in progress: ${missingBookingIds}`,
+              message: `Booking IDs not found${ctx.session.user.role === UserRoles.DRIVER ? " or not in progress" : ""}: ${missingBookingIds}`,
             });
           }
           return updatedBookingIds;

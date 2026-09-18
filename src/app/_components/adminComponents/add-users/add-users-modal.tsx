@@ -98,7 +98,7 @@ export default function AddUsersModal({
           <TextInput
             aria-label="Phone number input"
             description="Enter the user's phone number"
-            placeholder="123-456-7890"
+            placeholder="(123)-456-7890"
             {...form.getInputProps("phoneNumber")}
             key={form.key("phoneNumber")}
           />
