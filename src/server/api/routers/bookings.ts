@@ -181,6 +181,14 @@ export const bookingsRouter = createTRPCRouter({
           code: "FORBIDDEN",
           message: "Only admins can edit bookings from other users",
         });
+      } else if (
+        ctx.session.user.role === UserRoles.MEMBER &&
+        bookingToUpdate.status !== BookingStatus.PENDING
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Cannot edit a non-pending trip",
+        });
       }
 
       //--Input checking--

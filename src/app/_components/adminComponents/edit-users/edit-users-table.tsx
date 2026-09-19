@@ -138,9 +138,10 @@ export default function EditUsersTable({
         columnFilter === TableColumnNames.PHONE_NUM &&
         user.phoneNumber?.toLowerCase().includes(filterKeyword.toLowerCase());
       const residentMatch =
-        (columnFilter === TableColumnNames.RESIDENT && filterKeyword === "") ||
-        (filterKeyword === "Yes" && profile.isResident) ||
-        (filterKeyword === "No" && !profile.isResident);
+        columnFilter === TableColumnNames.RESIDENT &&
+        (filterKeyword === "" ||
+          (filterKeyword === "Yes" && profile.isResident) ||
+          (filterKeyword === "No" && !profile.isResident));
       const userRoleMatch =
         columnFilter === TableColumnNames.USER_ROLE &&
         user.role.toLowerCase().includes(filterKeyword.toLowerCase());

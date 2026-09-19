@@ -55,9 +55,15 @@ export const profileRouter = createTRPCRouter({
             });
           }
 
-          const userIdList = userIds.map((obj) => obj.id);
+          const tempList = userIds.map((obj) => obj.id);
+          let userIdList = [] as string[];
+          for (const id of tempList) {
+            if (!userIdList.includes(id)) {
+              userIdList = [...userIdList, id];
+            }
+          }
 
-          const updatedUsers = await db
+          const updatedUsers = await tx
             .update(profile)
             .set({
               isResident: true,
