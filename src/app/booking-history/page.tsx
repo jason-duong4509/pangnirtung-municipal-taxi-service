@@ -47,11 +47,13 @@ import {
   checkTripReason,
 } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
+import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import { BookingStatus } from "~/types/types";
+import { BookingStatus, UserRoles } from "~/types/types";
 import AddressDropdown from "../_components/bookingForm/booking-form-components/address-drop-down-field";
 import PickupTimeInput from "../_components/bookingForm/booking-form-components/pick-up-time-field";
 import AlertPopup from "../_components/common/alert/alert";
+import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 
 export default function BookingHistoryPage() {
   const router = useRouter();
@@ -72,6 +74,8 @@ export default function BookingHistoryPage() {
     <Text>Are you sure?</Text>,
   );
   const [onModalSubmit, setOnModalSubmit] = useState<() => void>(() => {});
+  const { data: session, isPending } = authClient.useSession();
+  const [showLoadingUI, setShowLoadingUI] = useState(true);
 
   //--Holds all bookings, separated into 4 tables--
   let pendingBookings = [] as JSX.Element[];
@@ -79,6 +83,18 @@ export default function BookingHistoryPage() {
   let cancelledBookings = [] as JSX.Element[];
   let completedBookings = [] as JSX.Element[];
   //-----------------------------------------------
+
+  useEffect(() => {
+    if (session?.user.role === UserRoles.ADMIN) {
+      router.replace("/admin");
+    } else if (session?.user.role === UserRoles.DRIVER) {
+      router.replace("/driver");
+    } else if (session?.user.role === UserRoles.MEMBER) {
+      setShowLoadingUI(false);
+    } else if (!isPending && !session) {
+      router.replace("/");
+    }
+  }, [session, router, isPending]);
 
   //Configure booking form
   const bookingForm = useForm<{
@@ -319,6 +335,10 @@ export default function BookingHistoryPage() {
       tripReason: values.reasonForTrip,
     });
   };
+
+  if (showLoadingUI) {
+    return <LoadingScreen />;
+  }
 
   return (
     <Flex

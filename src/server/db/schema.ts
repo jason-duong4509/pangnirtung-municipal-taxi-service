@@ -96,6 +96,9 @@ export const profile = pgTable("profile", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   isResident: boolean("is_resident").notNull().default(false),
   numberOfRides: integer("number_of_rides").notNull().default(0),
+  belongsTo: text("belongs_to")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
 });
 
 export const rideCodes = pgTable(
@@ -232,11 +235,16 @@ export const userUsedRideCode = pgTable("user_used_ride_code", {
 //==TABLE RELATIONS==
 
 //==DRIZZLE RELATIONS==
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ many, one }) => ({
   account: many(account),
   session: many(session),
   altContactInfo: many(altContactInfo),
   UserUsedRideCode: many(userUsedRideCode),
+  profile: one(profile),
+}));
+
+export const profileRelations = relations(profile, ({ one }) => ({
+  user: one(user),
 }));
 
 export const altContactInfoRelations = relations(altContactInfo, ({ one }) => ({

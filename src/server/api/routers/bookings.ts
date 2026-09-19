@@ -288,8 +288,14 @@ export const bookingsRouter = createTRPCRouter({
               ? and(
                   eq(bookings.created_by, ctx.session.user.id),
                   inArray(bookings.id, input.bookingIds),
+                  eq(bookings.status, BookingStatus.PENDING),
                 )
-              : inArray(bookings.id, input.bookingIds);
+              : ctx.session.user.role === UserRoles.DRIVER
+                ? and(
+                    inArray(bookings.id, input.bookingIds),
+                    eq(bookings.status, BookingStatus.IN_PROGRESS),
+                  )
+                : inArray(bookings.id, input.bookingIds);
 
           const cancelledBookingIds = await tx
             .update(bookings)
@@ -310,7 +316,7 @@ export const bookingsRouter = createTRPCRouter({
 
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Booking IDs not found: ${missingBookingIds}`,
+              message: `Booking IDs not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${missingBookingIds}`,
             });
           }
         });
@@ -374,7 +380,7 @@ export const bookingsRouter = createTRPCRouter({
 
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Booking IDs not found${ctx.session.user.role === UserRoles.DRIVER ? "or not pending" : ""}: ${missingBookingIds}`,
+              message: `Booking IDs not found${ctx.session.user.role === UserRoles.DRIVER ? " or not pending" : ""}: ${missingBookingIds}`,
             });
           }
         });
