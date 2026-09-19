@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, getTableColumns, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
   checkReportAppComments,
@@ -206,7 +206,6 @@ export const reportAppRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //todo: add rate limiting?
       //todo: maybe make this a protected procedure?
 
       //--Input checking--

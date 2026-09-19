@@ -116,14 +116,18 @@ export default function ManageAccountModal({
   const form = useForm<{
     name: string;
     email: string;
-    role: UserRoles;
+    role: UserRoles | undefined;
+    isResident: boolean | undefined;
+    numberOfRides: number;
   }>({
     mode: "uncontrolled",
 
     initialValues: {
       name: "",
       email: "",
-      role: UserRoles.MEMBER,
+      role: undefined,
+      isResident: undefined,
+      numberOfRides: 0,
     },
 
     validate: {
@@ -165,17 +169,22 @@ export default function ManageAccountModal({
       getUsersQuery.data &&
       getUsersQuery.data[0]
     ) {
-      const user = getUsersQuery.data[0];
+      const user = getUsersQuery.data[0]["user"];
+      const profile = getUsersQuery.data[0]["profile"];
 
       form.setInitialValues({
         name: user.name === "no-name-given.pang" ? "" : user.name,
         email: user.email.includes("@no-email-given.pang") ? "" : user.email,
         role: user.role,
+        isResident: profile.isResident,
+        numberOfRides: profile.numberOfRides,
       });
       form.setValues({
         name: user.name === "no-name-given.pang" ? "" : user.name,
         email: user.email.includes("@no-email-given.pang") ? "" : user.email,
         role: user.role,
+        isResident: profile.isResident,
+        numberOfRides: profile.numberOfRides,
       });
       phoneForm.setInitialValues({
         phoneNumber: user.phoneNumber ?? "",
@@ -253,7 +262,9 @@ export default function ManageAccountModal({
         <Stack>
           <TextInput
             description={
-              "If set, will be used to pre-fill the name section in future booking forms"
+              form.getValues().role === UserRoles.MEMBER
+                ? "If set, will be used to pre-fill the name section in future booking forms"
+                : "Add a name to this account for identification purposes"
             }
             label={"Name on Account"}
             placeholder="Name"
@@ -265,14 +276,16 @@ export default function ManageAccountModal({
               flex={1}
               label={"Residency Status"}
               readOnly
-              value={"Not a resident"}
+              value={
+                form.getValues().isResident ? "Resident" : "Not a Resident"
+              }
               variant="unstyled"
             />
             <TextInput
               flex={1}
               label={"User Role"}
               readOnly
-              value={form.getValues().role}
+              value={form.getValues().role ?? "Unknown"}
               variant="unstyled"
             />
           </Flex>
@@ -312,7 +325,10 @@ export default function ManageAccountModal({
         </Flex>
       ),
     },
-    {
+  ];
+
+  if (form.getValues().role === UserRoles.MEMBER) {
+    accordianSections.push({
       id: "payment",
       icon: <MoneyWavyIcon size={20} />,
       label: "Payment & Rides",
@@ -354,10 +370,10 @@ export default function ManageAccountModal({
             wrap="wrap"
           >
             <TextInput
-              defaultValue={"60 Rides"}
               description={"To cover trip costs"}
               label={"Ride Credits"}
               readOnly
+              value={`${form.getValues().numberOfRides > 999 ? "999+" : form.getValues().numberOfRides} Rides`}
               variant="unstyled"
             />
             <Stack justify="flex-end" pb={"xs"}>
@@ -375,8 +391,8 @@ export default function ManageAccountModal({
           </Flex>
         </Flex>
       ),
-    },
-  ];
+    });
+  }
 
   return (
     <>

@@ -21,19 +21,24 @@ import {
   SelectionSlashIcon,
   XSquareIcon,
 } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
 import { type JSX, useEffect, useState } from "react";
 import { dbTimeToPrettyString, formatString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
+import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import { BookingStatus } from "~/types/types";
+import { BookingStatus, UserRoles } from "~/types/types";
 import AlertPopup from "../_components/common/alert/alert";
 import CustomAppShell from "../_components/common/appShell/app-shell";
 import AsideButton from "../_components/common/appShell/aside-button";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
+import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
+import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
 import ConfirmResidencyModal from "../_components/driverComponents/confirm-residency-modal";
+import LogOutModal from "../_components/logout/logout";
 
 type verifiedResidents = RouterOutputs["bookings"]["complete"];
 
@@ -64,6 +69,28 @@ export default function DriverPage() {
   );
   const [confirmResidencyData, setConfirmResidencyData] =
     useState<verifiedResidents>([]);
+  const { data: session, isPending } = authClient.useSession();
+  const [showLoadingUI, setShowLoadingUI] = useState(true);
+  const router = useRouter();
+  const [
+    manageAccountModalOpened,
+    { open: openManageAccountModal, close: closeManageAccountModal },
+  ] = useDisclosure(false);
+  const [
+    logoutModalOpened,
+    { open: openLogoutModal, close: closeLogoutModal },
+  ] = useDisclosure(false);
+
+  useEffect(() => {
+    if (session && session.user.role === UserRoles.DRIVER && showLoadingUI) {
+      setShowLoadingUI(false);
+    } else if (
+      (session && session.user.role !== UserRoles.DRIVER) ||
+      (!isPending && !session)
+    ) {
+      router.replace("/");
+    }
+  }, [session, showLoadingUI, router, isPending]);
 
   //--Holds all bookings, separated into 2 tables--
   let pendingBookings = [] as JSX.Element[];
@@ -233,9 +260,18 @@ export default function DriverPage() {
     }
   }
 
+  if (showLoadingUI) {
+    return <LoadingScreen />;
+  }
+
   return (
     <>
       <aside>
+        <ManageAccountModal
+          closeModal={closeManageAccountModal}
+          modalOpened={manageAccountModalOpened}
+        />
+        <LogOutModal onClose={closeLogoutModal} opened={logoutModalOpened} />
         <ConfirmResidencyModal
           closeModal={closeConfirmResidencyModal}
           modalOpened={ConfirmResidencyModalOpened}
@@ -559,8 +595,14 @@ export default function DriverPage() {
               </AppShell.Section>
               <AppShell.Section>
                 <NavbarHeader text={"Account"} />
-                <NavbarOption onClick={() => {}} text={"Manage Account"} />
-                <NavbarOption onClick={() => {}} text={"Log Out"} />
+                <NavbarOption
+                  onClick={() => openManageAccountModal()}
+                  text={"Manage Account"}
+                />
+                <NavbarOption
+                  onClick={() => openLogoutModal()}
+                  text={"Log Out"}
+                />
               </AppShell.Section>
               <AppShell.Section>
                 <NavbarHeader text={"Miscellaneous"} />

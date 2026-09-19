@@ -22,6 +22,7 @@ export default function LogOutModal({
 }) {
   const router = useRouter();
   const [isMutating, setIsMutating] = useState(false);
+  const { refetch } = authClient.useSession();
 
   const logOut = async () => {
     setIsMutating(true);
@@ -31,7 +32,9 @@ export default function LogOutModal({
           showNotifications.success("Log out successful");
           onClose();
           setIsMutating(false);
-          router.push("/");
+          router.replace("/");
+          router.refresh();
+          refetch();
         },
         onError: (ctx) => {
           showNotifications.error(ctx.error.message);

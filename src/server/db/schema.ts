@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
 
+//==SCHEMA ENUMS==
 export const bookingStatus = pgEnum("bookingStatus", [
   BookingStatus.PENDING,
   BookingStatus.IN_PROGRESS,
@@ -30,7 +31,9 @@ export const userRoles = pgEnum("userRoles", [
   UserRoles.DRIVER,
   UserRoles.MEMBER,
 ]);
+//==SCHEMA ENUMS==
 
+//==TABLE SCHEMAS==
 export const bookings = pgTable("bookings", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   pickupTime: timestamp("pick_up_time", { withTimezone: true })
@@ -89,14 +92,37 @@ export const appIssuesTags = pgTable("app_issues_tags", {
   name: text("name").notNull().unique(),
 });
 
-export const appIssuesHasTags = pgTable("app_issues_has_tags", {
+export const profile = pgTable("profile", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  issueId: integer("issue_id")
+  isResident: boolean("is_resident").notNull().default(false),
+  numberOfRides: integer("number_of_rides").notNull().default(0),
+  belongsTo: text("belongs_to")
     .notNull()
-    .references(() => appIssues.id, { onDelete: "cascade" }),
-  tagId: integer("tag_id")
+    .references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const rideCodes = pgTable(
+  "ride_codes",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    code: text("code").notNull(),
+    discount: integer("discount").notNull(),
+  },
+  (table) => [
+    check(
+      "discount_range",
+      sql`${table.discount} >= 1 AND ${table.discount} <= 100`,
+    ),
+  ],
+);
+
+export const altContactInfo = pgTable("alt_contact_info", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  phoneNumber: text("phone_number").unique().notNull(),
+  ownedBy: text("owned_by")
     .notNull()
-    .references(() => appIssuesTags.id, { onDelete: "cascade" }),
+    .references(() => user.id, { onDelete: "cascade" }),
 });
 
 export const user = pgTable("user", {
@@ -184,10 +210,45 @@ export const verification = pgTable(
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
+//==TABLE SCHEMAS==
 
-export const userRelations = relations(user, ({ many }) => ({
+//==TABLE RELATIONS==
+export const appIssuesHasTags = pgTable("app_issues_has_tags", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  issueId: integer("issue_id")
+    .notNull()
+    .references(() => appIssues.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id")
+    .notNull()
+    .references(() => appIssuesTags.id, { onDelete: "cascade" }),
+});
+
+export const userUsedRideCode = pgTable("user_used_ride_code", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  rideCodeId: integer("ride_code_id")
+    .notNull()
+    .references(() => rideCodes.id, { onDelete: "cascade" }),
+});
+//==TABLE RELATIONS==
+
+//==DRIZZLE RELATIONS==
+export const userRelations = relations(user, ({ many, one }) => ({
   account: many(account),
   session: many(session),
+  altContactInfo: many(altContactInfo),
+  UserUsedRideCode: many(userUsedRideCode),
+  profile: one(profile),
+}));
+
+export const profileRelations = relations(profile, ({ one }) => ({
+  user: one(user),
+}));
+
+export const altContactInfoRelations = relations(altContactInfo, ({ one }) => ({
+  user: one(user),
 }));
 
 export const accountRelations = relations(account, ({ one }) => ({
@@ -219,3 +280,22 @@ export const issuesHaveTagsRelations = relations(
     }),
   }),
 );
+
+export const RideCodesRelations = relations(rideCodes, ({ many }) => ({
+  UserUsedRideCode: many(userUsedRideCode),
+}));
+
+export const UserUsedRideCodesRelations = relations(
+  userUsedRideCode,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [userUsedRideCode.userId],
+      references: [user.id],
+    }),
+    rideCodes: one(rideCodes, {
+      fields: [userUsedRideCode.rideCodeId],
+      references: [rideCodes.id],
+    }),
+  }),
+);
+//==DRIZZLE RELATIONS==

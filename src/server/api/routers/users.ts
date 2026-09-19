@@ -11,7 +11,7 @@ import {
 } from "~/lib/input-checkers";
 import { auth } from "~/server/better-auth";
 import { db } from "~/server/db";
-import { user, verification } from "~/server/db/schema";
+import { profile, user, verification } from "~/server/db/schema";
 import { UserRoles } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -25,7 +25,10 @@ export const usersRouter = createTRPCRouter({
     }
 
     try {
-      const result = await db.select().from(user);
+      const result = await db
+        .select()
+        .from(user)
+        .innerJoin(profile, eq(user.id, profile.belongsTo));
 
       return result;
     } catch (error) {
@@ -203,28 +206,44 @@ export const usersRouter = createTRPCRouter({
       //------------------
 
       try {
-        const [insertedUser] = await db
-          .insert(user)
-          .values({
-            id: generateId(),
-            name: "no-name-given.pang",
-            email: `${phoneNumber}@no-email-given.pang`,
-            emailVerified: false,
-            image: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            phoneNumber: phoneNumber,
-            phoneNumberVerified: true,
-            role: UserRoles.MEMBER,
-          })
-          .returning();
+        await db.transaction(async (tx) => {
+          const [insertedUser] = await tx
+            .insert(user)
+            .values({
+              id: generateId(),
+              name: "no-name-given.pang",
+              email: `${phoneNumber}@no-email-given.pang`,
+              emailVerified: false,
+              image: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              phoneNumber: phoneNumber,
+              phoneNumberVerified: true,
+              role: UserRoles.MEMBER,
+            })
+            .returning();
 
-        if (!insertedUser) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Database unable to create user",
-          });
-        }
+          if (!insertedUser) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database unable to create user record",
+            });
+          }
+
+          const [insertedProfile] = await tx
+            .insert(profile)
+            .values({
+              belongsTo: insertedUser.id,
+            })
+            .returning();
+
+          if (!insertedProfile) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database unable to create profile record",
+            });
+          }
+        });
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -241,7 +260,8 @@ export const usersRouter = createTRPCRouter({
       const result = await db
         .select()
         .from(user)
-        .where(eq(user.id, ctx.session.user.id));
+        .where(eq(user.id, ctx.session.user.id))
+        .innerJoin(profile, eq(user.id, profile.belongsTo));
 
       return result;
     } catch (error) {
