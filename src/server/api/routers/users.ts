@@ -11,7 +11,7 @@ import {
 } from "~/lib/input-checkers";
 import { auth } from "~/server/better-auth";
 import { db } from "~/server/db";
-import { user, verification } from "~/server/db/schema";
+import { profile, user, verification } from "~/server/db/schema";
 import { UserRoles } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -25,7 +25,10 @@ export const usersRouter = createTRPCRouter({
     }
 
     try {
-      const result = await db.select().from(user);
+      const result = await db
+        .select()
+        .from(user)
+        .innerJoin(profile, eq(user.id, profile.belongsTo));
 
       return result;
     } catch (error) {
@@ -241,7 +244,8 @@ export const usersRouter = createTRPCRouter({
       const result = await db
         .select()
         .from(user)
-        .where(eq(user.id, ctx.session.user.id));
+        .where(eq(user.id, ctx.session.user.id))
+        .innerJoin(profile, eq(user.id, profile.belongsTo));
 
       return result;
     } catch (error) {

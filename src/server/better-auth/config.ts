@@ -4,6 +4,7 @@ import { phoneNumber } from "better-auth/plugins";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
+import { profile } from "../db/schema";
 
 export const auth = betterAuth({
   appName: "Pangnirtung Municipal Taxi App",
@@ -25,6 +26,17 @@ export const auth = betterAuth({
       },
     }),
   ],
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          await db.insert(profile).values({
+            belongsTo: user.id,
+          });
+        },
+      },
+    },
+  },
   socialProviders: {
     github: {
       clientId: env.BETTER_AUTH_GITHUB_CLIENT_ID,

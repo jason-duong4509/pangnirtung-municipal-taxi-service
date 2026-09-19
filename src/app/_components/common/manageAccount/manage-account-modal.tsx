@@ -117,6 +117,8 @@ export default function ManageAccountModal({
     name: string;
     email: string;
     role: UserRoles | undefined;
+    isResident: boolean | undefined;
+    numberOfRides: number;
   }>({
     mode: "uncontrolled",
 
@@ -124,6 +126,8 @@ export default function ManageAccountModal({
       name: "",
       email: "",
       role: undefined,
+      isResident: undefined,
+      numberOfRides: 0,
     },
 
     validate: {
@@ -165,17 +169,22 @@ export default function ManageAccountModal({
       getUsersQuery.data &&
       getUsersQuery.data[0]
     ) {
-      const user = getUsersQuery.data[0];
+      const user = getUsersQuery.data[0]["user"];
+      const profile = getUsersQuery.data[0]["profile"];
 
       form.setInitialValues({
         name: user.name === "no-name-given.pang" ? "" : user.name,
         email: user.email.includes("@no-email-given.pang") ? "" : user.email,
         role: user.role,
+        isResident: profile.isResident,
+        numberOfRides: profile.numberOfRides,
       });
       form.setValues({
         name: user.name === "no-name-given.pang" ? "" : user.name,
         email: user.email.includes("@no-email-given.pang") ? "" : user.email,
         role: user.role,
+        isResident: profile.isResident,
+        numberOfRides: profile.numberOfRides,
       });
       phoneForm.setInitialValues({
         phoneNumber: user.phoneNumber ?? "",
@@ -267,7 +276,9 @@ export default function ManageAccountModal({
               flex={1}
               label={"Residency Status"}
               readOnly
-              value={"Not a resident"}
+              value={
+                form.getValues().isResident ? "Resident" : "Not a Resident"
+              }
               variant="unstyled"
             />
             <TextInput
@@ -359,10 +370,10 @@ export default function ManageAccountModal({
             wrap="wrap"
           >
             <TextInput
-              defaultValue={"60 Rides"}
               description={"To cover trip costs"}
               label={"Ride Credits"}
               readOnly
+              value={`${form.getValues().numberOfRides > 999 ? "999+" : form.getValues().numberOfRides} Rides`}
               variant="unstyled"
             />
             <Stack justify="flex-end" pb={"xs"}>

@@ -10,7 +10,7 @@ import {
   Table,
   TextInput,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   type Dispatch,
   type JSX,
@@ -50,6 +50,9 @@ export default function EditUsersTable({
   );
   const [columnFilter, setColumnFilter] = useState<string | null>(null);
   const [filterKeyword, setFilterKeyword] = useState<string>("");
+  const isTablet = useMediaQuery("(max-width: 660px)");
+  const isPhone = useMediaQuery("(max-width: 480px)");
+  const isSuperSmall = useMediaQuery("(max-width: 400px)");
 
   const getUsersQuery = api.users.getAll.useQuery();
 
@@ -65,7 +68,10 @@ export default function EditUsersTable({
   }, [getUsersQuery.error, getUsersQuery.isLoading]);
 
   if (!getUsersQuery.isLoading && getUsersQuery.data) {
-    for (const user of getUsersQuery.data) {
+    for (const entry of getUsersQuery.data) {
+      const user = entry["user"];
+      const profile = entry["profile"];
+
       const row = (
         <Table.Tr
           bg={selectedRows.includes(user.id) ? "buttonColor" : undefined}
@@ -88,7 +94,7 @@ export default function EditUsersTable({
               }
               return;
             }
-            setDrawerContents(user);
+            setDrawerContents(entry);
             openDrawer();
           }}
           style={{ cursor: "pointer" }}
@@ -110,11 +116,17 @@ export default function EditUsersTable({
             </Table.Td>
           )}
           <Table.Td>
-            {user.name === "no-name-given.pang" ? "" : user.name}
+            {user.name === "no-name-given.pang"
+              ? ""
+              : isTablet && user.name.length > 15
+                ? `${user.name.slice(0, 12)}...`
+                : user.name}
           </Table.Td>
           <Table.Td>{user.phoneNumber}</Table.Td>
-          <Table.Td>USER RESIDENCY STATUS NOT ADDED</Table.Td>
-          <Table.Td>{user.role}</Table.Td>
+          {!isSuperSmall && (
+            <Table.Td>{profile.isResident ? "Yes" : "No"}</Table.Td>
+          )}
+          {!isPhone && <Table.Td>{user.role}</Table.Td>}
         </Table.Tr>
       );
 
@@ -125,7 +137,10 @@ export default function EditUsersTable({
       const phoneNumMatch =
         columnFilter === TableColumnNames.PHONE_NUM &&
         user.phoneNumber?.toLowerCase().includes(filterKeyword.toLowerCase());
-      const residentMatch = columnFilter === TableColumnNames.RESIDENT && true; //todo: add residency status
+      const residentMatch =
+        (columnFilter === TableColumnNames.RESIDENT && filterKeyword === "") ||
+        (filterKeyword === "Yes" && profile.isResident) ||
+        (filterKeyword === "No" && !profile.isResident);
       const userRoleMatch =
         columnFilter === TableColumnNames.USER_ROLE &&
         user.role.toLowerCase().includes(filterKeyword.toLowerCase());
@@ -222,8 +237,8 @@ export default function EditUsersTable({
                 {isSelecting && <Table.Th></Table.Th>}
                 <Table.Th>Name On Account</Table.Th>
                 <Table.Th>Primary Phone Number</Table.Th>
-                <Table.Th>Resident?</Table.Th>
-                <Table.Th>User Role</Table.Th>
+                {!isSuperSmall && <Table.Th>Resident?</Table.Th>}
+                {!isPhone && <Table.Th>User Role</Table.Th>}
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>{usersList}</Table.Tbody>

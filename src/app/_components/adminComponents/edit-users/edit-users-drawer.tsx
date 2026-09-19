@@ -130,28 +130,32 @@ export default function EditUsersDrawer({
     }
 
     form.setInitialValues({
-      id: drawerContents.id,
+      id: drawerContents["user"].id,
       name:
-        drawerContents.name === "no-name-given.pang" ? "" : drawerContents.name,
-      email: drawerContents.email.includes("@no-email-given.pang")
+        drawerContents["user"].name === "no-name-given.pang"
+          ? ""
+          : drawerContents["user"].name,
+      email: drawerContents["user"].email.includes("@no-email-given.pang")
         ? ""
-        : drawerContents.email,
+        : drawerContents["user"].email,
       phoneNumber:
-        drawerContents.phoneNumber ??
+        drawerContents["user"].phoneNumber ??
         "ERROR: User does not have a phone number",
-      role: drawerContents.role,
+      role: drawerContents["user"].role,
     });
     form.setValues({
-      id: drawerContents.id,
+      id: drawerContents["user"].id,
       name:
-        drawerContents.name === "no-name-given.pang" ? "" : drawerContents.name,
-      email: drawerContents.email.includes("@no-email-given.pang")
+        drawerContents["user"].name === "no-name-given.pang"
+          ? ""
+          : drawerContents["user"].name,
+      email: drawerContents["user"].email.includes("@no-email-given.pang")
         ? ""
-        : drawerContents.email,
+        : drawerContents["user"].email,
       phoneNumber:
-        drawerContents.phoneNumber ??
+        drawerContents["user"].phoneNumber ??
         "ERROR: User does not have a phone number",
-      role: drawerContents.role,
+      role: drawerContents["user"].role,
     });
 
     form.resetDirty();
@@ -231,7 +235,7 @@ export default function EditUsersDrawer({
               readOnly
               value={
                 drawerContents
-                  ? dbTimeToPrettyString(drawerContents.createdAt)
+                  ? dbTimeToPrettyString(drawerContents["user"].createdAt)
                   : "Unable to fetch data"
               }
               variant="unstyled"
@@ -241,7 +245,7 @@ export default function EditUsersDrawer({
               readOnly
               value={
                 drawerContents
-                  ? dbTimeToPrettyString(drawerContents.updatedAt)
+                  ? dbTimeToPrettyString(drawerContents["user"].updatedAt)
                   : "Unable to fetch data"
               }
               variant="unstyled"
