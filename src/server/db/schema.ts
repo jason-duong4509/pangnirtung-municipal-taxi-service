@@ -56,6 +56,8 @@ export const bookings = pgTable("bookings", {
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
   status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
+  contactPhone: text("contact_phone_number").notNull(),
+  contactEmail: text("contact_email"),
 });
 
 export const appIssues = pgTable(
