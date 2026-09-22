@@ -62,6 +62,7 @@ import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
 import { PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
+import NameNumberPresetModal from "../common/namePhonePreset/name-number-preset-modal";
 import AddressDropdown from "./booking-form-components/address-drop-down-field";
 import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 
@@ -623,8 +624,16 @@ export default function BookingForm({
   const [bookedTripId, setBookedTripId] = useState(0);
   const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
     useDisclosure(false);
+  const [
+    presetModalOpened,
+    { open: openPresetModal, close: closePresetModal },
+  ] = useDisclosure(false);
   const [drawerContents, setDrawerContents] = useState<
     bookingsData | undefined
+  >(undefined);
+  const [presetName, setPresetName] = useState<string | undefined>(undefined);
+  const [presetPhoneNumber, setPresetPhoneNumber] = useState<
+    string | undefined
   >(undefined);
 
   const getUserQuery = api.users.getSelf.useQuery(undefined, {
@@ -865,6 +874,15 @@ export default function BookingForm({
     }
   }, [getBookingQuery.data]);
 
+  useEffect(() => {
+    if (presetName && presetPhoneNumber) {
+      bookingForm.setValues({
+        contactPhone: presetPhoneNumber,
+        name: presetName,
+      });
+    }
+  }, [presetName, presetPhoneNumber, bookingForm.setValues]);
+
   return (
     <Center
       h={"100%"}
@@ -876,6 +894,14 @@ export default function BookingForm({
         closeDrawer={closeDrawer}
         drawerContents={drawerContents}
         drawerOpened={drawerOpened}
+      />
+      <NameNumberPresetModal
+        closeModal={closePresetModal}
+        loadPreset
+        modalOpened={presetModalOpened}
+        openModal={openPresetModal}
+        setName={setPresetName}
+        setPhoneNumber={setPresetPhoneNumber}
       />
       <FormUI
         body={
@@ -919,57 +945,55 @@ export default function BookingForm({
 
       <FormUI
         body={
-          <>
-            <ScrollArea.Autosize mah={isMobile ? "170px" : "200px"}>
-              <Stack gap={"sm"}>
-                <TextInput
-                  aria-label="Text box for your name"
-                  key={bookingForm.key("name")}
-                  leftSection={<UserIcon size={20} />}
-                  {...bookingForm.getInputProps("name")}
-                  disabled={!getUserQuery.data?.[0]}
-                  placeholder="Contact Name"
-                />
-                <div>
-                  <Input.Wrapper
-                    aria-label="Text box for your phone number"
-                    error={bookingForm.errors.contactPhone}
-                  >
-                    <Input
-                      component={IMaskInput}
-                      key={bookingForm.key("contactPhone")}
-                      mask="(000) 000-0000"
-                      placeholder="Contact Phone Number"
-                      {...bookingForm.getInputProps("contactPhone")}
-                      disabled={!getUserQuery.data?.[0]}
-                      leftSection={<DeviceMobileIcon size={20} />}
-                    />
-                  </Input.Wrapper>
-                  <Button
-                    c={"black"}
-                    fw={"normal"}
-                    onClick={() => {}}
-                    p={0}
-                    size="compact-sm"
-                    style={{ textDecoration: "underline" }}
-                    type="button"
-                    variant="transparent"
-                  >
-                    Load Name + Number Preset
-                  </Button>
-                </div>
-                <Textarea
-                  aria-label="Reason for trip (optional)"
-                  key={bookingForm.key("reasonForTrip")}
-                  leftSection={<QuestionIcon size={20} />}
-                  {...bookingForm.getInputProps("reasonForTrip")}
-                  autosize
-                  minRows={1}
-                  placeholder="Reason for Trip (optional)"
-                />
-              </Stack>
-            </ScrollArea.Autosize>
-          </>
+          <ScrollArea.Autosize mah={isMobile ? "170px" : "200px"}>
+            <Stack gap={"sm"}>
+              <TextInput
+                aria-label="Text box for your name"
+                key={bookingForm.key("name")}
+                leftSection={<UserIcon size={20} />}
+                {...bookingForm.getInputProps("name")}
+                disabled={!getUserQuery.data?.[0]}
+                placeholder="Contact Name"
+              />
+              <div>
+                <Input.Wrapper
+                  aria-label="Text box for your phone number"
+                  error={bookingForm.errors.contactPhone}
+                >
+                  <Input
+                    component={IMaskInput}
+                    key={bookingForm.key("contactPhone")}
+                    mask="(000) 000-0000"
+                    placeholder="Contact Phone Number"
+                    {...bookingForm.getInputProps("contactPhone")}
+                    disabled={!getUserQuery.data?.[0]}
+                    leftSection={<DeviceMobileIcon size={20} />}
+                  />
+                </Input.Wrapper>
+                <Button
+                  c={"black"}
+                  fw={"normal"}
+                  onClick={() => openPresetModal()}
+                  p={0}
+                  size="compact-sm"
+                  style={{ textDecoration: "underline" }}
+                  type="button"
+                  variant="transparent"
+                >
+                  Load Name + Number Preset
+                </Button>
+              </div>
+              <Textarea
+                aria-label="Reason for trip (optional)"
+                key={bookingForm.key("reasonForTrip")}
+                leftSection={<QuestionIcon size={20} />}
+                {...bookingForm.getInputProps("reasonForTrip")}
+                autosize
+                minRows={1}
+                placeholder="Reason for Trip (optional)"
+              />
+            </Stack>
+          </ScrollArea.Autosize>
         }
         changeFormState={setFormState}
         changePrevFormState={setPrevFormState}
@@ -1274,7 +1298,7 @@ export default function BookingForm({
                 <Text component="span">
                   Your trip has been successfully booked. You can still make
                   changes to it until the trip is accepted by clicking the
-                  button below or by visiting{" "}
+                  button below or by visiting your{" "}
                 </Text>
                 <Anchor href="/booking-history">Trip History</Anchor>
               </Text>

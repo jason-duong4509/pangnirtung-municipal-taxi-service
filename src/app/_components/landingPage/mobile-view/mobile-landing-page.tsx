@@ -16,7 +16,7 @@ export default function MobileLandingPage({
 }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
-  const shortenTitle = useMediaQuery("(max-width: 455px)");
+  const shortenTitle = useMediaQuery("(max-width: 460px)");
   const [
     logoutModalOpened,
     { open: openLogoutModal, close: closeLogoutModal },
@@ -49,7 +49,12 @@ export default function MobileLandingPage({
               {shortenTitle ? "Taxi Service" : "Municipal Taxi Service"}
             </Title>
 
-            <Group flex={1} justify="flex-end" pr={"lg"}>
+            <Group
+              flex={1}
+              gap={shortenTitle ? "xs" : "md"}
+              justify="flex-end"
+              pr={"lg"}
+            >
               <Button
                 c={"black"}
                 color={"buttonColor"}

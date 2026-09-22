@@ -121,7 +121,7 @@ export const rideCodes = pgTable(
 export const altContactInfo = pgTable("alt_contact_info", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull(),
-  phoneNumber: text("phone_number").unique().notNull(),
+  phoneNumber: text("phone_number").notNull(),
   ownedBy: text("owned_by")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
