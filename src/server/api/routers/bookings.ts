@@ -244,6 +244,7 @@ export const bookingsRouter = createTRPCRouter({
         destAddr: z.string(),
         name: z.string(),
         tripReason: z.string(),
+        contactPhone: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -333,6 +334,16 @@ export const bookingsRouter = createTRPCRouter({
           message: tripReasonCheck.errorMessage,
         });
       }
+      const phoneNumberCheck = checkPhoneNumber(input.contactPhone);
+      let phoneNumber = "" as string;
+      if (phoneNumberCheck.isProper) {
+        phoneNumber = phoneNumberCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: phoneNumberCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
@@ -344,6 +355,7 @@ export const bookingsRouter = createTRPCRouter({
             destAddr: destAddr,
             name: name,
             tripReason: tripReason,
+            contactPhone: phoneNumber,
             updatedAt: new Date(),
           })
           .where(eq(bookings.id, input.bookingId))

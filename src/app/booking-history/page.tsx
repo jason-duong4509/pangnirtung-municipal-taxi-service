@@ -7,6 +7,7 @@ import {
   Drawer,
   Flex,
   Group,
+  Input,
   Paper,
   SegmentedControl,
   Skeleton,
@@ -25,6 +26,7 @@ import {
   CheckCircleIcon,
   CheckFatIcon,
   ClockIcon,
+  DeviceMobileIcon,
   HouseIcon,
   MapPinLineIcon,
   PathIcon,
@@ -35,6 +37,7 @@ import {
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { type JSX, useEffect, useState } from "react";
+import { IMaskInput } from "react-imask";
 import {
   dbTimeToLocalTime,
   dbTimeToPrettyString,
@@ -43,6 +46,7 @@ import {
 import {
   checkAddress,
   checkName,
+  checkPhoneNumber,
   checkPickUpTime,
   checkTripReason,
 } from "~/lib/input-checkers";
@@ -109,11 +113,21 @@ export default function BookingHistoryPage() {
     status: string;
     createdAt: Date;
     updatedAt: Date;
+    phoneNumber: string;
   }>({
     mode: "uncontrolled",
 
     //Frontend field checks
     validate: {
+      phoneNumber: (value) => {
+        const result = checkPhoneNumber(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
       pickupTime: (value) => {
         const result = checkPickUpTime(value as string | null);
 
@@ -251,6 +265,7 @@ export default function BookingHistoryPage() {
               status: formatString(booking.status),
               createdAt: booking.createdAt,
               updatedAt: booking.updatedAt,
+              phoneNumber: booking.contactPhone,
             });
             bookingForm.setValues({
               pickupTime:
@@ -267,6 +282,7 @@ export default function BookingHistoryPage() {
               status: formatString(booking.status),
               createdAt: booking.createdAt,
               updatedAt: booking.updatedAt,
+              phoneNumber: booking.contactPhone,
             });
             //------------------------------------------
 
@@ -347,6 +363,7 @@ export default function BookingHistoryPage() {
       pickupTime: values.pickupTime as string | null,
       bookingId: values.id,
       tripReason: values.reasonForTrip,
+      contactPhone: values.phoneNumber,
     });
   };
 
@@ -411,6 +428,21 @@ export default function BookingHistoryPage() {
               readOnly={bookingForm.getValues().status !== "Pending"}
               withAsterisk
             />
+            <Input.Wrapper
+              aria-label="Contact Number"
+              error={bookingForm.errors.phoneNumber}
+            >
+              <Input.Label required>Contact Number</Input.Label>
+              <Input
+                component={IMaskInput}
+                key={bookingForm.key("phoneNumber")}
+                mask="(000) 000-0000"
+                placeholder="Contact Phone Number"
+                {...bookingForm.getInputProps("phoneNumber")}
+                leftSection={<DeviceMobileIcon size={20} />}
+                readOnly={bookingForm.getValues().status !== "Pending"}
+              />
+            </Input.Wrapper>
             {bookingForm.getValues().status === "Pending" && (
               <>
                 <PickupTimeInput

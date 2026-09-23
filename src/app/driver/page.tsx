@@ -109,6 +109,7 @@ export default function DriverPage() {
     createdAt: Date;
     updatedAt: Date;
     verificationRequested: boolean;
+    phoneNumber: string;
   }>({
     mode: "uncontrolled",
   });
@@ -216,6 +217,7 @@ export default function DriverPage() {
               createdAt: booking.createdAt,
               updatedAt: booking.updatedAt,
               verificationRequested: booking.requestVerification,
+              phoneNumber: booking.contactPhone,
             });
 
             openDrawer();
@@ -301,67 +303,73 @@ export default function DriverPage() {
         >
           <Stack h={"calc(100dvh - 75px)"}>
             <TextInput
-              defaultValue={form.values.id}
               label="Booking ID"
               readOnly
+              value={form.getValues().id}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={form.values.name}
               label="Name"
               readOnly
+              value={form.getValues().name}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={dbTimeToPrettyString(form.values.pickupTime)}
+              label="Contact Number"
+              readOnly
+              value={form.getValues().phoneNumber}
+              variant="unstyled"
+            />
+            <TextInput
               label="Pick-up Time"
               readOnly
+              value={dbTimeToPrettyString(form.getValues().pickupTime)}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={form.values.pickupAddr}
               label="Pick-up Address"
               readOnly
+              value={form.getValues().pickupAddr}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={form.values.destAddr}
               label="Destination Address"
               readOnly
+              value={form.getValues().destAddr}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={form.values.verificationRequested ? "Yes" : "No"}
               label="Resident Verification Requested?"
               readOnly
+              value={form.getValues().verificationRequested ? "Yes" : "No"}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={
-                form.values.reasonForTrip === ""
-                  ? "None Given"
-                  : form.values.reasonForTrip
-              }
               label="Reason for Trip"
               readOnly
+              value={
+                form.getValues().reasonForTrip === ""
+                  ? "None Given"
+                  : form.getValues().reasonForTrip
+              }
               variant="unstyled"
             />
             <TextInput
-              defaultValue={form.values.paymentMethod}
               label="Payment Method"
               readOnly
+              value={form.getValues().paymentMethod}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={dbTimeToPrettyString(form.values.createdAt)}
               label="Created At"
               readOnly
+              value={dbTimeToPrettyString(form.getValues().createdAt)}
               variant="unstyled"
             />
             <TextInput
-              defaultValue={dbTimeToPrettyString(form.values.updatedAt)}
               label="Updated At"
               readOnly
+              value={dbTimeToPrettyString(form.getValues().updatedAt)}
               variant="unstyled"
             />
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
@@ -377,7 +385,7 @@ export default function DriverPage() {
                       setOnModalSubmit(() => () => {
                         setIsMutating(true);
                         cancelBookingMutation.mutate({
-                          bookingIds: [form.values.id],
+                          bookingIds: [form.getValues().id],
                         });
                       });
                     }}
@@ -400,7 +408,7 @@ export default function DriverPage() {
                       setOnModalSubmit(() => () => {
                         setIsMutating(true);
                         completeBookingMutation.mutate({
-                          bookingIds: [form.values.id],
+                          bookingIds: [form.getValues().id],
                         });
                       });
                     } else {
@@ -408,7 +416,7 @@ export default function DriverPage() {
                       setOnModalSubmit(() => () => {
                         setIsMutating(true);
                         acceptBookingMutation.mutate({
-                          bookingIds: [form.values.id],
+                          bookingIds: [form.getValues().id],
                         });
                       });
                     }

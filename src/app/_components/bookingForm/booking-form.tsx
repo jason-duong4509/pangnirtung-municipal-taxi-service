@@ -139,6 +139,7 @@ const BookingsDrawer = ({
     status: string;
     createdAt: Date;
     updatedAt: Date;
+    phoneNumber: string;
   }>({
     mode: "uncontrolled",
 
@@ -146,6 +147,15 @@ const BookingsDrawer = ({
     validate: {
       pickupTime: (value) => {
         const result = checkPickUpTime(value as string | null);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+      phoneNumber: (value) => {
+        const result = checkPhoneNumber(value);
 
         if (result.isProper) {
           return null;
@@ -214,6 +224,7 @@ const BookingsDrawer = ({
       status: formatString(drawerContents.status),
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
+      phoneNumber: drawerContents.contactPhone,
     });
     bookingForm.setValues({
       pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
@@ -227,6 +238,7 @@ const BookingsDrawer = ({
       status: formatString(drawerContents.status),
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
+      phoneNumber: drawerContents.contactPhone,
     });
     //------------------------------------------
 
@@ -252,6 +264,7 @@ const BookingsDrawer = ({
       pickupTime: values.pickupTime as string | null,
       bookingId: values.id,
       tripReason: values.reasonForTrip,
+      contactPhone: values.phoneNumber,
     });
   };
 
@@ -305,6 +318,21 @@ const BookingsDrawer = ({
             readOnly={bookingForm.getValues().status !== "Pending"}
             withAsterisk
           />
+          <Input.Wrapper
+            aria-label="Contact Number"
+            error={bookingForm.errors.phoneNumber}
+          >
+            <Input.Label required>Contact Number</Input.Label>
+            <Input
+              component={IMaskInput}
+              key={bookingForm.key("phoneNumber")}
+              mask="(000) 000-0000"
+              placeholder="Contact Phone Number"
+              {...bookingForm.getInputProps("phoneNumber")}
+              leftSection={<DeviceMobileIcon size={20} />}
+              readOnly={bookingForm.getValues().status !== "Pending"}
+            />
+          </Input.Wrapper>
           {bookingForm.getValues().status === "Pending" && (
             <>
               <PickupTimeInput
