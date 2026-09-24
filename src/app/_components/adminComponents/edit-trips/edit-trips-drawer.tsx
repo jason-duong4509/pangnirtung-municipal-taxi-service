@@ -229,7 +229,7 @@ export default function EditTripsDrawer({
         confirmButtonText={"Confirm"}
         isLoading={formSubmitting}
         modalOpened={modalOpened}
-        onConfirm={() => handleFormOnSubmit(bookingForm.values)}
+        onConfirm={() => bookingForm.onSubmit(handleFormOnSubmit)()}
         titleText={"Confirm Action"}
       />
       <Drawer

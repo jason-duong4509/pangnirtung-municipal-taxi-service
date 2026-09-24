@@ -45,8 +45,8 @@ export default function NameNumberPresetModal({
       modalOpened: boolean;
       closeModal: () => void;
       openModal: () => void;
-      setPhoneNumber: never;
-      setName: never;
+      setPhoneNumber?: never;
+      setName?: never;
       loadPreset: false;
     }) {
   const [value, setValue] = useState<string[]>([]);
@@ -61,10 +61,10 @@ export default function NameNumberPresetModal({
   const [alertBodyComponent, setAlertBodyComponent] = useState<JSX.Element>(
     <Text />,
   );
-  const [alertBodyOnSubmit, setAlertBodyonSubmit] = useState<() => void>(
-    () => {},
-  );
   const [isLoading, setIsLoading] = useState(false);
+  const [deletedPreset, setDeletedPreset] = useState<string | undefined>(
+    undefined,
+  );
 
   const getPresetsQuery = api.profile.getNameNumberPresets.useQuery(undefined, {
     //Forces manual fetching
@@ -116,10 +116,7 @@ export default function NameNumberPresetModal({
                     <Text>Are you sure?</Text>
                   </Stack>,
                 );
-                setAlertBodyonSubmit(
-                  () => () =>
-                    deletePreset(`${preset.name}+${preset.phoneNumber}`),
-                );
+                setDeletedPreset(`${preset.name}+${preset.phoneNumber}`);
                 openAlertModal();
               }}
             />
@@ -146,12 +143,13 @@ export default function NameNumberPresetModal({
     }
   }
 
-  const deletePreset = async (value: string) => {
-    if (isLoading) {
+  const deletePreset = async (value: string | undefined) => {
+    if (isLoading || !value) {
       //If form is already submitting
       return;
     }
     setIsLoading(true);
+    setDeletedPreset(undefined);
 
     const [name, phoneNumber] = value.split("+");
 
@@ -168,11 +166,14 @@ export default function NameNumberPresetModal({
       <AlertPopup
         abortButtonText={"Cancel"}
         body={alertBodyComponent}
-        closeModal={closeAlertModal}
+        closeModal={() => {
+          closeAlertModal();
+          setDeletedPreset(undefined);
+        }}
         confirmButtonText={"Delete"}
         isLoading={isLoading}
         modalOpened={alertModalOpened}
-        onConfirm={alertBodyOnSubmit}
+        onConfirm={() => deletePreset(deletedPreset)}
         titleText={"Deleting Preset"}
       />
       <AddNameNumberPresetModal
@@ -184,40 +185,43 @@ export default function NameNumberPresetModal({
         centered
         onClose={() => {
           closeModal();
-          setIsEditing(false);
+          setIsEditing(!loadPreset);
         }}
         opened={modalOpened}
         radius={"lg"}
         size={"md"}
         withCloseButton={false}
+        zIndex={299}
       >
         <Stack gap={"lg"} p={"md"}>
           <header>
             <Group justify="space-between">
               <Title order={4}>
-                {loadPreset ? "Load " : "View "}
+                {loadPreset ? "Load " : "Edit "}
                 {!isMobile ? "Name + Phone Number " : ""}Preset
               </Title>
               <CloseButton onClick={closeModal} />
             </Group>
             <Group justify="space-between">
               <Text>Presets</Text>
-              <Button
-                c={"black"}
-                fw={"normal"}
-                onClick={() => {
-                  setIsEditing(!isEditing);
-                  setValue([]);
-                }}
-                p={0}
-                size="compact-sm"
-                style={{ textDecoration: "underline" }}
-                type="button"
-                variant="transparent"
-              >
-                {!isEditing && "Edit Presets"}
-                {isEditing && "Finish"}
-              </Button>
+              {loadPreset && (
+                <Button
+                  c={"black"}
+                  fw={"normal"}
+                  onClick={() => {
+                    setIsEditing(!isEditing);
+                    setValue([]);
+                  }}
+                  p={0}
+                  size="compact-sm"
+                  style={{ textDecoration: "underline" }}
+                  type="button"
+                  variant="transparent"
+                >
+                  {!isEditing && "Edit Presets"}
+                  {isEditing && "Finish"}
+                </Button>
+              )}
             </Group>
           </header>
           <main>
@@ -264,7 +268,7 @@ export default function NameNumberPresetModal({
                         setName(name);
                         setPhoneNumber(phoneNumber);
                         closeModal();
-                        setIsEditing(false);
+                        setIsEditing(!loadPreset);
                       }
                     }
                   }}

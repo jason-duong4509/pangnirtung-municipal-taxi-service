@@ -24,6 +24,7 @@ import { api } from "~/trpc/react";
 import { UserRoles } from "~/types/types";
 import AlertPopup from "../alert/alert";
 import ChangePhoneNumberModal from "../changePhoneNumber/change-phone-number";
+import NameNumberPresetModal from "../namePhonePreset/name-number-preset-modal";
 
 function AccordionLabel({
   label,
@@ -65,6 +66,10 @@ export default function ManageAccountModal({
   ] = useDisclosure(false);
   const [changePhoneSuccess, setChangePhoneSuccess] = useState(false);
   const utils = api.useUtils();
+  const [
+    presetModalOpened,
+    { open: openPresetModal, close: closePresetModal },
+  ] = useDisclosure(false);
 
   const getUsersQuery = api.users.getSelf.useQuery(undefined, {
     //Forces manual fetching
@@ -298,31 +303,59 @@ export default function ManageAccountModal({
       label: "Account Information",
       description: "Phone number and email address",
       content: (
-        <Flex direction={isPhone ? "column" : "row"} gap={"md"}>
-          <Input.Wrapper
-            description="Used to log into this account"
-            error={phoneForm.errors.phoneNumber}
-            flex={1}
-            label="Phone Number"
-          >
-            <Input
-              aria-label="Phone Number Input"
-              component={IMaskInput}
-              key={phoneForm.key("phoneNumber")}
-              mask="(000) 000-0000"
-              placeholder="(123)-456-7890"
-              {...phoneForm.getInputProps("phoneNumber")}
+        <Stack>
+          <Flex direction={isPhone ? "column" : "row"} gap={"md"}>
+            <Input.Wrapper
+              description="Used to log into this account"
+              error={phoneForm.errors.phoneNumber}
+              flex={1}
+              label="Phone Number"
+            >
+              <Input
+                aria-label="Phone Number Input"
+                component={IMaskInput}
+                key={phoneForm.key("phoneNumber")}
+                mask="(000) 000-0000"
+                placeholder="(123)-456-7890"
+                {...phoneForm.getInputProps("phoneNumber")}
+              />
+            </Input.Wrapper>
+            <TextInput
+              description={"For communication via email"}
+              flex={1}
+              label={"Email Address"}
+              placeholder="someone@gmail.com"
+              {...form.getInputProps("email")}
+              key={form.key("email")}
             />
-          </Input.Wrapper>
-          <TextInput
-            description={"For communication via email"}
-            flex={1}
-            label={"Email Address"}
-            placeholder="someone@gmail.com"
-            {...form.getInputProps("email")}
-            key={form.key("email")}
-          />
-        </Flex>
+          </Flex>
+          {form.getValues().role === UserRoles.MEMBER && (
+            <Flex direction={isPhone ? "column" : "row"}>
+              <Input.Wrapper>
+                <Input.Label>Name and Phone Number Presets</Input.Label>
+                <Input.Description pb={"xs"}>
+                  Used to quickly fill in information while booking trips
+                </Input.Description>
+              </Input.Wrapper>
+              <Flex
+                align={isPhone ? "flex-start" : "center"}
+                flex={1}
+                justify={isPhone ? "flex-start" : "flex-end"}
+              >
+                <Button
+                  c={"black"}
+                  color="buttonColor"
+                  onClick={() => openPresetModal()}
+                  size="compact-sm"
+                  type="button"
+                  variant="filled"
+                >
+                  Edit Presets
+                </Button>
+              </Flex>
+            </Flex>
+          )}
+        </Stack>
       ),
     },
   ];
@@ -396,6 +429,12 @@ export default function ManageAccountModal({
 
   return (
     <>
+      <NameNumberPresetModal
+        closeModal={closePresetModal}
+        loadPreset={false}
+        modalOpened={presetModalOpened}
+        openModal={openPresetModal}
+      />
       <ChangePhoneNumberModal
         closeModal={closeChangePhoneModal}
         modalOpened={changePhoneModalOpened}

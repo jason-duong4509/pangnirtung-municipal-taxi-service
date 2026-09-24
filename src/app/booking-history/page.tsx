@@ -36,7 +36,7 @@ import {
   XCircleIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { type JSX, useEffect, useState } from "react";
+import { type JSX, useEffect, useRef, useState } from "react";
 import { IMaskInput } from "react-imask";
 import {
   dbTimeToLocalTime,
@@ -74,6 +74,7 @@ export default function BookingHistoryPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<number[]>([]); //Each element is a booking's ID
   const [isMutating, setIsMutating] = useState(false);
+  const isMutatingRef = useRef(false);
   const [alertBodyComponent, setAlertBodyComponent] = useState(
     <Text>Are you sure?</Text>,
   );
@@ -183,6 +184,7 @@ export default function BookingHistoryPage() {
     onSuccess: () => {
       showNotifications.success("Booking updated");
       setIsMutating(false);
+      isMutatingRef.current = false;
       getBookingsQuery.refetch();
       closeDrawer();
       closeAlertModal();
@@ -190,6 +192,7 @@ export default function BookingHistoryPage() {
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 
@@ -198,6 +201,7 @@ export default function BookingHistoryPage() {
     onSuccess: () => {
       showNotifications.success("Cancelled successfully");
       setIsMutating(false);
+      isMutatingRef.current = false;
       getBookingsQuery.refetch();
       closeDrawer();
       closeAlertModal();
@@ -207,6 +211,7 @@ export default function BookingHistoryPage() {
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 
@@ -350,11 +355,12 @@ export default function BookingHistoryPage() {
 
   //Handle booking edit/update behaviors
   const handleFormOnSubmit = async (values: typeof bookingForm.values) => {
-    if (isMutating) {
+    if (isMutatingRef.current) {
       //If form is already submitting
       return;
     }
     setIsMutating(true);
+    isMutatingRef.current = true;
 
     updateBookingMutation.mutate({
       pickupAddr: values.pickupAddr,
@@ -552,7 +558,11 @@ export default function BookingHistoryPage() {
                         </>,
                       );
                       setOnModalSubmit(() => () => {
+                        if (isMutatingRef.current) {
+                          return;
+                        }
                         setIsMutating(true);
+                        isMutatingRef.current = true;
                         cancelBookingMutation.mutate({
                           bookingIds: [bookingForm.getValues().id],
                         });
@@ -690,7 +700,11 @@ export default function BookingHistoryPage() {
                         </>,
                       );
                       setOnModalSubmit(() => () => {
+                        if (isMutatingRef.current) {
+                          return;
+                        }
                         setIsMutating(true);
+                        isMutatingRef.current = true;
                         cancelBookingMutation.mutate({
                           bookingIds: selectedRows,
                         });

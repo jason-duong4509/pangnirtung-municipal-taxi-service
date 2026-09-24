@@ -99,6 +99,7 @@ export default function AddNameNumberPresetModal({
       radius={"lg"}
       size={"md"}
       withCloseButton={false}
+      zIndex={299}
     >
       <Stack gap={"lg"} p={"md"}>
         <header>

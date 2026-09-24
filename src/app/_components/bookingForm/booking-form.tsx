@@ -40,6 +40,7 @@ import {
   type JSX,
   type SetStateAction,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { IMaskInput } from "react-imask";
@@ -92,6 +93,7 @@ const BookingsDrawer = ({
   drawerContents: bookingsData | undefined;
 }) => {
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const formSubmittingRef = useRef(false);
   const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
     useDisclosure(false);
   const [pickupAddr, setPickupAddr] = useState("");
@@ -107,10 +109,12 @@ const BookingsDrawer = ({
       setFormSubmitting(false);
       closeDrawer();
       closeAlertModal();
+      formSubmittingRef.current = false;
     },
     onError: (error) => {
       showNotifications.error(error.message);
       setFormSubmitting(false);
+      formSubmittingRef.current = false;
     },
   });
 
@@ -118,12 +122,14 @@ const BookingsDrawer = ({
     onSuccess: () => {
       showNotifications.success("Cancelled successfully");
       setFormSubmitting(false);
+      formSubmittingRef.current = false;
       closeDrawer();
       closeAlertModal();
     },
     onError: (error) => {
       showNotifications.error(error.message);
       setFormSubmitting(false);
+      formSubmittingRef.current = false;
     },
   });
 
@@ -251,11 +257,12 @@ const BookingsDrawer = ({
   ]);
 
   const handleFormOnSubmit = async (values: typeof bookingForm.values) => {
-    if (formSubmitting) {
+    if (formSubmittingRef.current) {
       //If form is already submitting
       return;
     }
     setFormSubmitting(true);
+    formSubmittingRef.current = true;
 
     updateBookingMutation.mutate({
       pickupAddr: values.pickupAddr,
@@ -265,6 +272,18 @@ const BookingsDrawer = ({
       bookingId: values.id,
       tripReason: values.reasonForTrip,
       contactPhone: values.phoneNumber,
+    });
+  };
+
+  const handleDelete = (bookingId: number) => {
+    if (formSubmittingRef.current) {
+      return;
+    }
+    setFormSubmitting(true);
+    formSubmittingRef.current = true;
+
+    cancelBookingMutation.mutate({
+      bookingIds: [bookingId],
     });
   };
 
@@ -403,13 +422,13 @@ const BookingsDrawer = ({
           />
           <TextInput
             aria-label="Payment method"
-            defaultValue={
+            label="Payment Method"
+            readOnly
+            value={
               bookingForm.getValues().paymentMethod === "Redeem Code"
                 ? `Code (${bookingForm.getValues().paymentCode ?? "unable to retrieve code"})`
                 : bookingForm.getValues().paymentMethod
             }
-            label="Payment Method"
-            readOnly
             variant="unstyled"
           />
           <TextInput
@@ -441,12 +460,9 @@ const BookingsDrawer = ({
                         <Text>This action cannot be undone!</Text>
                       </>,
                     );
-                    setOnModalSubmit(() => () => {
-                      setFormSubmitting(true);
-                      cancelBookingMutation.mutate({
-                        bookingIds: [bookingForm.getValues().id],
-                      });
-                    });
+                    setOnModalSubmit(
+                      () => () => handleDelete(bookingForm.getValues().id),
+                    );
                   }}
                   p={0}
                   size="compact-sm"
@@ -799,7 +815,7 @@ export default function BookingForm({
         }
       },
       contactEmail: (value) => {
-        if (sendReceiptToEmail) {
+        if (formState === BookingUIStates.Confirm && sendReceiptToEmail) {
           const result = checkEmail(value);
 
           if (result.isProper) {
@@ -890,7 +906,7 @@ export default function BookingForm({
         contactEmail: user.email.includes("@no-email-given.pang")
           ? ""
           : user.email,
-        contactPhone: user.phoneNumber!,
+        contactPhone: user.phoneNumber ?? "ERROR: Phone Number not Found",
         name: user.name.includes("no-name-given.pang") ? "" : user.name,
       });
     }
@@ -898,12 +914,14 @@ export default function BookingForm({
 
   useEffect(() => {
     if (getBookingQuery.data) {
-      setDrawerContents(getBookingQuery.data[0]);
+      setDrawerContents(getBookingQuery.data);
     }
   }, [getBookingQuery.data]);
 
   useEffect(() => {
     if (presetName && presetPhoneNumber) {
+      setPresetName(undefined);
+      setPresetPhoneNumber(undefined);
       bookingForm.setValues({
         contactPhone: presetPhoneNumber,
         name: presetName,

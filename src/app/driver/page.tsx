@@ -243,13 +243,27 @@ export default function DriverPage() {
             </Table.Td>
           )}
           <Table.Td>{dbTimeToPrettyString(booking.pickupTime)}</Table.Td>
-          <Table.Td>{booking.pickupAddr}</Table.Td>
-          <Table.Td>{booking.destAddr}</Table.Td>
+          <Table.Td>
+            {booking.pickupAddr.length > 15
+              ? `${booking.pickupAddr.slice(0, 12)}...`
+              : booking.pickupAddr}
+          </Table.Td>
+          <Table.Td>
+            {booking.destAddr.length > 15
+              ? `${booking.destAddr.slice(0, 12)}...`
+              : booking.destAddr}
+          </Table.Td>
           {!isPhone && <Table.Td>{formatString(booking.payment)}</Table.Td>}
           {!isMobile && (
             <Table.Td>{booking.requestVerification ? "Yes" : "No"}</Table.Td>
           )}
-          {!isTablet && <Table.Td>{booking.tripReason}</Table.Td>}
+          {!isTablet && (
+            <Table.Td>
+              {booking.tripReason.length > 30
+                ? `${booking.tripReason.slice(0, 27)}...`
+                : booking.tripReason}
+            </Table.Td>
+          )}
         </Table.Tr>
       );
 

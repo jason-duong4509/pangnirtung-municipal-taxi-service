@@ -30,7 +30,7 @@ export const bookingsRouter = createTRPCRouter({
       }
 
       try {
-        const result = await db
+        const [result] = await db
           .select()
           .from(bookings)
           .where(
@@ -47,10 +47,14 @@ export const bookingsRouter = createTRPCRouter({
           });
         }
         return result;
-      } catch {
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get bookings",
+          message: "Failed to get booking",
+          cause: error,
         });
       }
     }),
