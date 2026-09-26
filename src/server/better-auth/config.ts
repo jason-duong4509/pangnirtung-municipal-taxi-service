@@ -1,10 +1,15 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins";
-
+import { eq } from "drizzle-orm";
+import { Stripe } from "stripe";
 import { env } from "~/env";
 import { db } from "~/server/db";
-import { profile } from "../db/schema";
+import { profile, user as userTable } from "../db/schema";
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2026-08-26.dahlia",
+});
 
 export const auth = betterAuth({
   appName: "Pangnirtung Municipal Taxi App",
@@ -33,6 +38,13 @@ export const auth = betterAuth({
           await db.insert(profile).values({
             belongsTo: user.id,
           });
+
+          const stripeCustomer = await stripeClient.customers.create();
+
+          await db
+            .update(userTable)
+            .set({ stripeCustomerId: stripeCustomer.id })
+            .where(eq(userTable.id, user.id));
         },
       },
     },
