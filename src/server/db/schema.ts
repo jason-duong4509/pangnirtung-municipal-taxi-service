@@ -56,6 +56,8 @@ export const bookings = pgTable("bookings", {
     .$defaultFn(() => /* @__PURE__ */ new Date())
     .notNull(),
   status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
+  contactPhone: text("contact_phone_number").notNull(),
+  contactEmail: text("contact_email"),
 });
 
 export const appIssues = pgTable(
@@ -116,14 +118,24 @@ export const rideCodes = pgTable(
   ],
 );
 
-export const altContactInfo = pgTable("alt_contact_info", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull(),
-  phoneNumber: text("phone_number").unique().notNull(),
-  ownedBy: text("owned_by")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-});
+export const altContactInfo = pgTable(
+  "alt_contact_info",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    name: text("name").notNull(),
+    phoneNumber: text("phone_number").notNull(),
+    ownedBy: text("owned_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("alt_contact_owner_name_phone_uq").on(
+      table.ownedBy,
+      table.name,
+      table.phoneNumber,
+    ),
+  ],
+);
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),

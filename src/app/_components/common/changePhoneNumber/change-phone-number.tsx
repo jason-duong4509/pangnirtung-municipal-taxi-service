@@ -12,13 +12,7 @@ import {
 import { useForm } from "@mantine/form";
 import { ShieldCheckIcon } from "@phosphor-icons/react";
 import dayjs from "dayjs";
-import {
-  type Dispatch,
-  type SetStateAction,
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { checkOTP } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { authClient } from "~/server/better-auth/client";

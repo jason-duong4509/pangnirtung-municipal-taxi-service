@@ -4,6 +4,7 @@ import {
   Button,
   Drawer,
   Group,
+  Input,
   Stack,
   Text,
   Textarea,
@@ -12,12 +13,14 @@ import {
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import {
+  DeviceMobileIcon,
   MapPinLineIcon,
   PathIcon,
   QuestionIcon,
   UserIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { IMaskInput } from "react-imask";
 import {
   dbTimeToLocalTime,
   dbTimeToPrettyString,
@@ -26,6 +29,7 @@ import {
 import {
   checkAddress,
   checkName,
+  checkPhoneNumber,
   checkPickUpTime,
   checkTripReason,
 } from "~/lib/input-checkers";
@@ -85,6 +89,7 @@ export default function EditTripsDrawer({
     createdAt: Date;
     updatedAt: Date;
     requestedVerification: boolean;
+    phoneNumber: string;
   }>({
     mode: "uncontrolled",
 
@@ -101,6 +106,15 @@ export default function EditTripsDrawer({
       },
       pickupAddr: (value) => {
         const result = checkAddress(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+      phoneNumber: (value) => {
+        const result = checkPhoneNumber(value);
 
         if (result.isProper) {
           return null;
@@ -161,6 +175,7 @@ export default function EditTripsDrawer({
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
       requestedVerification: drawerContents.requestVerification,
+      phoneNumber: drawerContents.contactPhone,
     });
     bookingForm.setValues({
       pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
@@ -175,6 +190,7 @@ export default function EditTripsDrawer({
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
       requestedVerification: drawerContents.requestVerification,
+      phoneNumber: drawerContents.contactPhone,
     });
     //------------------------------------------
 
@@ -200,6 +216,7 @@ export default function EditTripsDrawer({
       pickupTime: values.pickupTime as string | null,
       bookingId: values.id,
       tripReason: values.reasonForTrip,
+      contactPhone: values.phoneNumber,
     });
   };
 
@@ -212,7 +229,7 @@ export default function EditTripsDrawer({
         confirmButtonText={"Confirm"}
         isLoading={formSubmitting}
         modalOpened={modalOpened}
-        onConfirm={() => handleFormOnSubmit(bookingForm.values)}
+        onConfirm={() => bookingForm.onSubmit(handleFormOnSubmit)()}
         titleText={"Confirm Action"}
       />
       <Drawer
@@ -249,6 +266,20 @@ export default function EditTripsDrawer({
               key={bookingForm.key("name")}
               withAsterisk
             />
+            <Input.Wrapper
+              aria-label="Contact Number"
+              error={bookingForm.errors.phoneNumber}
+            >
+              <Input.Label required>Contact Number</Input.Label>
+              <Input
+                component={IMaskInput}
+                key={bookingForm.key("phoneNumber")}
+                mask="(000) 000-0000"
+                placeholder="Contact Phone Number"
+                {...bookingForm.getInputProps("phoneNumber")}
+                leftSection={<DeviceMobileIcon size={20} />}
+              />
+            </Input.Wrapper>
             <PickupTimeInput
               form={bookingForm}
               formField={"pickupTime"}

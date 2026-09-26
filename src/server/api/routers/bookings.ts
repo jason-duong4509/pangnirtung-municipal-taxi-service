@@ -3,16 +3,61 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   checkAddress,
+  checkEmail,
   checkName,
+  checkPhoneNumber,
   checkPickUpTime,
   checkTripReason,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
-import { bookings } from "~/server/db/schema";
+import { bookings, profile } from "~/server/db/schema";
 import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const bookingsRouter = createTRPCRouter({
+  getOne: protectedProcedure
+    .input(
+      z.object({
+        bookingId: z.number(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (ctx.session.user.role !== UserRoles.MEMBER) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Query is only available to members",
+        });
+      }
+
+      try {
+        const [result] = await db
+          .select()
+          .from(bookings)
+          .where(
+            and(
+              eq(bookings.id, input.bookingId),
+              eq(bookings.created_by, ctx.session.user.id),
+            ),
+          );
+
+        if (!result) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Booking does not exist",
+          });
+        }
+        return result;
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get booking",
+          cause: error,
+        });
+      }
+    }),
   get: protectedProcedure.query(async ({ ctx }) => {
     try {
       if (ctx.session.user.role === UserRoles.ADMIN) {
@@ -57,6 +102,8 @@ export const bookingsRouter = createTRPCRouter({
         payment: z.nativeEnum(PaymentMethods),
         reminders: z.boolean(),
         requestVerification: z.boolean(),
+        contactEmail: z.string(),
+        contactPhone: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -118,9 +165,42 @@ export const bookingsRouter = createTRPCRouter({
           message: tripReasonCheck.errorMessage,
         });
       }
+      let email = "" as string;
+      if (input.contactEmail !== "") {
+        const emailCheck = checkEmail(input.contactEmail);
+        if (emailCheck.isProper) {
+          email = emailCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: emailCheck.errorMessage,
+          });
+        }
+      }
+      const phoneNumberCheck = checkPhoneNumber(input.contactPhone);
+      let phoneNumber = "" as string;
+      if (phoneNumberCheck.isProper) {
+        phoneNumber = phoneNumberCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: phoneNumberCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
+        const [user] = await db
+          .select({ isResident: profile.isResident })
+          .from(profile)
+          .where(eq(profile.belongsTo, ctx.session.user.id));
+        if (!user) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not retrieve profile data",
+          });
+        }
+
         const [insertedBooking] = await db
           .insert(bookings)
           .values({
@@ -132,15 +212,30 @@ export const bookingsRouter = createTRPCRouter({
             payment: input.payment,
             reminders: input.reminders,
             created_by: ctx.session.user.id,
-            requestVerification: input.requestVerification, //TODO: if user is already a resident, put false for this value
+            requestVerification: user.isResident
+              ? false
+              : input.requestVerification,
+            contactEmail: email === "" ? null : email,
+            contactPhone: phoneNumber,
           })
           .returning();
 
+        if (!insertedBooking) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to create booking",
+          });
+        }
+
         return insertedBooking;
-      } catch {
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create booking",
+          cause: error,
         });
       }
     }),
@@ -153,6 +248,7 @@ export const bookingsRouter = createTRPCRouter({
         destAddr: z.string(),
         name: z.string(),
         tripReason: z.string(),
+        contactPhone: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -242,6 +338,16 @@ export const bookingsRouter = createTRPCRouter({
           message: tripReasonCheck.errorMessage,
         });
       }
+      const phoneNumberCheck = checkPhoneNumber(input.contactPhone);
+      let phoneNumber = "" as string;
+      if (phoneNumberCheck.isProper) {
+        phoneNumber = phoneNumberCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: phoneNumberCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
@@ -253,6 +359,7 @@ export const bookingsRouter = createTRPCRouter({
             destAddr: destAddr,
             name: name,
             tripReason: tripReason,
+            contactPhone: phoneNumber,
             updatedAt: new Date(),
           })
           .where(eq(bookings.id, input.bookingId))
