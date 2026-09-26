@@ -8,6 +8,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import type { ErrorContext } from "better-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { showNotifications } from "~/lib/mantine-notifications-system";
@@ -36,7 +37,7 @@ export default function LogOutModal({
           router.refresh();
           refetch();
         },
-        onError: (ctx) => {
+        onError: (ctx: ErrorContext) => {
           showNotifications.error(ctx.error.message);
           setIsMutating(false);
         },
