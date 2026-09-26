@@ -154,6 +154,7 @@ export const user = pgTable("user", {
   phoneNumber: text("phone_number").unique(),
   phoneNumberVerified: boolean("phone_number_verified"),
   role: userRoles("role").notNull().default(UserRoles.MEMBER),
+  stripeCustomerId: text("stripe_customer_id"),
 });
 
 export const session = pgTable(

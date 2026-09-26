@@ -1,10 +1,16 @@
+import { stripe } from "@better-auth/stripe";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins";
+import Stripe from "stripe";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
 import { profile } from "../db/schema";
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2026-08-26.dahlia",
+});
 
 export const auth = betterAuth({
   appName: "Pangnirtung Municipal Taxi App",
@@ -24,6 +30,11 @@ export const auth = betterAuth({
 
         getTempName: () => "no-name-given.pang",
       },
+    }),
+    stripe({
+      stripeClient,
+      stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+      createCustomerOnSignUp: true,
     }),
   ],
   databaseHooks: {
