@@ -12,7 +12,6 @@ import {
   Loader,
   MantineProvider,
   Paper,
-  Radio,
   ScrollArea,
   Stack,
   Text,
@@ -27,6 +26,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   ArrowLeftIcon,
   CalendarBlankIcon,
+  ClipboardTextIcon,
   CurrencyCircleDollarIcon,
   DeviceMobileIcon,
   EnvelopeSimpleIcon,
@@ -64,6 +64,7 @@ import { api } from "~/trpc/react";
 import { PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
 import NameNumberPresetModal from "../common/namePhonePreset/name-number-preset-modal";
+import PaymentModal from "../common/payment/payment";
 import AddressDropdown from "./booking-form-components/address-drop-down-field";
 import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 
@@ -71,11 +72,11 @@ import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 const BookingUIStates = {
   Where_To: "Where_to", //pickup time, to/from locations
   About_You: "About_You", //name + reason for trip
-  Payment: "Payment", //payment options screen
-  Buy_Rides: "Buy_Rides", //buy more rides screen (USES NEW COMPONENT)
-  Select_Pay: "Select_Pay", //select a credit card screen (USES NEW COMPONENT)
-  Confirm: "Confirm", //confirm user input screen
-  End: "End", //successfully booked trip
+  Payment: "Payment", //initiate payment screen
+  Confirm: "Confirm", //confirm form details and payment screen
+  Loading: "Loading", //trip booking process loading, payment successful
+  Success: "Success", //booking is successful
+  Failed: "Failed", //booking was not successful (but payment was)
 } as const;
 type BookingUIStates = (typeof BookingUIStates)[keyof typeof BookingUIStates];
 
@@ -679,6 +680,10 @@ export default function BookingForm({
   const [presetPhoneNumber, setPresetPhoneNumber] = useState<
     string | undefined
   >(undefined);
+  const [
+    paymentModalOpened,
+    { open: openPaymentModal, close: closePaymentModal },
+  ] = useDisclosure(false);
 
   const getUserQuery = api.users.getSelf.useQuery(undefined, {
     enabled: false,
@@ -706,11 +711,14 @@ export default function BookingForm({
   const createBookingMutation = api.bookings.create.useMutation({
     onSuccess: (data) => {
       setFormSubmitting(false);
-      setFormState(BookingUIStates.End);
+      setFormState(BookingUIStates.Success);
       setBookedTripId(data.id);
     },
     onError: (error) => {
-      showNotifications.error(error.message);
+      showNotifications.error(
+        `${error.message}. You will be refunded automatically. Please try again later`,
+      );
+      setFormState(BookingUIStates.Failed);
       setFormSubmitting(false);
     },
   });
@@ -929,6 +937,11 @@ export default function BookingForm({
     }
   }, [presetName, presetPhoneNumber, bookingForm.setValues]);
 
+  if (formState === BookingUIStates.Payment) {
+    openPaymentModal();
+    setFormState(BookingUIStates.Confirm);
+  }
+
   return (
     <Center
       h={"100%"}
@@ -949,178 +962,8 @@ export default function BookingForm({
         setName={setPresetName}
         setPhoneNumber={setPresetPhoneNumber}
       />
-      <FormUI
-        body={
-          <>
-            <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
-
-            <AddressDropdown
-              ariaLabel="Pick-up address field"
-              changeValue={setPickupAddr}
-              fieldName="pickupAddr"
-              fieldValue={pickupAddr}
-              form={bookingForm}
-              icon={<MapPinLineIcon size={20} />}
-              placeholder="Pick-up Address"
-            />
-            <AddressDropdown
-              ariaLabel="Destination address field"
-              changeValue={setDestAddr}
-              fieldName="destAddr"
-              fieldValue={destAddr}
-              form={bookingForm}
-              icon={<PathIcon size={20} />}
-              placeholder="Destination Address"
-            />
-          </>
-        }
-        changeFormState={setFormState}
-        changePrevFormState={setPrevFormState}
-        currentFormState={formState}
-        form={bookingForm}
-        isMobile={isMobile}
-        nextButtonText={"Continue"}
-        nextUIType={BookingUIStates.About_You}
-        openLoginModal={openLoginModal}
-        prevFormState={prevFormState}
-        prevUIType={null}
-        showBackButton={false}
-        title={"Where to?"}
-        uiType={BookingUIStates.Where_To}
-      />
-
-      <FormUI
-        body={
-          <ScrollArea.Autosize mah={isMobile ? "170px" : "200px"}>
-            <Stack gap={"sm"}>
-              <TextInput
-                aria-label="Text box for your name"
-                key={bookingForm.key("name")}
-                leftSection={<UserIcon size={20} />}
-                {...bookingForm.getInputProps("name")}
-                disabled={!getUserQuery.data?.[0]}
-                placeholder="Contact Name"
-              />
-              <div>
-                <Input.Wrapper
-                  aria-label="Text box for your phone number"
-                  error={bookingForm.errors.contactPhone}
-                >
-                  <Input
-                    component={IMaskInput}
-                    key={bookingForm.key("contactPhone")}
-                    mask="(000) 000-0000"
-                    placeholder="Contact Phone Number"
-                    {...bookingForm.getInputProps("contactPhone")}
-                    disabled={!getUserQuery.data?.[0]}
-                    leftSection={<DeviceMobileIcon size={20} />}
-                  />
-                </Input.Wrapper>
-                <Button
-                  c={"black"}
-                  fw={"normal"}
-                  onClick={() => openPresetModal()}
-                  p={0}
-                  size="compact-sm"
-                  style={{ textDecoration: "underline" }}
-                  type="button"
-                  variant="transparent"
-                >
-                  Load Name + Number Preset
-                </Button>
-              </div>
-              <Textarea
-                aria-label="Reason for trip (optional)"
-                key={bookingForm.key("reasonForTrip")}
-                leftSection={<QuestionIcon size={20} />}
-                {...bookingForm.getInputProps("reasonForTrip")}
-                autosize
-                minRows={1}
-                placeholder="Reason for Trip (optional)"
-              />
-            </Stack>
-          </ScrollArea.Autosize>
-        }
-        changeFormState={setFormState}
-        changePrevFormState={setPrevFormState}
-        currentFormState={formState}
-        form={bookingForm}
-        isMobile={isMobile}
-        nextButtonText={"Continue"}
-        nextUIType={BookingUIStates.Payment}
-        openLoginModal={openLoginModal}
-        prevFormState={prevFormState}
-        prevUIType={BookingUIStates.Where_To}
-        showBackButton={true}
-        title={"About You"}
-        uiType={BookingUIStates.About_You}
-      />
-
-      <FormUI
-        body={
-          <Radio.Group
-            aria-label="Select payment method"
-            {...paymentForm.getInputProps("paymentType")}
-            error={null}
-            size="md"
-          >
-            <Stack>
-              <Radio
-                color="buttonColor"
-                label="Pay with Credit Card"
-                value={PaymentMethods.CREDIT_CARD}
-              />
-              <Radio
-                color="buttonColor"
-                label="Redeem Code"
-                value={PaymentMethods.REDEEM_CODE}
-              />
-              {paymentForm.values.paymentType ===
-                PaymentMethods.REDEEM_CODE && (
-                <TextInput
-                  aria-label="Redeem code text input"
-                  error={paymentForm.errors.paymentType}
-                  onChange={(event) => {
-                    paymentForm.values.enteredCode = event.currentTarget.value;
-                    paymentForm.clearErrors();
-                  }}
-                  placeholder="Enter Code"
-                  value={paymentForm.values.enteredCode}
-                />
-              )}
-              <Radio
-                color="buttonColor"
-                label="Pay with Rides"
-                value={PaymentMethods.RIDES}
-              />
-              {paymentForm.values.paymentType === PaymentMethods.RIDES && (
-                <Text>
-                  <Text span>
-                    This trip costs 1 Ride. You will have 40 Rides remaining.{" "}
-                  </Text>
-                  <Text span>Buy More</Text>
-                </Text>
-              )}
-            </Stack>
-          </Radio.Group>
-        }
-        changeFormState={setFormState}
-        changePrevFormState={setPrevFormState}
-        currentFormState={formState}
-        form={paymentForm}
-        isMobile={isMobile}
-        nextButtonText={"Continue"}
-        nextUIType={BookingUIStates.Confirm}
-        openLoginModal={openLoginModal}
-        prevFormState={prevFormState}
-        prevUIType={BookingUIStates.About_You}
-        showBackButton={true}
-        title={"Payment"}
-        uiType={BookingUIStates.Payment}
-      />
-
-      <FormUI
-        body={
+      <PaymentModal
+        asideContent={
           <>
             <Grid gutter={0}>
               <Grid.Col span={6}>
@@ -1291,25 +1134,201 @@ export default function BookingForm({
             )}
           </>
         }
+        asideTabIcon={<ClipboardTextIcon size={19} />}
+        asideTabName="Details"
+        closeModal={closePaymentModal}
+        modalOpened={paymentModalOpened}
+        onClose={() => {
+          setFormState(BookingUIStates.About_You),
+            setPrevFormState(BookingUIStates.Payment);
+        }}
+        onPaymentConfirm={() => {
+          const { hasErrors } = bookingForm.validate();
+
+          return {
+            proceedToPayment: !hasErrors,
+          };
+        }}
+        onPaymentSuccess={() => {
+          bookingForm.onSubmit(handleBookingSubmit)();
+          setFormState(BookingUIStates.Loading);
+          setPrevFormState(BookingUIStates.About_You);
+        }}
+      />
+      <FormUI
+        body={
+          <>
+            <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
+
+            <AddressDropdown
+              ariaLabel="Pick-up address field"
+              changeValue={setPickupAddr}
+              fieldName="pickupAddr"
+              fieldValue={pickupAddr}
+              form={bookingForm}
+              icon={<MapPinLineIcon size={20} />}
+              placeholder="Pick-up Address"
+            />
+            <AddressDropdown
+              ariaLabel="Destination address field"
+              changeValue={setDestAddr}
+              fieldName="destAddr"
+              fieldValue={destAddr}
+              form={bookingForm}
+              icon={<PathIcon size={20} />}
+              placeholder="Destination Address"
+            />
+          </>
+        }
         changeFormState={setFormState}
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
         form={bookingForm}
-        formSubmitting={formSubmitting}
-        handleSubmit={handleBookingSubmit}
         isMobile={isMobile}
-        nextButtonText={"Book"}
-        nextUIType={BookingUIStates.End}
+        nextButtonText={"Continue"}
+        nextUIType={BookingUIStates.About_You}
         openLoginModal={openLoginModal}
         prevFormState={prevFormState}
-        prevUIType={BookingUIStates.Payment}
-        showBackButton={true}
-        title={"Confirm"}
-        uiType={BookingUIStates.Confirm}
+        prevUIType={null}
+        showBackButton={false}
+        title={"Where to?"}
+        uiType={BookingUIStates.Where_To}
       />
+
+      <FormUI
+        body={
+          <ScrollArea.Autosize mah={isMobile ? "170px" : "200px"}>
+            <Stack gap={"sm"}>
+              <TextInput
+                aria-label="Text box for your name"
+                key={bookingForm.key("name")}
+                leftSection={<UserIcon size={20} />}
+                {...bookingForm.getInputProps("name")}
+                disabled={!getUserQuery.data?.[0]}
+                placeholder="Contact Name"
+              />
+              <div>
+                <Input.Wrapper
+                  aria-label="Text box for your phone number"
+                  error={bookingForm.errors.contactPhone}
+                >
+                  <Input
+                    component={IMaskInput}
+                    key={bookingForm.key("contactPhone")}
+                    mask="(000) 000-0000"
+                    placeholder="Contact Phone Number"
+                    {...bookingForm.getInputProps("contactPhone")}
+                    disabled={!getUserQuery.data?.[0]}
+                    leftSection={<DeviceMobileIcon size={20} />}
+                  />
+                </Input.Wrapper>
+                <Button
+                  c={"black"}
+                  fw={"normal"}
+                  onClick={() => openPresetModal()}
+                  p={0}
+                  size="compact-sm"
+                  style={{ textDecoration: "underline" }}
+                  type="button"
+                  variant="transparent"
+                >
+                  Load Name + Number Preset
+                </Button>
+              </div>
+              <Textarea
+                aria-label="Reason for trip (optional)"
+                key={bookingForm.key("reasonForTrip")}
+                leftSection={<QuestionIcon size={20} />}
+                {...bookingForm.getInputProps("reasonForTrip")}
+                autosize
+                minRows={1}
+                placeholder="Reason for Trip (optional)"
+              />
+            </Stack>
+          </ScrollArea.Autosize>
+        }
+        changeFormState={setFormState}
+        changePrevFormState={setPrevFormState}
+        currentFormState={formState}
+        form={bookingForm}
+        isMobile={isMobile}
+        nextButtonText={"Continue"}
+        nextUIType={BookingUIStates.Payment}
+        openLoginModal={openLoginModal}
+        prevFormState={prevFormState}
+        prevUIType={BookingUIStates.Where_To}
+        showBackButton={true}
+        title={"About You"}
+        uiType={BookingUIStates.About_You}
+      />
+
       <Transition
         duration={1000}
-        mounted={formState === BookingUIStates.End}
+        mounted={formState === BookingUIStates.Loading}
+        timingFunction="ease"
+        transition={
+          formState === BookingUIStates.Loading ? "slide-left" : "slide-right"
+        }
+      >
+        {(transitionStyle) => (
+          <Paper
+            bg={"primaryColor"}
+            mah={{ base: "350px", smMd: "400px" }}
+            p={"xl"}
+            pos={"absolute"}
+            radius="lg"
+            shadow="xl"
+            style={transitionStyle}
+            w={{ base: "350px", smMd: "400px" }}
+          >
+            <Stack align="center" h="100%" justify="center">
+              <Title order={4}>Processing Booking Request...</Title>
+              <Loader color="black" />
+            </Stack>
+          </Paper>
+        )}
+      </Transition>
+
+      <Transition
+        duration={1000}
+        mounted={formState === BookingUIStates.Failed}
+        timingFunction="ease"
+        transition={"slide-left"}
+      >
+        {(transitionStyle) => (
+          <Paper
+            bg={"primaryColor"}
+            mah={{ base: "350px", smMd: "400px" }}
+            p={"xl"}
+            pos={"absolute"}
+            radius="lg"
+            shadow="xl"
+            style={transitionStyle}
+            w={{ base: "350px", smMd: "400px" }}
+          >
+            <Stack gap={"lg"}>
+              <Title order={4}>Booking Failed</Title>
+              <Text>
+                We are unable to process your request at this time. A refund has
+                automatically been issued. Please try again later
+              </Text>
+
+              <Button
+                c={"black"}
+                color="buttonColor"
+                onClick={() => window.location.reload()}
+                type="button"
+              >
+                Start from Beginning
+              </Button>
+            </Stack>
+          </Paper>
+        )}
+      </Transition>
+
+      <Transition
+        duration={1000}
+        mounted={formState === BookingUIStates.Success}
         timingFunction="ease"
         transition={"slide-left"}
       >

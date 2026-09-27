@@ -44,9 +44,12 @@ const ItemDrawer = ({
       <AlertPopup
         abortButtonText={"Back"}
         body={
-          <Text>
-            Buying {buyRideNum} Rides for ${10 * buyRideNum}. Are you sure?
-          </Text>
+          <>
+            <Text>
+              Buying {buyRideNum} Rides for ${10 * buyRideNum}. Are you sure?
+            </Text>
+            <Text>This cannot be refunded!</Text>
+          </>
         }
         closeModal={closeAlertModal}
         confirmButtonText={"Confirm"}
@@ -73,8 +76,13 @@ const ItemDrawer = ({
         >
           <RideTicket height={"50px"} width={"100px"} />
           <div>
-            <Title order={4}>Ride x1</Title>
-            <Text>Owned: 5</Text>
+            <Title order={4} ta={"center"}>
+              Ride x1
+            </Title>
+            <Text ta={"center"}>Owned: 5</Text>
+            <Text c={"red"} ta={"center"}>
+              Rides cannot be refunded after purchased
+            </Text>
           </div>
           <ActionIcon.Group>
             <ActionIcon
