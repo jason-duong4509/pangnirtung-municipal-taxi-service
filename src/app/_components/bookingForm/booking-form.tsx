@@ -63,6 +63,7 @@ import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
 import { PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
+import InstallPwaPrompt from "../common/installPwaPrompt/install-pwa-prompt";
 import NameNumberPresetModal from "../common/namePhonePreset/name-number-preset-modal";
 import PaymentModal from "../common/payment/payment";
 import AddressDropdown from "./booking-form-components/address-drop-down-field";
@@ -684,6 +685,10 @@ export default function BookingForm({
     paymentModalOpened,
     { open: openPaymentModal, close: closePaymentModal },
   ] = useDisclosure(false);
+  const [
+    pwaPromptModalOpened,
+    { open: openPwaPromptModal, close: closePwaPromptModal },
+  ] = useDisclosure(false);
 
   const getUserQuery = api.users.getSelf.useQuery(undefined, {
     enabled: false,
@@ -949,6 +954,10 @@ export default function BookingForm({
       style={{ overflow: "hidden" }}
       w={"100%"}
     >
+      <InstallPwaPrompt
+        closeModal={closePwaPromptModal}
+        modalOpened={pwaPromptModalOpened}
+      />
       <BookingsDrawer
         closeDrawer={closeDrawer}
         drawerContents={drawerContents}
@@ -1367,6 +1376,25 @@ export default function BookingForm({
                 </Text>
                 <Anchor href="/booking-history">Trip History</Anchor>
               </Text>
+
+              <Text>
+                We have an app! Download the app to receive in-app notifications
+                and an app-like experience
+              </Text>
+              <Group justify="flex-start">
+                <Button
+                  c={"black"}
+                  fw={"normal"}
+                  onClick={() => openPwaPromptModal()}
+                  p={0}
+                  size="compact-sm"
+                  style={{ textDecoration: "underline" }}
+                  type="button"
+                  variant="transparent"
+                >
+                  Download the app
+                </Button>
+              </Group>
 
               <Button
                 c={"black"}

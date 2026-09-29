@@ -18,6 +18,7 @@ export default function PickupTimeInput({
     <DateTimePicker
       aria-label="Pick-up Time Selection"
       clearable
+      dropdownType="modal"
       leftSection={<CalendarBlankIcon size={19} />}
       maxDate={dayjs().add(1, "month").toDate()}
       minDate={new Date()}
@@ -26,7 +27,7 @@ export default function PickupTimeInput({
       timePickerProps={{
         withDropdown: true,
         format: "12h",
-        popoverProps: { withinPortal: false },
+        popoverProps: { withinPortal: true },
       }}
       valueFormat={"ddd[,] MMM D [at] h:mm A"}
       {...form.getInputProps(formField)}
