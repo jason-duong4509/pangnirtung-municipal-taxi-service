@@ -45,6 +45,7 @@ export const bookings = pgTable("bookings", {
   tripReason: text("reason_for_trip").notNull(),
   payment: paymentMethod("payment_method").notNull(),
   reminders: boolean("receive_reminders").notNull().default(false),
+  sentReminder: boolean("sent_reminder").notNull().default(false),
   requestVerification: boolean("request_verification").notNull().default(false),
   created_by: text("created_by")
     .notNull()
@@ -58,6 +59,22 @@ export const bookings = pgTable("bookings", {
   status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
   contactPhone: text("contact_phone_number").notNull(),
   contactEmail: text("contact_email"),
+});
+
+export const enabledPushNotifications = pgTable("enabled_push_notifications", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  deviceEndpoint: text("device_endpoint").unique().notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  belongsTo: text("belongs_to")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
 });
 
 export const appIssues = pgTable(
@@ -254,7 +271,26 @@ export const userRelations = relations(user, ({ many, one }) => ({
   altContactInfo: many(altContactInfo),
   UserUsedRideCode: many(userUsedRideCode),
   profile: one(profile),
+  enabledPushNotifications: many(enabledPushNotifications),
+  bookings: many(bookings),
 }));
+
+export const bookingRelations = relations(bookings, ({ one }) => ({
+  user: one(user, {
+    fields: [bookings.created_by],
+    references: [user.id],
+  }),
+}));
+
+export const pushNotificationsRelations = relations(
+  enabledPushNotifications,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [enabledPushNotifications.belongsTo],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const profileRelations = relations(profile, ({ one }) => ({
   user: one(user),

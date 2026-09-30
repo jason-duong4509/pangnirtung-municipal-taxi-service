@@ -22,6 +22,7 @@ export default function MobileLandingPage({
     { open: openLogoutModal, close: closeLogoutModal },
   ] = useDisclosure(false);
   const [firstRender, setFirstRender] = useState(true);
+  const [burgerOpened, { toggle: toggleBurger }] = useDisclosure();
 
   if (!isPending && firstRender) {
     setFirstRender(false);
@@ -95,7 +96,10 @@ export default function MobileLandingPage({
         </Paper>
 
         <Flex align={"center"} flex={1} justify={"center"} pos={"relative"}>
-          <BookingForm openLoginModal={openLoginModal} />
+          <BookingForm
+            openLoginModal={openLoginModal}
+            toggleBurger={toggleBurger}
+          />
         </Flex>
 
         <Paper
@@ -105,7 +109,11 @@ export default function MobileLandingPage({
           w={"100vw"}
         >
           <Flex align={"center"} h={"100%"} justify={"flex-end"} pr={"lg"}>
-            <MenuButton openLoginModal={openLoginModal} />
+            <MenuButton
+              burgerOpened={burgerOpened}
+              openLoginModal={openLoginModal}
+              toggleBurger={toggleBurger}
+            />
           </Flex>
         </Paper>
       </Flex>
