@@ -8,3 +8,7 @@ export const pickupTimeRegex = /^\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d$/;
 //-----------
 
 export const IANA_TIME_ZONE = "America/Pangnirtung";
+export const BOOKING_COSTS = {
+  in_town: 15,
+  out_of_town: 25,
+};

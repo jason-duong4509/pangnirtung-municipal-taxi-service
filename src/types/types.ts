@@ -1,8 +1,26 @@
+import { BOOKING_COSTS } from "./constants";
+
 export enum BookingStatus {
   PENDING = "pending",
   IN_PROGRESS = "in_progress",
   CANCELLED = "cancelled",
   COMPLETED = "completed",
+}
+
+export const BookingTypes = [
+  {
+    label: `In Town ($${BOOKING_COSTS["in_town"]})`,
+    value: "in_town",
+  },
+  {
+    label: `Out of Town ($${BOOKING_COSTS["out_of_town"]})`,
+    value: "out_of_town",
+  },
+];
+
+export enum BookingValueTypes {
+  IN_TOWN = "in_town",
+  OUT_OF_TOWN = "out_of_town",
 }
 
 export enum PaymentMethods {

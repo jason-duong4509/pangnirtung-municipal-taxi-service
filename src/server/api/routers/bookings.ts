@@ -3,6 +3,7 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   checkAddress,
+  checkBookingType,
   checkEmail,
   checkName,
   checkPhoneNumber,
@@ -11,7 +12,12 @@ import {
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import { bookings, profile } from "~/server/db/schema";
-import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
+import {
+  BookingStatus,
+  type BookingValueTypes,
+  PaymentMethods,
+  UserRoles,
+} from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const bookingsRouter = createTRPCRouter({
@@ -104,6 +110,7 @@ export const bookingsRouter = createTRPCRouter({
         requestVerification: z.boolean(),
         contactEmail: z.string(),
         contactPhone: z.string(),
+        bookingType: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -187,6 +194,16 @@ export const bookingsRouter = createTRPCRouter({
           message: phoneNumberCheck.errorMessage,
         });
       }
+      const bookingTypeCheck = checkBookingType(input.bookingType);
+      let bookingType = undefined as BookingValueTypes | undefined;
+      if (bookingTypeCheck.isProper) {
+        bookingType = bookingTypeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: bookingTypeCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
@@ -217,6 +234,7 @@ export const bookingsRouter = createTRPCRouter({
               : input.requestVerification,
             contactEmail: email === "" ? null : email,
             contactPhone: phoneNumber,
+            bookingType: bookingType,
           })
           .returning();
 
@@ -249,6 +267,7 @@ export const bookingsRouter = createTRPCRouter({
         name: z.string(),
         tripReason: z.string(),
         contactPhone: z.string(),
+        bookingType: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -348,6 +367,16 @@ export const bookingsRouter = createTRPCRouter({
           message: phoneNumberCheck.errorMessage,
         });
       }
+      const bookingTypeCheck = checkBookingType(input.bookingType);
+      let bookingType = undefined as BookingValueTypes | undefined;
+      if (bookingTypeCheck.isProper) {
+        bookingType = bookingTypeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: bookingTypeCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
@@ -361,6 +390,7 @@ export const bookingsRouter = createTRPCRouter({
             tripReason: tripReason,
             contactPhone: phoneNumber,
             updatedAt: new Date(),
+            bookingType: bookingType,
           })
           .where(eq(bookings.id, input.bookingId))
           .returning();

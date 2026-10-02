@@ -10,7 +10,12 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
+import {
+  BookingStatus,
+  BookingValueTypes,
+  PaymentMethods,
+  UserRoles,
+} from "~/types/types";
 
 //==SCHEMA ENUMS==
 export const bookingStatus = pgEnum("bookingStatus", [
@@ -30,6 +35,11 @@ export const userRoles = pgEnum("userRoles", [
   UserRoles.ADMIN,
   UserRoles.DRIVER,
   UserRoles.MEMBER,
+]);
+
+export const bookingTypes = pgEnum("bookingTypes", [
+  BookingValueTypes.IN_TOWN,
+  BookingValueTypes.OUT_OF_TOWN,
 ]);
 //==SCHEMA ENUMS==
 
@@ -58,6 +68,7 @@ export const bookings = pgTable("bookings", {
   status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
   contactPhone: text("contact_phone_number").notNull(),
   contactEmail: text("contact_email"),
+  bookingType: bookingTypes("booking_type").notNull(),
 });
 
 export const appIssues = pgTable(

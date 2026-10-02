@@ -13,6 +13,7 @@ import {
   MantineProvider,
   Paper,
   ScrollArea,
+  Select,
   Stack,
   Text,
   Textarea,
@@ -33,6 +34,7 @@ import {
   MapPinLineIcon,
   PathIcon,
   QuestionIcon,
+  RoadHorizonIcon,
   UserIcon,
 } from "@phosphor-icons/react";
 import {
@@ -51,6 +53,7 @@ import {
 } from "~/lib/helpers";
 import {
   checkAddress,
+  checkBookingType,
   checkEmail,
   checkName,
   checkPhoneNumber,
@@ -61,7 +64,7 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import { PaymentMethods } from "~/types/types";
+import { BookingTypes, PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
 import NameNumberPresetModal from "../common/namePhonePreset/name-number-preset-modal";
 import PaymentModal from "../common/payment/payment";
@@ -147,6 +150,7 @@ const BookingsDrawer = ({
     createdAt: Date;
     updatedAt: Date;
     phoneNumber: string;
+    bookingType: string;
   }>({
     mode: "uncontrolled",
 
@@ -206,6 +210,15 @@ const BookingsDrawer = ({
           return result.errorMessage;
         }
       },
+      bookingType: (value) => {
+        const result = checkBookingType(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
     },
   });
 
@@ -232,6 +245,7 @@ const BookingsDrawer = ({
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
       phoneNumber: drawerContents.contactPhone,
+      bookingType: drawerContents.bookingType,
     });
     bookingForm.setValues({
       pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
@@ -246,6 +260,7 @@ const BookingsDrawer = ({
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
       phoneNumber: drawerContents.contactPhone,
+      bookingType: drawerContents.bookingType,
     });
     //------------------------------------------
 
@@ -273,6 +288,7 @@ const BookingsDrawer = ({
       bookingId: values.id,
       tripReason: values.reasonForTrip,
       contactPhone: values.phoneNumber,
+      bookingType: values.bookingType,
     });
   };
 
@@ -355,6 +371,14 @@ const BookingsDrawer = ({
           </Input.Wrapper>
           {bookingForm.getValues().status === "Pending" && (
             <>
+              <Select
+                aria-label="Booking Type"
+                data={BookingTypes}
+                key={bookingForm.key("bookingType")}
+                leftSection={<RoadHorizonIcon size={20} />}
+                placeholder="Booking Type"
+                {...bookingForm.getInputProps("bookingType")}
+              />
               <PickupTimeInput
                 form={bookingForm}
                 formField={"pickupTime"}
@@ -387,6 +411,12 @@ const BookingsDrawer = ({
           )}
           {bookingForm.getValues().status !== "Pending" && (
             <>
+              <TextInput
+                label={"Booking Type"}
+                leftSection={<RoadHorizonIcon size={20} />}
+                readOnly
+                value={bookingForm.getValues().bookingType}
+              />
               <TextInput
                 label={"Pick-up Time"}
                 leftSection={<CalendarBlankIcon size={20} />}
@@ -738,6 +768,7 @@ export default function BookingForm({
       requestVerification: false,
       contactEmail: "",
       contactPhone: "",
+      bookingType: "",
     },
 
     //Frontend field checks
@@ -851,6 +882,22 @@ export default function BookingForm({
           return null;
         }
       },
+      bookingType: (value) => {
+        if (
+          formState === BookingUIStates.Where_To ||
+          formState === BookingUIStates.Confirm
+        ) {
+          const result = checkBookingType(value);
+
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
+      },
     },
   });
 
@@ -903,6 +950,7 @@ export default function BookingForm({
       requestVerification: values.requestVerification,
       contactEmail: sendReceiptToEmail ? values.contactEmail : "",
       contactPhone: values.contactPhone,
+      bookingType: values.bookingType,
     });
   };
 
@@ -997,6 +1045,21 @@ export default function BookingForm({
                     leftSection={<DeviceMobileIcon size={20} />}
                   />
                 </Input.Wrapper>
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Booking Type</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <Select
+                  aria-label="Booking Type"
+                  data={BookingTypes}
+                  key={bookingForm.key("bookingType")}
+                  leftSection={<RoadHorizonIcon size={20} />}
+                  placeholder="Booking Type"
+                  {...bookingForm.getInputProps("bookingType")}
+                />
               </Grid.Col>
             </Grid>
             <Grid gutter={0}>
@@ -1177,6 +1240,14 @@ export default function BookingForm({
               form={bookingForm}
               icon={<PathIcon size={20} />}
               placeholder="Destination Address"
+            />
+            <Select
+              aria-label="Booking Type"
+              data={BookingTypes}
+              key={bookingForm.key("bookingType")}
+              leftSection={<RoadHorizonIcon size={20} />}
+              placeholder="Booking Type"
+              {...bookingForm.getInputProps("bookingType")}
             />
           </>
         }

@@ -12,6 +12,8 @@ import {
   usernameRegex,
 } from "~/types/constants";
 import {
+  BookingTypes,
+  BookingValueTypes,
   PriorityRatingTypesNumber,
   ReportAppIssueChipTypes,
 } from "~/types/types";
@@ -407,4 +409,30 @@ export const checkReportAppTags = (
     isProper: true,
     formattedInput: listOfTags,
   };
+};
+
+export const checkBookingType = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: BookingValueTypes } => {
+  let bookingType = undefined as BookingValueTypes | undefined;
+
+  Object.values(BookingValueTypes).forEach((type) => {
+    if (type === input) {
+      bookingType = type;
+    }
+  });
+
+  if (bookingType) {
+    return {
+      isProper: true,
+      formattedInput: bookingType,
+    };
+  } else {
+    return {
+      isProper: false,
+      errorMessage: "Improper booking type given",
+    };
+  }
 };
