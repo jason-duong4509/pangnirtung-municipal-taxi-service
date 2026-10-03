@@ -1,24 +1,32 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, or } from "drizzle-orm";
+import Stripe from "stripe";
 import { z } from "zod";
 import {
   checkAddress,
   checkBookingType,
+  checkBookingTypeAndPaymentMethod,
   checkEmail,
   checkName,
+  checkPaymentMethodType,
   checkPhoneNumber,
   checkPickUpTime,
+  checkRedeemCode,
   checkTripReason,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
-import { bookings, profile } from "~/server/db/schema";
+import { bookings, profile, rideCodes, user } from "~/server/db/schema";
 import {
   BookingStatus,
-  type BookingValueTypes,
+  BookingValueTypes,
   PaymentMethods,
   UserRoles,
 } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2026-08-26.dahlia",
+});
 
 export const bookingsRouter = createTRPCRouter({
   getOne: protectedProcedure
@@ -105,12 +113,14 @@ export const bookingsRouter = createTRPCRouter({
         destAddr: z.string(),
         name: z.string(),
         tripReason: z.string(),
-        payment: z.nativeEnum(PaymentMethods),
+        paymentMethod: z.string(),
         reminders: z.boolean(),
         requestVerification: z.boolean(),
         contactEmail: z.string(),
         contactPhone: z.string(),
         bookingType: z.string(),
+        redeemCode: z.string().nullable(),
+        paymentMethodId: z.string().nullable(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -204,17 +214,131 @@ export const bookingsRouter = createTRPCRouter({
           message: bookingTypeCheck.errorMessage,
         });
       }
+      const paymentMethodTypeCheck = checkPaymentMethodType(
+        input.paymentMethod,
+      );
+      let paymentMethod = undefined as PaymentMethods | undefined;
+      if (paymentMethodTypeCheck.isProper) {
+        paymentMethod = paymentMethodTypeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: paymentMethodTypeCheck.errorMessage,
+        });
+      }
+      let rideCode = null as null | string;
+      if (input.redeemCode) {
+        const redeemCodeCheck = checkRedeemCode(input.redeemCode);
+        if (redeemCodeCheck.isProper) {
+          rideCode = redeemCodeCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: redeemCodeCheck.errorMessage,
+          });
+        }
+      }
+      const bookingTypeAndPaymentCheck = checkBookingTypeAndPaymentMethod(
+        input.bookingType,
+        input.paymentMethod,
+      );
+      if (!bookingTypeAndPaymentCheck.isProper) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: bookingTypeAndPaymentCheck.errorMessage,
+        });
+      }
       //------------------
 
+      if (rideCode) {
+        const [code] = await db
+          .select({ rideCode: rideCodes.code })
+          .from(rideCodes)
+          .where(eq(rideCodes.code, rideCode));
+
+        if (!code) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No code found",
+          });
+        }
+      }
+
       try {
-        const [user] = await db
-          .select({ isResident: profile.isResident })
+        const [userProfile] = await db
+          .select({
+            isResident: profile.isResident,
+            numberOfRides: profile.numberOfRides,
+          })
           .from(profile)
           .where(eq(profile.belongsTo, ctx.session.user.id));
-        if (!user) {
+        if (!userProfile) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Could not retrieve profile data",
+          });
+        }
+
+        const [userData] = await db
+          .select({ stripeCustomerId: user.stripeCustomerId })
+          .from(user)
+          .where(eq(user.id, ctx.session.user.id));
+        if (!userData) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not retrieve user data",
+          });
+        }
+
+        if (
+          userProfile.numberOfRides === 0 &&
+          paymentMethod === PaymentMethods.RIDES
+        ) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Insufficient ride credits to cover this booking cost",
+          });
+        }
+
+        if (input.paymentMethodId) {
+          const stripePaymentMethod = await stripe.paymentMethods.retrieve(
+            input.paymentMethodId,
+          );
+
+          if (stripePaymentMethod.customer !== userData.stripeCustomerId) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Payment method does not belong to user",
+            });
+          }
+        }
+
+        if (
+          (paymentMethod === PaymentMethods.CREDIT_CARD &&
+            !input.paymentMethodId) ||
+          (paymentMethod !== PaymentMethods.CREDIT_CARD &&
+            input.paymentMethodId)
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Missing payment data when paying with a credit card",
+          });
+        }
+
+        if (
+          bookingType === BookingValueTypes.OUT_OF_TOWN &&
+          paymentMethod === PaymentMethods.RIDES
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Cannot use ride credits to cover out of town trips",
+          });
+        }
+
+        if (rideCode && paymentMethod === PaymentMethods.RIDES) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Ride codes are not usable on ride credits",
           });
         }
 
@@ -226,15 +350,17 @@ export const bookingsRouter = createTRPCRouter({
             name: name,
             pickupTime: pickupTime,
             tripReason: tripReason,
-            payment: input.payment,
+            paymentMethod: paymentMethod,
             reminders: input.reminders,
             created_by: ctx.session.user.id,
-            requestVerification: user.isResident
+            requestVerification: userProfile.isResident
               ? false
               : input.requestVerification,
             contactEmail: email === "" ? null : email,
             contactPhone: phoneNumber,
             bookingType: bookingType,
+            rideCode: rideCode,
+            stripePaymentMethodId: input.paymentMethodId,
           })
           .returning();
 
@@ -267,7 +393,6 @@ export const bookingsRouter = createTRPCRouter({
         name: z.string(),
         tripReason: z.string(),
         contactPhone: z.string(),
-        bookingType: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -367,16 +492,6 @@ export const bookingsRouter = createTRPCRouter({
           message: phoneNumberCheck.errorMessage,
         });
       }
-      const bookingTypeCheck = checkBookingType(input.bookingType);
-      let bookingType = undefined as BookingValueTypes | undefined;
-      if (bookingTypeCheck.isProper) {
-        bookingType = bookingTypeCheck.formattedInput;
-      } else {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: bookingTypeCheck.errorMessage,
-        });
-      }
       //------------------
 
       try {
@@ -390,7 +505,6 @@ export const bookingsRouter = createTRPCRouter({
             tripReason: tripReason,
             contactPhone: phoneNumber,
             updatedAt: new Date(),
-            bookingType: bookingType,
           })
           .where(eq(bookings.id, input.bookingId))
           .returning();

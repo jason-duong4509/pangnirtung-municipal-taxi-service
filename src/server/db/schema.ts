@@ -28,7 +28,7 @@ export const bookingStatus = pgEnum("bookingStatus", [
 export const paymentMethod = pgEnum("paymentMethod", [
   PaymentMethods.CREDIT_CARD,
   PaymentMethods.RIDES,
-  PaymentMethods.REDEEM_CODE,
+  PaymentMethods.CASH,
 ]);
 
 export const userRoles = pgEnum("userRoles", [
@@ -53,7 +53,10 @@ export const bookings = pgTable("bookings", {
   destAddr: text("destination_address").notNull(),
   name: text("name").notNull(),
   tripReason: text("reason_for_trip").notNull(),
-  payment: paymentMethod("payment_method").notNull(),
+  paymentMethod: paymentMethod("payment_method").notNull(),
+  stripePaymentMethodId: text("stripe_payment_method_id"),
+  paid: boolean("paid").notNull().default(false),
+  rideCode: text("ride_code").references(() => rideCodes.code),
   reminders: boolean("receive_reminders").notNull().default(false),
   requestVerification: boolean("request_verification").notNull().default(false),
   created_by: text("created_by")
@@ -69,6 +72,7 @@ export const bookings = pgTable("bookings", {
   contactPhone: text("contact_phone_number").notNull(),
   contactEmail: text("contact_email"),
   bookingType: bookingTypes("booking_type").notNull(),
+  requiresAdjustment: boolean("requires_adjustment").notNull().default(false),
 });
 
 export const appIssues = pgTable(
@@ -117,8 +121,7 @@ export const profile = pgTable("profile", {
 export const rideCodes = pgTable(
   "ride_codes",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-    code: text("code").notNull(),
+    code: text("code").primaryKey().notNull(),
     discount: integer("discount").notNull(),
   },
   (table) => [
@@ -252,9 +255,9 @@ export const userUsedRideCode = pgTable("user_used_ride_code", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  rideCodeId: integer("ride_code_id")
+  rideCode: text("ride_code")
     .notNull()
-    .references(() => rideCodes.id, { onDelete: "cascade" }),
+    .references(() => rideCodes.code, { onDelete: "cascade" }),
 });
 //==TABLE RELATIONS==
 
@@ -265,6 +268,16 @@ export const userRelations = relations(user, ({ many, one }) => ({
   altContactInfo: many(altContactInfo),
   UserUsedRideCode: many(userUsedRideCode),
   profile: one(profile),
+  bookings: many(bookings),
+}));
+
+export const bookingRelations = relations(bookings, ({ one }) => ({
+  rideCodes: one(rideCodes),
+  user: one(user),
+}));
+
+export const rideCodeRelations = relations(rideCodes, ({ many }) => ({
+  bookings: many(bookings),
 }));
 
 export const profileRelations = relations(profile, ({ one }) => ({
@@ -317,8 +330,8 @@ export const UserUsedRideCodesRelations = relations(
       references: [user.id],
     }),
     rideCodes: one(rideCodes, {
-      fields: [userUsedRideCode.rideCodeId],
-      references: [rideCodes.id],
+      fields: [userUsedRideCode.rideCode],
+      references: [rideCodes.code],
     }),
   }),
 );

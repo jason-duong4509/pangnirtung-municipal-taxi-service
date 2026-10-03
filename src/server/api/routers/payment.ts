@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
 import { db } from "~/server/db";
-import { user } from "~/server/db/schema";
+import { rideCodes, user } from "~/server/db/schema";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -141,6 +141,70 @@ export const paymentRouter = createTRPCRouter({
       });
     }
 
+    const customerSession = await stripe.customerSessions.create({
+      customer:
+        returnedUser.stripeCustomerId === null
+          ? undefined
+          : returnedUser.stripeCustomerId,
+      components: {
+        payment_element: {
+          enabled: true,
+
+          features: {
+            payment_method_redisplay: "enabled", //display previously saved credit cards
+            payment_method_allow_redisplay_filters: [
+              //display previously saved credit cards of all types
+              "always",
+              "limited",
+              "unspecified",
+            ],
+            payment_method_remove: "enabled", //allows users to remove saved cards
+          },
+        },
+      },
+    });
+    if (!customerSession.client_secret) {
+      console.log("todo: figure out why this could be null");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Unable to retrieve client session secret",
+      });
+    }
+
+    return {
+      clientSecret: setupIntent.client_secret,
+      clientSessionSecret: customerSession.client_secret,
+    };
+  }),
+  createSetupIntentBooking: protectedProcedure.mutation(async ({ ctx }) => {
+    const [returnedUser] = await db
+      .select({ stripeCustomerId: user.stripeCustomerId })
+      .from(user)
+      .where(eq(user.id, ctx.session.user.id));
+
+    if (!returnedUser) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "User does not exist",
+      });
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer:
+        returnedUser.stripeCustomerId === null
+          ? undefined
+          : returnedUser.stripeCustomerId,
+      payment_method_types: ["card"],
+      usage: "off_session",
+    });
+
+    if (!setupIntent.client_secret) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Unable to retrieve client secret",
+      });
+    }
+
     return {
       clientSecret: setupIntent.client_secret,
     };
@@ -204,5 +268,29 @@ export const paymentRouter = createTRPCRouter({
       }
 
       await stripe.paymentMethods.detach(input.payment_id);
+    }),
+  getCodeDiscount: protectedProcedure
+    .input(
+      z.object({
+        code: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const [retrievedCode] = await db
+        .select({ code: rideCodes.code, discount: rideCodes.discount })
+        .from(rideCodes)
+        .where(eq(rideCodes.code, input.code));
+
+      if (!retrievedCode) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Code does not exist",
+        });
+      }
+
+      return {
+        code: retrievedCode.code,
+        discount: retrievedCode.discount,
+      };
     }),
 });

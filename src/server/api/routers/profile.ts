@@ -270,4 +270,32 @@ export const profileRouter = createTRPCRouter({
         });
       }
     }),
+  getNumberOfRides: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const [result] = await db
+        .select({
+          numberOfRides: profile.numberOfRides,
+        })
+        .from(profile)
+        .where(eq(profile.belongsTo, ctx.session.user.id));
+
+      if (!result) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "User does not have a profile record",
+        });
+      }
+
+      return result;
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get number of rides",
+        cause: error,
+      });
+    }
+  }),
 });
