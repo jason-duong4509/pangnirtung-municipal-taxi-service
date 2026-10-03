@@ -14,6 +14,7 @@ import {
 import {
   BookingTypes,
   BookingValueTypes,
+  PaymentMethods,
   PriorityRatingTypesNumber,
   ReportAppIssueChipTypes,
 } from "~/types/types";
@@ -435,4 +436,101 @@ export const checkBookingType = (
       errorMessage: "Improper booking type given",
     };
   }
+};
+
+export const checkPaymentMethodType = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: PaymentMethods } => {
+  let paymentType = undefined as PaymentMethods | undefined;
+
+  Object.values(PaymentMethods).forEach((type) => {
+    if (type === input) {
+      paymentType = type;
+    }
+  });
+
+  if (paymentType) {
+    return {
+      isProper: true,
+      formattedInput: paymentType,
+    };
+  } else {
+    return {
+      isProper: false,
+      errorMessage: "Improper payment method given",
+    };
+  }
+};
+
+export const checkBookingTypeAndPaymentMethod = (
+  bookingType: string,
+  paymentMethod: string,
+):
+  | { isProper: false; errorMessage: string }
+  | {
+      isProper: true;
+      formattedInput: {
+        bookingType: BookingValueTypes;
+        paymentMethod: PaymentMethods;
+      };
+    } => {
+  const bookingTypeCheck = checkBookingType(bookingType);
+  let formattedBookingType = undefined as undefined | BookingValueTypes;
+  if (bookingTypeCheck.isProper) {
+    formattedBookingType = bookingTypeCheck.formattedInput;
+  } else {
+    return {
+      isProper: false,
+      errorMessage: "Invalid booking type given",
+    };
+  }
+
+  const paymentMethodCheck = checkPaymentMethodType(paymentMethod);
+  let formattedPaymentMethod = undefined as undefined | PaymentMethods;
+  if (paymentMethodCheck.isProper) {
+    formattedPaymentMethod = paymentMethodCheck.formattedInput;
+  } else {
+    return {
+      isProper: false,
+      errorMessage: "Invalid payment method given",
+    };
+  }
+
+  if (
+    formattedBookingType === BookingValueTypes.OUT_OF_TOWN &&
+    formattedPaymentMethod === PaymentMethods.RIDES
+  ) {
+    return {
+      isProper: false,
+      errorMessage: "Rides cannot be used on out of town trips",
+    };
+  } else {
+    return {
+      isProper: true,
+      formattedInput: {
+        bookingType: formattedBookingType,
+        paymentMethod: formattedPaymentMethod,
+      },
+    };
+  }
+};
+
+export const checkRedeemCode = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: string } => {
+  if (!usernameRegex.test(input)) {
+    return {
+      isProper: false,
+      errorMessage: "Code can only be alphanumeric",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: input.toLowerCase(),
+  };
 };

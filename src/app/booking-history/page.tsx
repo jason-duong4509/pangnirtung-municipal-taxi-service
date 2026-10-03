@@ -264,7 +264,7 @@ export default function BookingHistoryPage() {
               destAddr: booking.destAddr,
               name: booking.name,
               reasonForTrip: booking.tripReason,
-              paymentMethod: formatString(booking.payment),
+              paymentMethod: formatString(booking.paymentMethod),
               paymentCode: null,
               id: booking.id,
               status: formatString(booking.status),
@@ -281,7 +281,7 @@ export default function BookingHistoryPage() {
               destAddr: booking.destAddr,
               name: booking.name,
               reasonForTrip: booking.tripReason,
-              paymentMethod: formatString(booking.payment),
+              paymentMethod: formatString(booking.paymentMethod),
               paymentCode: null,
               id: booking.id,
               status: formatString(booking.status),
@@ -329,7 +329,7 @@ export default function BookingHistoryPage() {
           </Table.Td>
           {!isMobile && (
             <>
-              <Table.Td>{formatString(booking.payment)}</Table.Td>
+              <Table.Td>{formatString(booking.paymentMethod)}</Table.Td>
               <Table.Td>
                 {booking.tripReason.length > 30
                   ? `${booking.tripReason.slice(0, 27)}...`

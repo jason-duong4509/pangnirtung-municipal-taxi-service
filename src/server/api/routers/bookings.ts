@@ -4,18 +4,21 @@ import { z } from "zod";
 import {
   checkAddress,
   checkBookingType,
+  checkBookingTypeAndPaymentMethod,
   checkEmail,
   checkName,
+  checkPaymentMethodType,
   checkPhoneNumber,
   checkPickUpTime,
+  checkRedeemCode,
   checkTripReason,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
-import { bookings, profile } from "~/server/db/schema";
+import { bookings, profile, rideCodes } from "~/server/db/schema";
 import {
   BookingStatus,
   type BookingValueTypes,
-  PaymentMethods,
+  type PaymentMethods,
   UserRoles,
 } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -105,12 +108,13 @@ export const bookingsRouter = createTRPCRouter({
         destAddr: z.string(),
         name: z.string(),
         tripReason: z.string(),
-        payment: z.nativeEnum(PaymentMethods),
+        paymentMethod: z.string(),
         reminders: z.boolean(),
         requestVerification: z.boolean(),
         contactEmail: z.string(),
         contactPhone: z.string(),
         bookingType: z.string(),
+        redeemCode: z.string().nullable(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -204,7 +208,55 @@ export const bookingsRouter = createTRPCRouter({
           message: bookingTypeCheck.errorMessage,
         });
       }
+      const paymentMethodTypeCheck = checkPaymentMethodType(
+        input.paymentMethod,
+      );
+      let paymentMethod = undefined as PaymentMethods | undefined;
+      if (paymentMethodTypeCheck.isProper) {
+        paymentMethod = paymentMethodTypeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: paymentMethodTypeCheck.errorMessage,
+        });
+      }
+      let rideCode = null as null | string;
+      if (input.redeemCode) {
+        const redeemCodeCheck = checkRedeemCode(input.redeemCode);
+        if (redeemCodeCheck.isProper) {
+          rideCode = redeemCodeCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: redeemCodeCheck.errorMessage,
+          });
+        }
+      }
+      const bookingTypeAndPaymentCheck = checkBookingTypeAndPaymentMethod(
+        input.bookingType,
+        input.paymentMethod,
+      );
+      if (!bookingTypeAndPaymentCheck.isProper) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: bookingTypeAndPaymentCheck.errorMessage,
+        });
+      }
       //------------------
+
+      if (rideCode) {
+        const [code] = await db
+          .select({ rideCode: rideCodes.code })
+          .from(rideCodes)
+          .where(eq(rideCodes.code, rideCode));
+
+        if (!code) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No code found",
+          });
+        }
+      }
 
       try {
         const [user] = await db
@@ -226,7 +278,7 @@ export const bookingsRouter = createTRPCRouter({
             name: name,
             pickupTime: pickupTime,
             tripReason: tripReason,
-            payment: input.payment,
+            paymentMethod: paymentMethod,
             reminders: input.reminders,
             created_by: ctx.session.user.id,
             requestVerification: user.isResident
@@ -235,6 +287,7 @@ export const bookingsRouter = createTRPCRouter({
             contactEmail: email === "" ? null : email,
             contactPhone: phoneNumber,
             bookingType: bookingType,
+            rideCode: rideCode,
           })
           .returning();
 
@@ -267,7 +320,6 @@ export const bookingsRouter = createTRPCRouter({
         name: z.string(),
         tripReason: z.string(),
         contactPhone: z.string(),
-        bookingType: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -367,16 +419,6 @@ export const bookingsRouter = createTRPCRouter({
           message: phoneNumberCheck.errorMessage,
         });
       }
-      const bookingTypeCheck = checkBookingType(input.bookingType);
-      let bookingType = undefined as BookingValueTypes | undefined;
-      if (bookingTypeCheck.isProper) {
-        bookingType = bookingTypeCheck.formattedInput;
-      } else {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: bookingTypeCheck.errorMessage,
-        });
-      }
       //------------------
 
       try {
@@ -390,7 +432,6 @@ export const bookingsRouter = createTRPCRouter({
             tripReason: tripReason,
             contactPhone: phoneNumber,
             updatedAt: new Date(),
-            bookingType: bookingType,
           })
           .where(eq(bookings.id, input.bookingId))
           .returning();

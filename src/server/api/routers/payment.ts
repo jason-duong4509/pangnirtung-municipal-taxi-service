@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
 import { db } from "~/server/db";
-import { user } from "~/server/db/schema";
+import { rideCodes, user } from "~/server/db/schema";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -204,5 +204,29 @@ export const paymentRouter = createTRPCRouter({
       }
 
       await stripe.paymentMethods.detach(input.payment_id);
+    }),
+  getCodeDiscount: protectedProcedure
+    .input(
+      z.object({
+        code: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const [retrievedCode] = await db
+        .select({ code: rideCodes.code, discount: rideCodes.discount })
+        .from(rideCodes)
+        .where(eq(rideCodes.code, input.code));
+
+      if (!retrievedCode) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Code does not exist",
+        });
+      }
+
+      return {
+        code: retrievedCode.code,
+        discount: retrievedCode.discount,
+      };
     }),
 });

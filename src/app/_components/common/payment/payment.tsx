@@ -8,14 +8,17 @@ import {
   Divider,
   Flex,
   Group,
+  Input,
   Loader,
   Modal,
   ScrollArea,
   SegmentedControl,
   Stack,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
+import { useForm } from "@mantine/form";
 import { useMediaQuery } from "@mantine/hooks";
 import { CreditCardIcon } from "@phosphor-icons/react";
 import {
@@ -24,24 +27,184 @@ import {
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-import { type JSX, useState } from "react";
+import {
+  type Dispatch,
+  type JSX,
+  type SetStateAction,
+  useEffect,
+  useState,
+} from "react";
+import { formatString } from "~/lib/helpers";
+import { checkRedeemCode } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { stripePromise } from "~/lib/stripe";
 import { api } from "~/trpc/react";
+import {
+  BOOKING_COSTS,
+  type BookingValueTypes,
+  PaymentMethods,
+} from "~/types/types";
 import TripLoading from "../trips/trip-loading";
 
-const PaymentForm = ({
+const PaymentFooter = ({
+  bookingType,
+  isLoading,
+  paymentMethod,
+  numberOfRides,
+  setDiscountCode,
+}: {
+  bookingType: BookingValueTypes;
+  isLoading: boolean;
+  paymentMethod: PaymentMethods;
+  numberOfRides?: number;
+  setDiscountCode: Dispatch<SetStateAction<string | null>>;
+}) => {
+  const [totalCost, setTotalCost] = useState(BOOKING_COSTS[bookingType]);
+  const [redeemCodeLoading, setRedeemCodeLoading] = useState(false);
+
+  useEffect(() => {
+    setTotalCost(BOOKING_COSTS[bookingType]);
+  }, [bookingType]);
+
+  const redeemCodeForm = useForm<{
+    code: string;
+  }>({
+    mode: "uncontrolled",
+
+    initialValues: {
+      code: "",
+    },
+
+    //Frontend field checks
+    validate: {
+      code: (value) => {
+        const result = checkRedeemCode(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+    },
+  });
+
+  const getCodeDiscountMutation = api.payment.getCodeDiscount.useMutation({
+    onSuccess: (data) => {
+      const discount = data.discount / 100;
+      showNotifications.success("Code successfully redeemed");
+      setRedeemCodeLoading(false);
+      setTotalCost(
+        () =>
+          BOOKING_COSTS[bookingType] - BOOKING_COSTS[bookingType] * discount,
+      );
+      setDiscountCode(data.code);
+    },
+    onError: (error) => {
+      setTotalCost(() => BOOKING_COSTS[bookingType]);
+      setDiscountCode(null);
+      showNotifications.error(
+        error.message ?? "An error occurred while validating ride code",
+      );
+      setRedeemCodeLoading(false);
+    },
+  });
+
+  const handleSubmit = async () => {
+    if (redeemCodeLoading) {
+      return;
+    }
+    setRedeemCodeLoading(true);
+
+    getCodeDiscountMutation.mutate({
+      code: redeemCodeForm.getValues().code,
+    });
+  };
+
+  return (
+    <>
+      <Group justify="space-between">
+        <div>
+          <Input.Label>Ride</Input.Label>
+          <Input.Description>{`${formatString(bookingType)} ($${BOOKING_COSTS[bookingType]})`}</Input.Description>
+        </div>
+
+        <Text>{`$${BOOKING_COSTS[bookingType]}`}</Text>
+      </Group>
+
+      {paymentMethod === PaymentMethods.RIDES && (
+        <Group justify="space-between">
+          <div>
+            <Input.Label>Available Ride Credits</Input.Label>
+            <Input.Description>Each credit covers 1 ride</Input.Description>
+          </div>
+
+          <Text>{numberOfRides}</Text>
+        </Group>
+      )}
+
+      {paymentMethod !== PaymentMethods.RIDES && (
+        <Group>
+          <TextInput
+            aria-label="Redeem code input"
+            flex={1}
+            key={redeemCodeForm.key("code")}
+            placeholder="Enter Discount Code"
+            {...redeemCodeForm.getInputProps("code")}
+          />
+          <Button
+            c={"black"}
+            color="buttonColor"
+            onClick={() => redeemCodeForm.onSubmit(handleSubmit)()}
+            type="button"
+            variant="filled"
+          >
+            {!redeemCodeLoading && "Redeem"}
+            {redeemCodeLoading && <Loader color="black" size={20} />}
+          </Button>
+        </Group>
+      )}
+
+      <Group justify="space-between">
+        <Input.Label>Total</Input.Label>
+        {paymentMethod === PaymentMethods.RIDES && <Text>1 Ride Credit</Text>}
+        {paymentMethod !== PaymentMethods.RIDES && <Text>${totalCost}</Text>}
+      </Group>
+
+      <Button
+        c={"black"}
+        color="buttonColor"
+        p={0}
+        size="compact-sm"
+        type="submit"
+        variant="filled"
+      >
+        {!isLoading && "Confirm and Pay"}
+        {isLoading && <Loader color="black" size={20} />}
+      </Button>
+    </>
+  );
+};
+
+const CreditCardPayment = ({
   clientSecret,
   onPaymentConfirm,
   onPaymentSuccess,
+  bookingType,
+  isLoading,
+  setIsLoading,
+  setDiscountCode,
 }: {
   clientSecret: string;
   onPaymentConfirm?: () => { proceedToPayment: boolean };
   onPaymentSuccess: () => void;
+  bookingType: BookingValueTypes;
+  isLoading: boolean;
+  setIsLoading: Dispatch<SetStateAction<boolean>>;
+  setDiscountCode: Dispatch<SetStateAction<string | null>>;
 }) => {
   const stripe = useStripe();
   const elements = useElements();
-  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (event: React.SubmitEvent) => {
     event.preventDefault();
@@ -93,19 +256,42 @@ const PaymentForm = ({
     <form onSubmit={handleSubmit}>
       <Stack>
         <PaymentElement />
-
-        <Button
-          c={"black"}
-          color="buttonColor"
-          p={0}
-          size="compact-sm"
-          type="submit"
-          variant="filled"
-        >
-          {!isLoading && "Confirm and Pay"}
-          {isLoading && <Loader color="black" size={20} />}
-        </Button>
+        <PaymentFooter
+          bookingType={bookingType}
+          isLoading={isLoading}
+          paymentMethod={PaymentMethods.CREDIT_CARD}
+          setDiscountCode={setDiscountCode}
+        />
       </Stack>
+    </form>
+  );
+};
+
+const PaymentForm = ({
+  onPaymentSuccess,
+  paymentMethod,
+  numberOfRides,
+  paymentFooter,
+}: {
+  onPaymentSuccess: () => void;
+  paymentMethod: PaymentMethods;
+  numberOfRides?: number;
+  paymentFooter: JSX.Element;
+}) => {
+  const handlePaymentSubmit = async (event: React.SubmitEvent) => {
+    event.preventDefault();
+
+    if (paymentMethod === PaymentMethods.RIDES && numberOfRides === 0) {
+      showNotifications.error("Not enough Ride credits to cover this trip");
+      return;
+    } else {
+      onPaymentSuccess();
+    }
+  };
+
+  return (
+    <form onSubmit={handlePaymentSubmit}>
+      <Stack>{paymentFooter}</Stack>
     </form>
   );
 };
@@ -119,6 +305,9 @@ export default function PaymentModal({
   closeModal,
   asideTabName,
   asideTabIcon,
+  bookingType,
+  paymentMethod,
+  setDiscountCode,
 }:
   | {
       asideContent?: never;
@@ -129,6 +318,9 @@ export default function PaymentModal({
       closeModal: () => void;
       asideTabName?: never;
       asideTabIcon?: never;
+      bookingType: BookingValueTypes;
+      paymentMethod: PaymentMethods;
+      setDiscountCode: Dispatch<SetStateAction<string | null>>;
     }
   | {
       asideContent: JSX.Element;
@@ -139,6 +331,9 @@ export default function PaymentModal({
       closeModal: () => void;
       asideTabName: string;
       asideTabIcon: JSX.Element;
+      bookingType: BookingValueTypes;
+      paymentMethod: PaymentMethods;
+      setDiscountCode: Dispatch<SetStateAction<string | null>>;
     }) {
   const [customerSecret, setCustomerSecret] = useState<string | undefined>(
     undefined,
@@ -149,6 +344,30 @@ export default function PaymentModal({
   const [firstLoad, setFirstLoad] = useState(true);
   const isMobile = useMediaQuery("(max-width: 800px)");
   const [tabView, setTabView] = useState("payment");
+  const [isLoading, setIsLoading] = useState(false);
+  const [rideCount, setRideCount] = useState(0);
+
+  const getRideCount = api.profile.getNumberOfRides.useQuery(undefined, {
+    //Forces manual fetching
+    enabled: false,
+  });
+
+  useEffect(() => {
+    if (modalOpened && paymentMethod === PaymentMethods.RIDES) {
+      getRideCount.refetch();
+    }
+  }, [modalOpened, paymentMethod, getRideCount.refetch]);
+
+  useEffect(() => {
+    if (!getRideCount.isFetching && getRideCount.error) {
+      showNotifications.error(
+        getRideCount.error.message ??
+          "An error occurred while fetching ride count",
+      );
+    } else if (!getRideCount.isFetching && getRideCount.data) {
+      setRideCount(getRideCount.data.numberOfRides);
+    }
+  }, [getRideCount.error, getRideCount.isFetching, getRideCount.data]);
 
   const createPaymentIntentMutation =
     api.payment.createPaymentIntent.useMutation({
@@ -161,7 +380,11 @@ export default function PaymentModal({
       },
     });
 
-  if (modalOpened && firstLoad) {
+  if (
+    modalOpened &&
+    firstLoad &&
+    paymentMethod === PaymentMethods.CREDIT_CARD
+  ) {
     setFirstLoad(false);
     createPaymentIntentMutation.mutate({
       pack: "100", //todo: change this to be an actual valid price
@@ -234,26 +457,52 @@ export default function PaymentModal({
           )}
           {((isMobile && tabView === "payment") || !isMobile) && (
             <Box flex={1}>
-              {customerSecret && (
-                <Elements
-                  options={{
-                    clientSecret: customerSecret,
-                    customerSessionClientSecret: customerSessionSecret,
-                  }}
-                  stripe={stripePromise}
-                >
-                  <PaymentForm
-                    clientSecret={customerSecret}
-                    onPaymentConfirm={onPaymentConfirm}
-                    onPaymentSuccess={() => {
-                      onPaymentSuccess();
-                      closeModal();
-                      setFirstLoad(true);
+              {customerSecret &&
+                paymentMethod === PaymentMethods.CREDIT_CARD && (
+                  <Elements
+                    options={{
+                      clientSecret: customerSecret,
+                      customerSessionClientSecret: customerSessionSecret,
                     }}
-                  />
-                </Elements>
+                    stripe={stripePromise}
+                  >
+                    <CreditCardPayment
+                      bookingType={bookingType}
+                      clientSecret={customerSecret}
+                      isLoading={isLoading}
+                      onPaymentConfirm={onPaymentConfirm}
+                      onPaymentSuccess={() => {
+                        onPaymentSuccess();
+                        closeModal();
+                        setFirstLoad(true);
+                      }}
+                      setDiscountCode={setDiscountCode}
+                      setIsLoading={setIsLoading}
+                    />
+                  </Elements>
+                )}
+              {!customerSecret &&
+                paymentMethod === PaymentMethods.CREDIT_CARD && <TripLoading />}
+              {paymentMethod !== PaymentMethods.CREDIT_CARD && (
+                <PaymentForm
+                  numberOfRides={rideCount}
+                  onPaymentSuccess={() => {
+                    onPaymentSuccess();
+                    closeModal();
+                    setFirstLoad(true);
+                  }}
+                  paymentFooter={
+                    <PaymentFooter
+                      bookingType={bookingType}
+                      isLoading={isLoading}
+                      numberOfRides={rideCount}
+                      paymentMethod={paymentMethod}
+                      setDiscountCode={setDiscountCode}
+                    />
+                  }
+                  paymentMethod={paymentMethod}
+                />
               )}
-              {!customerSecret && <TripLoading />}
             </Box>
           )}
         </Flex>
