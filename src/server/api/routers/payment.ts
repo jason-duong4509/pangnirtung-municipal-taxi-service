@@ -1,9 +1,9 @@
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
 import { db } from "~/server/db";
-import { rideCodes, user } from "~/server/db/schema";
+import { rideCodes, user, userUsedRideCode } from "~/server/db/schema";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -275,7 +275,7 @@ export const paymentRouter = createTRPCRouter({
         code: z.string(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [retrievedCode] = await db
         .select({ code: rideCodes.code, discount: rideCodes.discount })
         .from(rideCodes)
@@ -285,6 +285,23 @@ export const paymentRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Code does not exist",
+        });
+      }
+
+      const [userUsedCode] = await db
+        .select()
+        .from(userUsedRideCode)
+        .where(
+          and(
+            eq(userUsedRideCode.rideCode, input.code),
+            eq(userUsedRideCode.userId, ctx.session.user.id),
+          ),
+        );
+
+      if (userUsedCode) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Code already redeemed",
         });
       }
 

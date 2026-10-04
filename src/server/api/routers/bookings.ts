@@ -15,8 +15,16 @@ import {
   checkTripReason,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
-import { bookings, profile, rideCodes, user } from "~/server/db/schema";
 import {
+  bookings,
+  profile,
+  RideCodesRelations,
+  rideCodes,
+  user,
+  userUsedRideCode,
+} from "~/server/db/schema";
+import {
+  BOOKING_COSTS,
   BookingStatus,
   BookingValueTypes,
   PaymentMethods,
@@ -342,6 +350,13 @@ export const bookingsRouter = createTRPCRouter({
           });
         }
 
+        if (rideCode) {
+          await db.insert(userUsedRideCode).values({
+            rideCode: rideCode,
+            userId: ctx.session.user.id,
+          });
+        }
+
         const [insertedBooking] = await db
           .insert(bookings)
           .values({
@@ -539,44 +554,52 @@ export const bookingsRouter = createTRPCRouter({
           message: "No trips selected",
         });
       }
-      //TODO: add refund?
       try {
         await db.transaction(async (tx) => {
-          const whereClause =
-            ctx.session.user.role === UserRoles.MEMBER
-              ? and(
-                  eq(bookings.created_by, ctx.session.user.id),
-                  inArray(bookings.id, input.bookingIds),
-                  eq(bookings.status, BookingStatus.PENDING),
-                )
-              : ctx.session.user.role === UserRoles.DRIVER
+          for (const bookingId of input.bookingIds) {
+            const whereClause =
+              ctx.session.user.role === UserRoles.MEMBER
                 ? and(
-                    inArray(bookings.id, input.bookingIds),
-                    eq(bookings.status, BookingStatus.IN_PROGRESS),
+                    eq(bookings.created_by, ctx.session.user.id),
+                    eq(bookings.id, bookingId),
+                    eq(bookings.status, BookingStatus.PENDING),
                   )
-                : inArray(bookings.id, input.bookingIds);
+                : ctx.session.user.role === UserRoles.DRIVER
+                  ? and(
+                      eq(bookings.id, bookingId),
+                      eq(bookings.status, BookingStatus.IN_PROGRESS),
+                    )
+                  : eq(bookings.id, bookingId);
 
-          const cancelledBookingIds = await tx
-            .update(bookings)
-            .set({
-              status: BookingStatus.CANCELLED,
-              updatedAt: new Date(),
-            })
-            .where(whereClause)
-            .returning({ id: bookings.id });
+            const [cancelledBookingId] = await tx
+              .update(bookings)
+              .set({
+                status: BookingStatus.CANCELLED,
+                updatedAt: new Date(),
+              })
+              .where(whereClause)
+              .returning({ id: bookings.id, usedRideCode: bookings.rideCode });
 
-          if (cancelledBookingIds.length !== input.bookingIds.length) {
-            const cancelledBookingsList = cancelledBookingIds.map(
-              (obj) => obj.id,
-            );
-            const missingBookingIds = input.bookingIds.filter(
-              (id) => !cancelledBookingsList.includes(id),
-            );
+            if (!cancelledBookingId) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Booking ID not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${bookingId}`,
+              });
+            }
 
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Booking IDs not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${missingBookingIds}`,
-            });
+            if (cancelledBookingId.usedRideCode) {
+              await tx
+                .delete(userUsedRideCode)
+                .where(
+                  and(
+                    eq(
+                      userUsedRideCode.rideCode,
+                      cancelledBookingId.usedRideCode,
+                    ),
+                    eq(userUsedRideCode.userId, ctx.session.user.id),
+                  ),
+                );
+            }
           }
         });
       } catch (error) {
@@ -614,33 +637,117 @@ export const bookingsRouter = createTRPCRouter({
 
       try {
         await db.transaction(async (tx) => {
-          const whereClause =
-            ctx.session.user.role === UserRoles.DRIVER
-              ? and(
-                  inArray(bookings.id, input.bookingIds),
-                  eq(bookings.status, BookingStatus.PENDING),
-                )
-              : inArray(bookings.id, input.bookingIds);
+          for (const bookingId of input.bookingIds) {
+            const whereClause =
+              ctx.session.user.role === UserRoles.DRIVER
+                ? and(
+                    eq(bookings.id, bookingId),
+                    eq(bookings.status, BookingStatus.PENDING),
+                  )
+                : eq(bookings.id, bookingId);
 
-          const updatedBookingIds = await tx
-            .update(bookings)
-            .set({
-              status: BookingStatus.IN_PROGRESS,
-              updatedAt: new Date(),
-            })
-            .where(whereClause)
-            .returning({ id: bookings.id });
+            const [result] = await tx
+              .select()
+              .from(bookings)
+              .where(whereClause)
+              .innerJoin(user, eq(bookings.created_by, user.id))
+              .innerJoin(profile, eq(bookings.created_by, profile.belongsTo));
 
-          if (updatedBookingIds.length !== input.bookingIds.length) {
-            const updatedBookingsList = updatedBookingIds.map((obj) => obj.id);
-            const missingBookingIds = input.bookingIds.filter(
-              (id) => !updatedBookingsList.includes(id),
-            );
+            if (!result) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Booking ID ${bookingId} not found`,
+              });
+            }
 
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Booking IDs not found${ctx.session.user.role === UserRoles.DRIVER ? " or not pending" : ""}: ${missingBookingIds}`,
-            });
+            let rideCodeDiscount = 0;
+            if (result.bookings.rideCode) {
+              //User used a ride code
+              //--Get ride code discount--
+              const [redeemedCode] = await tx
+                .select()
+                .from(rideCodes)
+                .where(eq(rideCodes.code, result.bookings.rideCode));
+              if (!redeemedCode) {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: `Failed to find the discount rate for ride code ${result.bookings.rideCode}`,
+                });
+              } else {
+                rideCodeDiscount = redeemedCode.discount / 100;
+              }
+              //--------------------------
+            }
+
+            //--Charge by payment method--
+            if (result.bookings.paymentMethod === PaymentMethods.CREDIT_CARD) {
+              if (!result.bookings.stripePaymentMethodId) {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: `Booking ID ${bookingId} missing stripe payment ID`,
+                });
+              }
+
+              try {
+                const discount =
+                  BOOKING_COSTS[result.bookings.bookingType] *
+                  100 *
+                  rideCodeDiscount;
+                await stripe.paymentIntents.create({
+                  //charge the user's credit card
+                  amount:
+                    BOOKING_COSTS[result.bookings.bookingType] * 100 - discount,
+                  currency: "cad",
+                  customer: result.user.stripeCustomerId!,
+                  payment_method: result.bookings.stripePaymentMethodId,
+                  off_session: true,
+                  confirm: true,
+                });
+              } catch (error) {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: `Stripe payment encountered an error on booking ID ${result.bookings.id}`,
+                });
+              }
+            } else if (result.bookings.paymentMethod === PaymentMethods.RIDES) {
+              if (result.profile.numberOfRides === 0) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: `Booking ID ${bookingId} does not have enough ride credits to cover the trip`,
+                });
+              }
+
+              const [updatedUser] = await tx
+                .update(profile)
+                .set({
+                  numberOfRides: result.profile.numberOfRides - 1,
+                })
+                .where(eq(profile.belongsTo, result.user.id))
+                .returning();
+
+              if (!updatedUser) {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: `Failed to update ride credits for user ${result.user.id}`,
+                });
+              }
+            }
+            //--Charge by payment method--
+
+            await tx
+              .update(bookings)
+              .set({
+                ...(result.bookings.paymentMethod === PaymentMethods.CREDIT_CARD
+                  ? { paid: true }
+                  : {}),
+                ...(result.bookings.paymentMethod === PaymentMethods.RIDES
+                  ? { paid: true }
+                  : {}),
+                status: BookingStatus.IN_PROGRESS,
+                updatedAt: new Date(),
+              })
+              .where(whereClause)
+              .returning({ id: bookings.id });
           }
         });
       } catch (error) {
@@ -713,6 +820,92 @@ export const bookingsRouter = createTRPCRouter({
           (user) => user.requestVerification === true,
         );
         return requestedVerification;
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update booking",
+          cause: error,
+        });
+      }
+    }),
+  requestBookingDetailAdjustment: protectedProcedure
+    .input(
+      z.object({
+        bookingType: z.string(),
+        bookingId: z.number(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (
+        ctx.session.user.role !== UserRoles.DRIVER &&
+        ctx.session.user.role !== UserRoles.ADMIN
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not allowed to perform this action",
+        });
+      }
+
+      const [bookingToUpdate] = await db
+        .select()
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.id, input.bookingId),
+            eq(bookings.created_by, ctx.session.user.id),
+          ),
+        );
+
+      if (!bookingToUpdate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Booking ID ${input.bookingId} not found`,
+        });
+      } else if (bookingToUpdate.status !== BookingStatus.PENDING) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot make changes to an non-pending trip",
+        });
+      } else if (bookingToUpdate.bookingType === input.bookingType) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Booking already of this type",
+        });
+      }
+
+      //--Input checking--
+      const bookingTypecheck = checkBookingType(input.bookingType);
+      let bookingType = undefined as undefined | BookingValueTypes;
+      if (bookingTypecheck.isProper) {
+        bookingType = bookingTypecheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: bookingTypecheck.errorMessage,
+        });
+      }
+      //------------------
+
+      try {
+        const [result] = await db
+          .update(bookings)
+          .set({
+            bookingType: bookingType,
+            requiresAdjustment: true,
+            updatedAt: new Date(),
+          })
+          .where(eq(bookings.id, input.bookingId))
+          .returning();
+
+        if (!result) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No bookings found to update",
+          });
+        }
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;

@@ -28,7 +28,11 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import { BookingStatus, UserRoles } from "~/types/types";
+import {
+  BookingStatus,
+  type BookingValueTypes,
+  UserRoles,
+} from "~/types/types";
 import AlertPopup from "../_components/common/alert/alert";
 import CustomAppShell from "../_components/common/appShell/app-shell";
 import AsideButton from "../_components/common/appShell/aside-button";
@@ -38,6 +42,7 @@ import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
 import ConfirmResidencyModal from "../_components/driverComponents/confirm-residency-modal";
+import RequestAdjustmentModal from "../_components/driverComponents/request-adjustment-modal";
 import LogOutModal from "../_components/logout/logout";
 
 type verifiedResidents = RouterOutputs["bookings"]["complete"];
@@ -80,6 +85,10 @@ export default function DriverPage() {
     logoutModalOpened,
     { open: openLogoutModal, close: closeLogoutModal },
   ] = useDisclosure(false);
+  const [
+    requestAdjustmentModalOpened,
+    { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
+  ] = useDisclosure(false);
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.DRIVER && showLoadingUI) {
@@ -110,6 +119,7 @@ export default function DriverPage() {
     updatedAt: Date;
     verificationRequested: boolean;
     phoneNumber: string;
+    bookingType: BookingValueTypes;
   }>({
     mode: "uncontrolled",
   });
@@ -212,12 +222,13 @@ export default function DriverPage() {
               destAddr: booking.destAddr,
               name: booking.name,
               reasonForTrip: booking.tripReason,
-              paymentMethod: formatString(booking.payment),
+              paymentMethod: formatString(booking.paymentMethod),
               id: booking.id,
               createdAt: booking.createdAt,
               updatedAt: booking.updatedAt,
               verificationRequested: booking.requestVerification,
               phoneNumber: booking.contactPhone,
+              bookingType: booking.bookingType,
             });
 
             openDrawer();
@@ -253,7 +264,9 @@ export default function DriverPage() {
               ? `${booking.destAddr.slice(0, 12)}...`
               : booking.destAddr}
           </Table.Td>
-          {!isPhone && <Table.Td>{formatString(booking.payment)}</Table.Td>}
+          {!isPhone && (
+            <Table.Td>{formatString(booking.paymentMethod)}</Table.Td>
+          )}
           {!isMobile && (
             <Table.Td>{booking.requestVerification ? "Yes" : "No"}</Table.Td>
           )}
@@ -283,6 +296,12 @@ export default function DriverPage() {
   return (
     <>
       <aside>
+        <RequestAdjustmentModal
+          bookingId={form.getValues().id}
+          closeModal={closeRequestAdjustmentModal}
+          currentBookingType={form.getValues().bookingType}
+          modalOpened={requestAdjustmentModalOpened}
+        />
         <ManageAccountModal
           closeModal={closeManageAccountModal}
           modalOpened={manageAccountModalOpened}
@@ -332,6 +351,12 @@ export default function DriverPage() {
               label="Contact Number"
               readOnly
               value={form.getValues().phoneNumber}
+              variant="unstyled"
+            />
+            <TextInput
+              label="Booking Type"
+              readOnly
+              value={formatString(form.getValues().bookingType ?? "")}
               variant="unstyled"
             />
             <TextInput
@@ -409,6 +434,19 @@ export default function DriverPage() {
                     variant="outline"
                   >
                     Cancel Trip
+                  </Button>
+                )}
+                {viewPendingTrips && (
+                  <Button
+                    c={"black"}
+                    color="buttonColor"
+                    onClick={() => openRequestAdjustmentModal()}
+                    p={0}
+                    size="compact-sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Request Adjustment
                   </Button>
                 )}
                 <Button
