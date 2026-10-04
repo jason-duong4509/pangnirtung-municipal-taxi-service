@@ -319,6 +319,7 @@ export default function PaymentModal({
   paymentMethod,
   setDiscountCode,
   setStripePaymentMethodId,
+  modalSize,
 }:
   | {
       asideContent?: never;
@@ -333,6 +334,7 @@ export default function PaymentModal({
       paymentMethod: PaymentMethods;
       setDiscountCode: Dispatch<SetStateAction<string | null>>;
       setStripePaymentMethodId: (v: string) => void;
+      modalSize?: string;
     }
   | {
       asideContent: JSX.Element;
@@ -347,6 +349,7 @@ export default function PaymentModal({
       paymentMethod: PaymentMethods;
       setDiscountCode: Dispatch<SetStateAction<string | null>>;
       setStripePaymentMethodId: (v: string) => void;
+      modalSize?: string;
     }) {
   const [customerSecret, setCustomerSecret] = useState<string | undefined>(
     undefined,
@@ -415,7 +418,7 @@ export default function PaymentModal({
       onClose={onCloseCleanup}
       opened={modalOpened}
       radius={"lg"}
-      size={"100%"}
+      size={modalSize ?? "100%"}
       withCloseButton={false}
     >
       <Stack gap={"lg"} p={"md"}>

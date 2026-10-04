@@ -66,7 +66,6 @@ import {
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
-import { paymentMethod } from "~/server/db/schema";
 import { api } from "~/trpc/react";
 import { BookingTypes, BookingValueTypes, PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
@@ -1222,8 +1221,8 @@ export default function BookingForm({
         closeModal={closePaymentModal}
         modalOpened={paymentModalOpened}
         onClose={() => {
-          setFormState(BookingUIStates.Payment),
-            setPrevFormState(BookingUIStates.Payment2);
+          setFormState(BookingUIStates.Payment);
+          setPrevFormState(BookingUIStates.Payment2);
         }}
         onPaymentConfirm={() => {
           const { hasErrors } = bookingForm.validate();

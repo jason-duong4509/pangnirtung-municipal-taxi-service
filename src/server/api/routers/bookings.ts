@@ -12,13 +12,13 @@ import {
   checkPhoneNumber,
   checkPickUpTime,
   checkRedeemCode,
+  checkRedeemedCode,
   checkTripReason,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import {
   bookings,
   profile,
-  RideCodesRelations,
   rideCodes,
   user,
   userUsedRideCode,
@@ -59,6 +59,51 @@ export const bookingsRouter = createTRPCRouter({
             and(
               eq(bookings.id, input.bookingId),
               eq(bookings.created_by, ctx.session.user.id),
+            ),
+          );
+
+        if (!result) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Booking does not exist",
+          });
+        }
+        return result;
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get booking",
+          cause: error,
+        });
+      }
+    }),
+  getConfirmationBooking: protectedProcedure
+    .input(
+      z.object({
+        bookingId: z.number(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (ctx.session.user.role !== UserRoles.MEMBER) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Query is only available to members",
+        });
+      }
+
+      try {
+        const [result] = await db
+          .select()
+          .from(bookings)
+          .where(
+            and(
+              eq(bookings.id, input.bookingId),
+              eq(bookings.created_by, ctx.session.user.id),
+              eq(bookings.requiresAdjustment, true),
+              eq(bookings.status, BookingStatus.PENDING),
             ),
           );
 
@@ -351,6 +396,22 @@ export const bookingsRouter = createTRPCRouter({
         }
 
         if (rideCode) {
+          const [alreadyUsedCode] = await db
+            .select()
+            .from(userUsedRideCode)
+            .where(
+              and(
+                eq(userUsedRideCode.rideCode, rideCode),
+                eq(userUsedRideCode.userId, ctx.session.user.id),
+              ),
+            );
+
+          if (alreadyUsedCode) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Ride codes already redeemed",
+            });
+          }
           await db.insert(userUsedRideCode).values({
             rideCode: rideCode,
             userId: ctx.session.user.id,
@@ -617,26 +678,166 @@ export const bookingsRouter = createTRPCRouter({
     .input(
       z.object({
         bookingIds: z.array(z.number()),
+        newRideCode: z.string().optional(),
+        newPaymentMethod: z.string().optional(),
+        newStripePaymentId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (
-        ctx.session.user.role !== UserRoles.DRIVER &&
-        ctx.session.user.role !== UserRoles.ADMIN
-      ) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Not allowed to accept trips and mark in progress",
-        });
-      } else if (input.bookingIds.length === 0) {
+      if (input.bookingIds.length === 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "No trips selected",
         });
+      } else if (
+        input.bookingIds.length !== 1 &&
+        ctx.session.user.role === UserRoles.MEMBER
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Not allowed to bulk cancel trips",
+        });
       }
+
+      //--Input check on optional fields--
+      let newRideCode = "" as string;
+      if (input.newRideCode) {
+        const rideCodeCheck = checkRedeemedCode(input.newRideCode);
+        if (rideCodeCheck.isProper) {
+          newRideCode = rideCodeCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: rideCodeCheck.errorMessage,
+          });
+        }
+      }
+      let newPaymentMethod = undefined as undefined | PaymentMethods;
+      if (input.newPaymentMethod) {
+        const paymentMethodCheck = checkPaymentMethodType(
+          input.newPaymentMethod,
+        );
+        if (paymentMethodCheck.isProper) {
+          newPaymentMethod = paymentMethodCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: paymentMethodCheck.errorMessage,
+          });
+        }
+      }
+      //--Input check on optional fields--
 
       try {
         await db.transaction(async (tx) => {
+          //--members: Update payment information in booking form before accepting--
+          if (ctx.session.user.role === UserRoles.MEMBER) {
+            //--Input checks on optional fields--
+            if (!input.newPaymentMethod) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Payment method required",
+              });
+            }
+            const [returnedBooking] = await tx
+              .select()
+              .from(bookings)
+              .where(
+                and(
+                  eq(bookings.id, input.bookingIds[0] as number),
+                  eq(bookings.created_by, ctx.session.user.id),
+                ),
+              );
+            if (!returnedBooking) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "No booking found",
+              });
+            } else if (
+              returnedBooking.bookingType === BookingValueTypes.OUT_OF_TOWN &&
+              newPaymentMethod === PaymentMethods.RIDES
+            ) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message:
+                  "Ride credits cannot be used to cover out of town trips",
+              });
+            } else if (
+              newPaymentMethod === PaymentMethods.CREDIT_CARD &&
+              !input.newStripePaymentId
+            ) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Missing stripe payment ID",
+              });
+            }
+
+            if (returnedBooking.rideCode) {
+              //--Free up ride code used in the booking to accept--
+              await tx
+                .delete(userUsedRideCode)
+                .where(
+                  and(
+                    eq(userUsedRideCode.rideCode, returnedBooking.rideCode),
+                    eq(userUsedRideCode.userId, ctx.session.user.id),
+                  ),
+                );
+              //--Free up ride code used in the booking to accept--
+            }
+
+            if (input.newRideCode) {
+              const [retrievedCode] = await tx
+                .select({ code: rideCodes.code, discount: rideCodes.discount })
+                .from(rideCodes)
+                .where(eq(rideCodes.code, newRideCode));
+
+              if (!retrievedCode) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Code does not exist",
+                });
+              }
+
+              const [userUsedCode] = await tx
+                .select()
+                .from(userUsedRideCode)
+                .where(
+                  and(
+                    eq(userUsedRideCode.rideCode, newRideCode),
+                    eq(userUsedRideCode.userId, ctx.session.user.id),
+                  ),
+                );
+
+              if (userUsedCode) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Code already redeemed",
+                });
+              }
+
+              await tx.insert(userUsedRideCode).values({
+                rideCode: newRideCode,
+                userId: ctx.session.user.id,
+              });
+            }
+            //--Input checks on optional fields--
+
+            await tx
+              .update(bookings)
+              .set({
+                paymentMethod: newPaymentMethod,
+                ...(newPaymentMethod === PaymentMethods.CREDIT_CARD
+                  ? { stripePaymentMethodId: input.newStripePaymentId }
+                  : { stripePaymentMethodId: null }),
+                ...(input.newRideCode &&
+                newPaymentMethod !== PaymentMethods.RIDES
+                  ? { rideCode: newRideCode }
+                  : { rideCode: null }),
+              })
+              .where(eq(bookings.id, input.bookingIds[0] as number));
+          }
+          //--members: Update payment information in booking form before accepting--
+
           for (const bookingId of input.bookingIds) {
             const whereClause =
               ctx.session.user.role === UserRoles.DRIVER
@@ -644,7 +845,13 @@ export const bookingsRouter = createTRPCRouter({
                     eq(bookings.id, bookingId),
                     eq(bookings.status, BookingStatus.PENDING),
                   )
-                : eq(bookings.id, bookingId);
+                : ctx.session.user.role === UserRoles.MEMBER
+                  ? and(
+                      eq(bookings.id, bookingId),
+                      eq(bookings.status, BookingStatus.PENDING),
+                      eq(bookings.created_by, ctx.session.user.id),
+                    )
+                  : eq(bookings.id, bookingId);
 
             const [result] = await tx
               .select()
@@ -685,6 +892,16 @@ export const bookingsRouter = createTRPCRouter({
                 throw new TRPCError({
                   code: "INTERNAL_SERVER_ERROR",
                   message: `Booking ID ${bookingId} missing stripe payment ID`,
+                });
+              }
+
+              const paymentMethod = await stripe.paymentMethods.retrieve(
+                result.bookings.stripePaymentMethodId,
+              );
+              if (paymentMethod.customer !== result.user.stripeCustomerId) {
+                throw new TRPCError({
+                  code: "FORBIDDEN",
+                  message: "Payment method ID does not belong to user",
                 });
               }
 
@@ -742,6 +959,9 @@ export const bookingsRouter = createTRPCRouter({
                   : {}),
                 ...(result.bookings.paymentMethod === PaymentMethods.RIDES
                   ? { paid: true }
+                  : {}),
+                ...(result.bookings.paymentMethod === PaymentMethods.CASH
+                  ? { paid: false }
                   : {}),
                 status: BookingStatus.IN_PROGRESS,
                 updatedAt: new Date(),
@@ -917,4 +1137,40 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
+  getAdjustmentRequestedBooking: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== UserRoles.MEMBER) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Query is only available to members",
+      });
+    }
+
+    try {
+      const [adjustmentRequestedBooking] = await db
+        .select()
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.created_by, ctx.session.user.id),
+            eq(bookings.requiresAdjustment, true),
+            eq(bookings.status, BookingStatus.PENDING),
+          ),
+        )
+        .limit(1);
+
+      if (!adjustmentRequestedBooking) {
+        return null;
+      }
+      return `/confirm-booking/${adjustmentRequestedBooking.id}`;
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get adjustment requested bookings",
+        cause: error,
+      });
+    }
+  }),
 });
