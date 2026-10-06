@@ -11,6 +11,7 @@ export const BOOKING_COSTS = {
 };
 
 export const RIDE_CREDIT_COST = 12;
+export const MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE = 50;
 
 export enum BookingValueTypes {
   IN_TOWN = "in_town",

@@ -4,6 +4,10 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { db } from "~/server/db";
 import { rideCodes, user, userUsedRideCode } from "~/server/db/schema";
+import {
+  MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE,
+  RIDE_CREDIT_COST,
+} from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -11,10 +15,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 export const paymentRouter = createTRPCRouter({
-  createPaymentIntent: protectedProcedure //todo: implement payment costs
+  createPaymentIntent: protectedProcedure
     .input(
       z.object({
-        pack: z.enum(["100", "500", "1000"]),
+        numberOfRides: z.number(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -30,25 +34,18 @@ export const paymentRouter = createTRPCRouter({
         });
       }
 
-      const packs = {
-        "100": {
-          amount: 100,
-          credits: 100,
-        },
-        "500": {
-          amount: 500,
-          credits: 500,
-        },
-        "1000": {
-          amount: 1000,
-          credits: 1000,
-        },
-      };
-
-      const pack = packs[input.pack];
+      if (
+        input.numberOfRides < 1 ||
+        input.numberOfRides > MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Not allowed to purchase ${input.numberOfRides} ride credits`,
+        });
+      }
 
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: pack.amount,
+        amount: RIDE_CREDIT_COST * input.numberOfRides * 100,
         currency: "cad",
         customer:
           returnedUser.stripeCustomerId === null
@@ -58,16 +55,8 @@ export const paymentRouter = createTRPCRouter({
         setup_future_usage: "off_session",
         metadata: {
           userId: ctx.session.user.id,
-          purchaseType: "booking", //TODO: make it "ride" if ride
-          quantity: 1, //TODO: make it not 1 if ride, unless purchased 1 ride
-          cost: 10, //TODO: implement properly
-          ridesUsed: 0, //TODO: implement properly (if buying rides, N/A or 0)
+          quantity: input.numberOfRides,
         },
-        //when doing webhook:
-        //grab from the db the newest entry that matches the metadata fields
-        //if none exist, we assume then that the booking was not successful but payment was, we initiate a refund based on intentid
-        //if we find the row, we add an intent id and change the status to PAID
-        //purchases were theres no intent id nor paid status cannot be refunded, maybe tell the user to file a complaint when that happens
       });
       if (!paymentIntent.client_secret) {
         throw new TRPCError({
@@ -100,7 +89,6 @@ export const paymentRouter = createTRPCRouter({
         },
       });
       if (!customerSession.client_secret) {
-        console.log("todo: figure out why this could be null");
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Unable to retrieve client session secret",
@@ -164,7 +152,6 @@ export const paymentRouter = createTRPCRouter({
       },
     });
     if (!customerSession.client_secret) {
-      console.log("todo: figure out why this could be null");
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Unable to retrieve client session secret",

@@ -1,5 +1,9 @@
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { db } from "~/server/db";
+import { profile } from "~/server/db/schema";
+import { MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE } from "~/types/types";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -32,13 +36,24 @@ export async function POST(request: Request) {
   if (event.type === "payment_intent.succeeded") {
     //If stripe responded with a payment succeeded event
     const paymentIntent = event.data.object;
-    const orderId = paymentIntent.metadata.orderId;
-    //TODO: insert db update call
-    //TODO: upon clicking confrim and pay on frontend, have that call the create booking endpoint
-    //then, the endpoint will make a booking with a new column PAID? and mark it as unpaid
-    //let stripe handle the rest, on success for the stripe form, close and go to the end ui for the booking form
-    // when this webhook fires, insert db update call for the corresponding booking and set paid to true
-    //after all of this, add refunding via canceling trips and then managing saved credit cards
+    const userId = paymentIntent.metadata.userId;
+    const rideQuantity = Number(paymentIntent.metadata.quantity);
+
+    const invalidRideQuantity =
+      isNaN(rideQuantity) ||
+      rideQuantity < 1 ||
+      rideQuantity > MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE;
+    if (invalidRideQuantity || !userId) {
+      return;
+    }
+
+    await db
+      .update(profile)
+      .set({
+        numberOfRides: sql`${profile.numberOfRides} + ${rideQuantity}`,
+      })
+      .where(eq(profile.belongsTo, userId))
+      .returning();
   }
 
   return new NextResponse("ok", {

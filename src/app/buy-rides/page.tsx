@@ -20,33 +20,55 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import PangSeal from "~/assets/icons/pang";
 import RideTicket from "~/assets/icons/ride-ticket";
+import { showNotifications } from "~/lib/mantine-notifications-system";
+import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
-import { UserRoles } from "~/types/types";
+import { api } from "~/trpc/react";
+import {
+  MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE,
+  RIDE_CREDIT_COST,
+  UserRoles,
+} from "~/types/types";
 import AlertPopup from "../_components/common/alert/alert";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
+import PaymentModalRideCredit from "../_components/common/payment/buy-rides-payment";
+
+type userData = RouterOutputs["users"]["getSelf"][0];
 
 const ItemDrawer = ({
   drawerOpened,
   closeDrawer,
+  numberOfRidesOwned,
 }: {
   drawerOpened: boolean;
   closeDrawer: () => void;
+  numberOfRidesOwned: number;
 }) => {
   const [
     buyRideNum,
     { increment: increaseRideNum, decrement: decreaseRideNum },
-  ] = useCounter(1, { min: 1, max: 50 });
+  ] = useCounter(1, { min: 1, max: MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE });
   const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
     useDisclosure(false);
+  const [
+    paymentModalOpened,
+    { open: openPaymentModal, close: closePaymentModal },
+  ] = useDisclosure(false);
 
   return (
     <>
+      <PaymentModalRideCredit
+        closeModal={closePaymentModal}
+        modalOpened={paymentModalOpened}
+        numberOfRidesPurchased={buyRideNum}
+      />
       <AlertPopup
         abortButtonText={"Back"}
         body={
           <>
             <Text>
-              Buying {buyRideNum} Rides for ${10 * buyRideNum}. Are you sure?
+              Buying {buyRideNum} Rides for ${RIDE_CREDIT_COST * buyRideNum}.
+              Are you sure?
             </Text>
             <Text>This cannot be refunded!</Text>
           </>
@@ -55,7 +77,11 @@ const ItemDrawer = ({
         confirmButtonText={"Confirm"}
         isLoading={false}
         modalOpened={alertModalOpened}
-        onConfirm={() => console.log("buying rides")}
+        onConfirm={() => {
+          openPaymentModal();
+          closeAlertModal();
+          closeDrawer();
+        }}
         titleText={"Confirm Purchase"}
       />
       <Drawer
@@ -79,7 +105,7 @@ const ItemDrawer = ({
             <Title order={4} ta={"center"}>
               Ride x1
             </Title>
-            <Text ta={"center"}>Owned: 5</Text>
+            <Text ta={"center"}>Owned: {numberOfRidesOwned}</Text>
             <Text c={"red"} ta={"center"}>
               Rides cannot be refunded after purchased
             </Text>
@@ -112,7 +138,7 @@ const ItemDrawer = ({
           </ActionIcon.Group>
           <Grid>
             <Grid.Col span={6}>
-              <Text>{`$${10 * buyRideNum}`}</Text>
+              <Text>{`$${RIDE_CREDIT_COST * buyRideNum}`}</Text>
             </Grid.Col>
             <Grid.Col span={6}>
               <Button
@@ -132,13 +158,17 @@ const ItemDrawer = ({
   );
 };
 
-const ShopItem = () => {
+const ShopItem = ({ numberOfRidesOwned }: { numberOfRidesOwned: number }) => {
   const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
     useDisclosure(false);
 
   return (
     <>
-      <ItemDrawer closeDrawer={closeDrawer} drawerOpened={drawerOpened} />
+      <ItemDrawer
+        closeDrawer={closeDrawer}
+        drawerOpened={drawerOpened}
+        numberOfRidesOwned={numberOfRidesOwned}
+      />
       <Card h={300} padding="lg" radius="md" shadow="sm" w={250} withBorder>
         <Card.Section bg={"grey"} h={200}>
           <Flex align="center" h={"100%"} justify="center">
@@ -152,7 +182,7 @@ const ShopItem = () => {
         </Group>
 
         <Text c="dimmed" size="sm">
-          Rides cover trip costs at a discounted price!
+          Ride credits cover trip in-town ride costs at a discounted price!
         </Text>
 
         <Button
@@ -174,14 +204,49 @@ export default function BuyRidesPage() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const [showLoadingUI, setShowLoadingUI] = useState(true);
+  const [userData, setUserData] = useState<userData>();
+
+  const getUsersQuery = api.users.getSelf.useQuery(undefined, {
+    //Forces manual fetching
+    enabled: false,
+  });
 
   useEffect(() => {
-    if (!isPending && session?.user.role !== UserRoles.MEMBER) {
+    if (session && session.user.role === UserRoles.MEMBER) {
+      getUsersQuery.refetch();
+    } else if (
+      (session && session.user.role !== UserRoles.MEMBER) ||
+      (!isPending && !session)
+    ) {
       router.replace("/");
-    } else if (!isPending && session?.user.role === UserRoles.MEMBER) {
-      setShowLoadingUI(false);
     }
-  }, [session, router, isPending]);
+  }, [session, router, isPending, getUsersQuery.refetch]);
+
+  useEffect(() => {
+    if (!getUsersQuery.isFetching && getUsersQuery.error) {
+      showNotifications.error(
+        getUsersQuery.error.message ??
+          "An error occurred while fetching user data",
+      );
+    } else if (
+      !getUsersQuery.isFetching &&
+      getUsersQuery.data &&
+      getUsersQuery.data[0]
+    ) {
+      const notAResident = !getUsersQuery.data[0].profile.isResident;
+      if (notAResident) {
+        router.replace("/");
+      } else {
+        setShowLoadingUI(false);
+        setUserData(getUsersQuery.data[0]);
+      }
+    }
+  }, [
+    getUsersQuery.isFetching,
+    getUsersQuery.error,
+    getUsersQuery.data,
+    router,
+  ]);
 
   if (showLoadingUI) {
     return <LoadingScreen />;
@@ -224,7 +289,9 @@ export default function BuyRidesPage() {
               py={"xl"}
               wrap="wrap"
             >
-              <ShopItem />
+              <ShopItem
+                numberOfRidesOwned={userData?.profile.numberOfRides ?? 0}
+              />
             </Flex>
           </ScrollArea.Autosize>
         </Flex>
