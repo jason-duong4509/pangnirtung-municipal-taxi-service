@@ -1037,9 +1037,15 @@ export const bookingsRouter = createTRPCRouter({
         });
 
         const requestedVerification = updatedUsers.filter(
-          (user) => user.requestVerification === true,
+          (booking) => booking.requestVerification === true,
         );
-        return requestedVerification;
+        const paidWithCash = updatedUsers.filter(
+          (booking) => booking.paymentMethod === PaymentMethods.CASH,
+        );
+        return {
+          requestedVerification: requestedVerification,
+          paidWithCash: paidWithCash,
+        };
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;

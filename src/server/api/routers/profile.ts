@@ -4,7 +4,7 @@ import { z } from "zod";
 import { checkName, checkPhoneNumber } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import { altContactInfo, bookings, profile } from "~/server/db/schema";
-import { UserRoles } from "~/types/types";
+import { PaymentMethods, UserRoles } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const profileRouter = createTRPCRouter({
@@ -90,6 +90,68 @@ export const profileRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to verify residency",
+          cause: error,
+        });
+      }
+    }),
+  verifyCashPayment: protectedProcedure
+    .input(
+      z.object({
+        bookingIds: z.array(z.number()),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (
+        ctx.session.user.role !== UserRoles.ADMIN &&
+        ctx.session.user.role !== UserRoles.DRIVER
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not allowed",
+        });
+      }
+
+      if (input.bookingIds.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No trips selected",
+        });
+      }
+
+      try {
+        await db.transaction(async (tx) => {
+          const updatedBookings = await tx
+            .update(bookings)
+            .set({
+              paid: true,
+            })
+            .where(
+              and(
+                inArray(bookings.id, input.bookingIds),
+                eq(bookings.paymentMethod, PaymentMethods.CASH),
+              ),
+            )
+            .returning();
+
+          if (updatedBookings.length !== input.bookingIds.length) {
+            const bookingIdsList = updatedBookings.map((obj) => obj.id);
+            const missingIdsList = input.bookingIds.filter(
+              (id) => !bookingIdsList.includes(id),
+            );
+
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Booking IDs not found or did not pay with cash: ${missingIdsList}`,
+            });
+          }
+        });
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to verify cash payment",
           cause: error,
         });
       }

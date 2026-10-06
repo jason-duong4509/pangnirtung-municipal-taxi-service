@@ -6,14 +6,18 @@ import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
 import AlertPopup from "../common/alert/alert";
 
-type verifiedResidents = RouterOutputs["bookings"]["complete"];
+type usersRequestingResidency =
+  RouterOutputs["bookings"]["complete"]["requestedVerification"];
+type usersPaidWithCash = RouterOutputs["bookings"]["complete"]["paidWithCash"];
 
-export default function ConfirmResidencyModal({
-  trips,
+export default function ConfirmExtraInfoModal({
+  data,
+  dataType,
   modalOpened,
   closeModal,
 }: {
-  trips: verifiedResidents;
+  data: usersRequestingResidency | usersPaidWithCash;
+  dataType: "users_requesting_residency" | "users_paid_with_cash";
   modalOpened: boolean;
   closeModal: () => void;
 }) {
@@ -33,13 +37,26 @@ export default function ConfirmResidencyModal({
     },
   });
 
-  if (trips.length === 0) {
+  const verifyCashPaymentMutation = api.profile.verifyCashPayment.useMutation({
+    onSuccess: () => {
+      showNotifications.success("Verification successful");
+      setIsMutating(false);
+      closeModal();
+      setSelectedRows([]);
+    },
+    onError: (error) => {
+      showNotifications.error(error.message);
+      setIsMutating(false);
+    },
+  });
+
+  if (data.length === 0) {
     return;
   }
 
   let table = [] as JSX.Element[];
 
-  for (const booking of trips) {
+  for (const booking of data) {
     const row = (
       <Table.Tr
         bg={selectedRows.includes(booking.id) ? "buttonColor" : undefined}
@@ -84,23 +101,38 @@ export default function ConfirmResidencyModal({
 
   const handleVerifyMutation = () => {
     if (selectedRows.length === 0) {
-      showNotifications.error("No trips selected");
+      showNotifications.error("No data selected");
       return;
     }
     setIsMutating(true);
-    verifyResidentMutation.mutate({
-      bookingIds: selectedRows,
-    });
+
+    if (dataType === "users_requesting_residency") {
+      verifyResidentMutation.mutate({
+        bookingIds: selectedRows,
+      });
+    } else if (dataType === "users_paid_with_cash") {
+      verifyCashPaymentMutation.mutate({
+        bookingIds: selectedRows,
+      });
+    }
   };
   return (
     <AlertPopup
       abortButtonText={"Skip All Users"}
       body={
         <Stack h={"60dvh"}>
-          <Text>
-            The following trips marked for completion also requested resident
-            verification. Select which users to verify below
-          </Text>
+          {dataType === "users_paid_with_cash" && (
+            <Text>
+              The following trips marked for completion also paid with cash.
+              Select which users to verify their cash payment below
+            </Text>
+          )}
+          {dataType === "users_requesting_residency" && (
+            <Text>
+              The following trips marked for completion also requested resident
+              verification. Select which users to verify below
+            </Text>
+          )}
           <Table.ScrollContainer minWidth={0} style={{ flex: 1, minHeight: 0 }}>
             <Table highlightOnHover stickyHeader>
               <Table.Thead>
@@ -121,7 +153,11 @@ export default function ConfirmResidencyModal({
       isLoading={isMutating}
       modalOpened={modalOpened}
       onConfirm={() => handleVerifyMutation()}
-      titleText={"Confirm Residency"}
+      titleText={
+        dataType === "users_requesting_residency"
+          ? "Confirm Residency"
+          : "Confirm Cash Payment"
+      }
     />
   );
 }
