@@ -23,6 +23,7 @@ import {
   user,
   userUsedRideCode,
 } from "~/server/db/schema";
+import { notifyDriver } from "~/server/push-driver-notifications";
 import {
   BOOKING_COSTS,
   BookingStatus,
@@ -44,23 +45,25 @@ export const bookingsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      if (ctx.session.user.role !== UserRoles.MEMBER) {
+      if (
+        ctx.session.user.role !== UserRoles.MEMBER &&
+        ctx.session.user.role !== UserRoles.DRIVER
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Query is only available to members",
+          message: "Not allowed",
         });
       }
 
       try {
-        const [result] = await db
-          .select()
-          .from(bookings)
-          .where(
-            and(
-              eq(bookings.id, input.bookingId),
-              eq(bookings.created_by, ctx.session.user.id),
-            ),
-          );
+        const whereCondition =
+          ctx.session.user.role === UserRoles.MEMBER
+            ? and(
+                eq(bookings.id, input.bookingId),
+                eq(bookings.created_by, ctx.session.user.id),
+              )
+            : eq(bookings.id, input.bookingId);
+        const [result] = await db.select().from(bookings).where(whereCondition);
 
         if (!result) {
           throw new TRPCError({
@@ -446,6 +449,12 @@ export const bookingsRouter = createTRPCRouter({
             message: "Unable to create booking",
           });
         }
+
+        //--Send a notification to the driver--
+        await notifyDriver({
+          bookingId: insertedBooking.id,
+        });
+        //-------------------------------------
 
         return insertedBooking;
       } catch (error) {
