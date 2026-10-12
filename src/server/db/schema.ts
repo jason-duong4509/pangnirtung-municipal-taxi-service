@@ -55,6 +55,8 @@ export const bookings = pgTable("bookings", {
   tripReason: text("reason_for_trip").notNull(),
   paymentMethod: paymentMethod("payment_method").notNull(),
   stripePaymentMethodId: text("stripe_payment_method_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeRefundId: text("stripe_refund_id"),
   paid: boolean("paid").notNull().default(false),
   rideCode: text("ride_code").references(() => rideCodes.code),
   reminders: boolean("receive_reminders").notNull().default(false),
@@ -107,6 +109,22 @@ export const appIssues = pgTable(
 export const appIssuesTags = pgTable("app_issues_tags", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull().unique(),
+});
+
+export const rideCreditTransactions = pgTable("ride_credit_transactions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: text("user_id").references(() => user.id, {
+    onDelete: "cascade",
+  }),
+  numberOfRides: integer("number_of_rides").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
+  claimed: boolean("claimed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
 });
 
 export const profile = pgTable("profile", {
@@ -269,11 +287,28 @@ export const userRelations = relations(user, ({ many, one }) => ({
   UserUsedRideCode: many(userUsedRideCode),
   profile: one(profile),
   bookings: many(bookings),
+  rideCreditTransactions: many(rideCreditTransactions),
 }));
 
+export const rideCreditTransactionsRelations = relations(
+  rideCreditTransactions,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [rideCreditTransactions.userId],
+      references: [user.id],
+    }),
+  }),
+);
+
 export const bookingRelations = relations(bookings, ({ one }) => ({
-  rideCodes: one(rideCodes),
-  user: one(user),
+  rideCodes: one(rideCodes, {
+    fields: [bookings.rideCode],
+    references: [rideCodes.code],
+  }),
+  user: one(user, {
+    fields: [bookings.created_by],
+    references: [user.id],
+  }),
 }));
 
 export const rideCodeRelations = relations(rideCodes, ({ many }) => ({

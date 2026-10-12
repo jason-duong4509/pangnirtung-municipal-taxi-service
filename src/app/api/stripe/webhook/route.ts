@@ -1,8 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "~/server/db";
-import { profile } from "~/server/db/schema";
+import { profile, rideCreditTransactions } from "~/server/db/schema";
 import { MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE } from "~/types/types";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -33,7 +33,10 @@ export async function POST(request: Request) {
     });
   }
 
-  if (event.type === "payment_intent.succeeded") {
+  if (
+    event.type === "payment_intent.succeeded" &&
+    event.data.object.metadata.quantity
+  ) {
     //If stripe responded with a payment succeeded event
     const paymentIntent = event.data.object;
     const userId = paymentIntent.metadata.userId;
@@ -44,16 +47,80 @@ export async function POST(request: Request) {
       rideQuantity < 1 ||
       rideQuantity > MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE;
     if (invalidRideQuantity || !userId) {
-      return;
+      return new NextResponse("Invalid ride quantity or missing user ID", {
+        status: 400,
+      });
     }
 
-    await db
-      .update(profile)
-      .set({
-        numberOfRides: sql`${profile.numberOfRides} + ${rideQuantity}`,
+    const [paymentTransaction] = await db
+      .select({
+        id: rideCreditTransactions.id,
       })
-      .where(eq(profile.belongsTo, userId))
-      .returning();
+      .from(rideCreditTransactions)
+      .where(
+        and(
+          eq(rideCreditTransactions.userId, userId),
+          eq(rideCreditTransactions.numberOfRides, rideQuantity),
+          eq(rideCreditTransactions.stripePaymentIntentId, paymentIntent.id),
+          eq(rideCreditTransactions.claimed, false),
+        ),
+      );
+    if (!paymentTransaction) {
+      //Did not find an available transaction
+      return new NextResponse("ok", {
+        status: 200,
+      });
+    }
+
+    try {
+      await db.transaction(async (tx) => {
+        const [updatedRow] = await tx
+          .update(rideCreditTransactions)
+          .set({
+            claimed: true,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(rideCreditTransactions.id, paymentTransaction.id),
+              eq(rideCreditTransactions.claimed, false),
+            ),
+          )
+          .returning();
+
+        if (!updatedRow) {
+          throw new Error(
+            "Encountered unknown error when updating transaction row",
+          );
+        }
+
+        const [updatedProfileRow] = await tx
+          .update(profile)
+          .set({
+            numberOfRides: sql`${profile.numberOfRides} + ${rideQuantity}`,
+          })
+          .where(eq(profile.belongsTo, userId))
+          .returning();
+
+        if (!updatedProfileRow) {
+          throw new Error(
+            "Encountered unknown error when adding ride credits to user",
+          );
+        }
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        return new NextResponse(error.message, {
+          status: 500,
+        });
+      }
+      return new NextResponse(
+        "An unknown error occurred while processing a stripe ride code request",
+        {
+          status: 500,
+        },
+      );
+    }
   }
 
   return new NextResponse("ok", {

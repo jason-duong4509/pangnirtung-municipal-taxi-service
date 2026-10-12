@@ -92,12 +92,21 @@ const PaymentFooter = ({
   const getCodeDiscountMutation = api.payment.getCodeDiscount.useMutation({
     onSuccess: (data) => {
       const discount = data.discount / 100;
+      const discountInCents = BOOKING_COSTS[bookingType] * 100 * discount;
+      const totalCostInCents =
+        BOOKING_COSTS[bookingType] * 100 - discountInCents;
+      const roundedCostInCents = Math.round(totalCostInCents);
+      const totalCost = roundedCostInCents / 100;
+
+      if (totalCost >= 0.5) {
+        //minimum stripe amount
+        setTotalCost(() => totalCost);
+      } else {
+        setTotalCost(() => 0);
+      }
+
       showNotifications.success("Code successfully redeemed");
       setRedeemCodeLoading(false);
-      setTotalCost(
-        () =>
-          BOOKING_COSTS[bookingType] - BOOKING_COSTS[bookingType] * discount,
-      );
       setDiscountCode(data.code);
     },
     onError: (error) => {
@@ -257,7 +266,9 @@ const CreditCardPayment = ({
       return;
     }
 
-    showNotifications.success("Payment successfully processed");
+    showNotifications.success(
+      "Successfully received payment information. You will be charged when the trip is accepted",
+    );
     onPaymentSuccess();
     setIsLoading(false);
   };

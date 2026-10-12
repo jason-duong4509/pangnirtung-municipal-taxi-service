@@ -296,19 +296,6 @@ export const checkTripReason = (
   };
 };
 
-export const checkRedeemedCode = (
-  input: string,
-):
-  | { isProper: false; errorMessage: string }
-  | { isProper: true; formattedInput: string } => {
-  //TODO: implement
-
-  return {
-    isProper: true,
-    formattedInput: input.trim(),
-  };
-};
-
 export const checkReportAppComments = (
   input: string,
 ):

@@ -1223,6 +1223,7 @@ export default function BookingForm({
         onClose={() => {
           setFormState(BookingUIStates.Payment);
           setPrevFormState(BookingUIStates.Payment2);
+          setDiscountCode(null);
         }}
         onPaymentConfirm={() => {
           const { hasErrors } = bookingForm.validate();

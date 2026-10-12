@@ -43,6 +43,18 @@ export default function Home() {
   ]);
 
   useEffect(() => {
+    if (
+      !getAdjustmentRequestedBookingQuery.isFetching &&
+      getAdjustmentRequestedBookingQuery.error
+    ) {
+      setShowLoadingUI(false);
+    }
+  }, [
+    getAdjustmentRequestedBookingQuery.error,
+    getAdjustmentRequestedBookingQuery.isFetching,
+  ]);
+
+  useEffect(() => {
     if (session?.user.role === UserRoles.ADMIN) {
       router.replace("/admin");
     } else if (session?.user.role === UserRoles.DRIVER) {

@@ -3,7 +3,12 @@ import { and, eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
 import { db } from "~/server/db";
-import { rideCodes, user, userUsedRideCode } from "~/server/db/schema";
+import {
+  rideCodes,
+  rideCreditTransactions,
+  user,
+  userUsedRideCode,
+} from "~/server/db/schema";
 import {
   MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE,
   RIDE_CREDIT_COST,
@@ -18,7 +23,7 @@ export const paymentRouter = createTRPCRouter({
   createPaymentIntent: protectedProcedure
     .input(
       z.object({
-        numberOfRides: z.number(),
+        numberOfRides: z.number().int(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -31,6 +36,11 @@ export const paymentRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "User does not exist",
+        });
+      } else if (returnedUser.stripeCustomerId === null) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "User is not a stripe customer",
         });
       }
 
@@ -47,10 +57,7 @@ export const paymentRouter = createTRPCRouter({
       const paymentIntent = await stripe.paymentIntents.create({
         amount: RIDE_CREDIT_COST * input.numberOfRides * 100,
         currency: "cad",
-        customer:
-          returnedUser.stripeCustomerId === null
-            ? undefined
-            : returnedUser.stripeCustomerId,
+        customer: returnedUser.stripeCustomerId,
         payment_method_types: ["card"],
         setup_future_usage: "off_session",
         metadata: {
@@ -66,10 +73,7 @@ export const paymentRouter = createTRPCRouter({
       }
 
       const customerSession = await stripe.customerSessions.create({
-        customer:
-          returnedUser.stripeCustomerId === null
-            ? undefined
-            : returnedUser.stripeCustomerId,
+        customer: returnedUser.stripeCustomerId,
         components: {
           payment_element: {
             enabled: true,
@@ -95,6 +99,12 @@ export const paymentRouter = createTRPCRouter({
         });
       }
 
+      await db.insert(rideCreditTransactions).values({
+        userId: ctx.session.user.id,
+        numberOfRides: input.numberOfRides,
+        stripePaymentIntentId: paymentIntent.id,
+      });
+
       return {
         clientSecret: paymentIntent.client_secret,
         clientSessionSecret: customerSession.client_secret,
@@ -111,13 +121,15 @@ export const paymentRouter = createTRPCRouter({
         code: "BAD_REQUEST",
         message: "User does not exist",
       });
+    } else if (returnedUser.stripeCustomerId === null) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "User is not a stripe customer",
+      });
     }
 
     const setupIntent = await stripe.setupIntents.create({
-      customer:
-        returnedUser.stripeCustomerId === null
-          ? undefined
-          : returnedUser.stripeCustomerId,
+      customer: returnedUser.stripeCustomerId,
       payment_method_types: ["card"],
       usage: "off_session",
     });
@@ -130,10 +142,7 @@ export const paymentRouter = createTRPCRouter({
     }
 
     const customerSession = await stripe.customerSessions.create({
-      customer:
-        returnedUser.stripeCustomerId === null
-          ? undefined
-          : returnedUser.stripeCustomerId,
+      customer: returnedUser.stripeCustomerId,
       components: {
         payment_element: {
           enabled: true,
@@ -174,13 +183,15 @@ export const paymentRouter = createTRPCRouter({
         code: "BAD_REQUEST",
         message: "User does not exist",
       });
+    } else if (returnedUser.stripeCustomerId === null) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "User is not a stripe customer",
+      });
     }
 
     const setupIntent = await stripe.setupIntents.create({
-      customer:
-        returnedUser.stripeCustomerId === null
-          ? undefined
-          : returnedUser.stripeCustomerId,
+      customer: returnedUser.stripeCustomerId,
       payment_method_types: ["card"],
       usage: "off_session",
     });
@@ -207,13 +218,15 @@ export const paymentRouter = createTRPCRouter({
         code: "BAD_REQUEST",
         message: "User does not exist",
       });
+    } else if (returnedUser.stripeCustomerId === null) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "User is not a stripe customer",
+      });
     }
 
     const paymentMethods = await stripe.paymentMethods.list({
-      customer:
-        returnedUser.stripeCustomerId === null
-          ? undefined
-          : returnedUser.stripeCustomerId,
+      customer: returnedUser.stripeCustomerId,
       type: "card",
     });
 

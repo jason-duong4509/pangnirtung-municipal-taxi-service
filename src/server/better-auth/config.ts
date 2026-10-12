@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { Stripe } from "stripe";
 import { env } from "~/env";
 import { db } from "~/server/db";
@@ -35,16 +36,34 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
-          await db.insert(profile).values({
-            belongsTo: user.id,
-          });
+          try {
+            await db.transaction(async (tx) => {
+              await tx.insert(profile).values({
+                belongsTo: user.id,
+              });
 
-          const stripeCustomer = await stripeClient.customers.create();
+              const stripeCustomer = await stripeClient.customers.create();
 
-          await db
-            .update(userTable)
-            .set({ stripeCustomerId: stripeCustomer.id })
-            .where(eq(userTable.id, user.id));
+              await tx
+                .update(userTable)
+                .set({ stripeCustomerId: stripeCustomer.id })
+                .where(eq(userTable.id, user.id));
+            });
+          } catch (error) {
+            try {
+              await db.delete(userTable).where(eq(userTable.id, user.id));
+            } catch (deleteError) {
+              throw new NextResponse(
+                "Could not perform failed user creation cleanup. Please contact an admin for assistance",
+                {
+                  status: 500,
+                },
+              );
+            }
+            throw new NextResponse("User creation failed. Please try again", {
+              status: 500,
+            });
+          }
         },
       },
     },

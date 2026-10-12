@@ -149,6 +149,7 @@ export default function DriverPage() {
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 
@@ -176,6 +177,7 @@ export default function DriverPage() {
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 
@@ -193,6 +195,7 @@ export default function DriverPage() {
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 

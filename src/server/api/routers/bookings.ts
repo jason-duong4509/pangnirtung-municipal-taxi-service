@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
 import {
@@ -12,7 +12,6 @@ import {
   checkPhoneNumber,
   checkPickUpTime,
   checkRedeemCode,
-  checkRedeemedCode,
   checkTripReason,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
@@ -318,136 +317,139 @@ export const bookingsRouter = createTRPCRouter({
       }
 
       try {
-        const [userProfile] = await db
-          .select({
-            isResident: profile.isResident,
-            numberOfRides: profile.numberOfRides,
-          })
-          .from(profile)
-          .where(eq(profile.belongsTo, ctx.session.user.id));
-        if (!userProfile) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Could not retrieve profile data",
-          });
-        }
+        const result = await db.transaction(async (tx) => {
+          const [userProfile] = await tx
+            .select({
+              isResident: profile.isResident,
+              numberOfRides: profile.numberOfRides,
+            })
+            .from(profile)
+            .where(eq(profile.belongsTo, ctx.session.user.id));
+          if (!userProfile) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Could not retrieve profile data",
+            });
+          }
 
-        const [userData] = await db
-          .select({ stripeCustomerId: user.stripeCustomerId })
-          .from(user)
-          .where(eq(user.id, ctx.session.user.id));
-        if (!userData) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Could not retrieve user data",
-          });
-        }
+          const [userData] = await tx
+            .select({ stripeCustomerId: user.stripeCustomerId })
+            .from(user)
+            .where(eq(user.id, ctx.session.user.id));
+          if (!userData) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Could not retrieve user data",
+            });
+          }
 
-        if (
-          userProfile.numberOfRides === 0 &&
-          paymentMethod === PaymentMethods.RIDES
-        ) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Insufficient ride credits to cover this booking cost",
-          });
-        }
-
-        if (input.paymentMethodId) {
-          const stripePaymentMethod = await stripe.paymentMethods.retrieve(
-            input.paymentMethodId,
-          );
-
-          if (stripePaymentMethod.customer !== userData.stripeCustomerId) {
+          if (
+            userProfile.numberOfRides === 0 &&
+            paymentMethod === PaymentMethods.RIDES
+          ) {
             throw new TRPCError({
               code: "FORBIDDEN",
-              message: "Payment method does not belong to user",
+              message: "Insufficient ride credits to cover this booking cost",
             });
           }
-        }
 
-        if (
-          (paymentMethod === PaymentMethods.CREDIT_CARD &&
-            !input.paymentMethodId) ||
-          (paymentMethod !== PaymentMethods.CREDIT_CARD &&
-            input.paymentMethodId)
-        ) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Missing payment data when paying with a credit card",
-          });
-        }
-
-        if (
-          bookingType === BookingValueTypes.OUT_OF_TOWN &&
-          paymentMethod === PaymentMethods.RIDES
-        ) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Cannot use ride credits to cover out of town trips",
-          });
-        }
-
-        if (rideCode && paymentMethod === PaymentMethods.RIDES) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Ride codes are not usable on ride credits",
-          });
-        }
-
-        if (rideCode) {
-          const [alreadyUsedCode] = await db
-            .select()
-            .from(userUsedRideCode)
-            .where(
-              and(
-                eq(userUsedRideCode.rideCode, rideCode),
-                eq(userUsedRideCode.userId, ctx.session.user.id),
-              ),
+          if (input.paymentMethodId) {
+            const stripePaymentMethod = await stripe.paymentMethods.retrieve(
+              input.paymentMethodId,
             );
 
-          if (alreadyUsedCode) {
+            if (stripePaymentMethod.customer !== userData.stripeCustomerId) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "Payment method does not belong to user",
+              });
+            }
+          }
+
+          if (
+            (paymentMethod === PaymentMethods.CREDIT_CARD &&
+              !input.paymentMethodId) ||
+            (paymentMethod !== PaymentMethods.CREDIT_CARD &&
+              input.paymentMethodId)
+          ) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "Ride codes already redeemed",
+              message: "Missing payment data when paying with a credit card",
             });
           }
-          await db.insert(userUsedRideCode).values({
-            rideCode: rideCode,
-            userId: ctx.session.user.id,
-          });
-        }
 
-        const [insertedBooking] = await db
-          .insert(bookings)
-          .values({
-            pickupAddr: pickupAddr,
-            destAddr: destAddr,
-            name: name,
-            pickupTime: pickupTime,
-            tripReason: tripReason,
-            paymentMethod: paymentMethod,
-            reminders: input.reminders,
-            created_by: ctx.session.user.id,
-            requestVerification: userProfile.isResident
-              ? false
-              : input.requestVerification,
-            contactEmail: email === "" ? null : email,
-            contactPhone: phoneNumber,
-            bookingType: bookingType,
-            rideCode: rideCode,
-            stripePaymentMethodId: input.paymentMethodId,
-          })
-          .returning();
+          if (
+            bookingType === BookingValueTypes.OUT_OF_TOWN &&
+            paymentMethod === PaymentMethods.RIDES
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Cannot use ride credits to cover out of town trips",
+            });
+          }
 
-        if (!insertedBooking) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Unable to create booking",
-          });
-        }
+          if (rideCode && paymentMethod === PaymentMethods.RIDES) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Ride codes are not usable on ride credits",
+            });
+          }
 
-        return insertedBooking;
+          if (rideCode) {
+            const [alreadyUsedCode] = await tx
+              .select()
+              .from(userUsedRideCode)
+              .where(
+                and(
+                  eq(userUsedRideCode.rideCode, rideCode),
+                  eq(userUsedRideCode.userId, ctx.session.user.id),
+                ),
+              );
+
+            if (alreadyUsedCode) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Ride codes already redeemed",
+              });
+            }
+            await tx.insert(userUsedRideCode).values({
+              rideCode: rideCode,
+              userId: ctx.session.user.id,
+            });
+          }
+
+          const [insertedBooking] = await tx
+            .insert(bookings)
+            .values({
+              pickupAddr: pickupAddr,
+              destAddr: destAddr,
+              name: name,
+              pickupTime: pickupTime,
+              tripReason: tripReason,
+              paymentMethod: paymentMethod,
+              reminders: input.reminders,
+              created_by: ctx.session.user.id,
+              requestVerification: userProfile.isResident
+                ? false
+                : input.requestVerification,
+              contactEmail: email === "" ? null : email,
+              contactPhone: phoneNumber,
+              bookingType: bookingType,
+              rideCode: rideCode,
+              stripePaymentMethodId: input.paymentMethodId,
+            })
+            .returning();
+
+          if (!insertedBooking) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Unable to create booking",
+            });
+          }
+
+          return insertedBooking;
+        });
+        return result;
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -616,8 +618,9 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
       try {
-        await db.transaction(async (tx) => {
-          for (const bookingId of input.bookingIds) {
+        let unfinishedBookings = [...input.bookingIds] as number[];
+        for (const bookingId of input.bookingIds) {
+          await db.transaction(async (tx) => {
             const whereClause =
               ctx.session.user.role === UserRoles.MEMBER
                 ? and(
@@ -630,7 +633,28 @@ export const bookingsRouter = createTRPCRouter({
                       eq(bookings.id, bookingId),
                       eq(bookings.status, BookingStatus.IN_PROGRESS),
                     )
-                  : eq(bookings.id, bookingId);
+                  : and(
+                      eq(bookings.id, bookingId),
+                      ne(bookings.status, BookingStatus.CANCELLED),
+                    );
+
+            const [originalBooking] = await tx
+              .select({
+                status: bookings.status,
+                rideCode: bookings.rideCode,
+                type: bookings.bookingType,
+                paymentMethod: bookings.paymentMethod,
+                paymentIntentId: bookings.stripePaymentIntentId,
+              })
+              .from(bookings)
+              .where(whereClause);
+
+            if (!originalBooking) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Booking ID not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+              });
+            }
 
             const [cancelledBookingId] = await tx
               .update(bookings)
@@ -639,12 +663,16 @@ export const bookingsRouter = createTRPCRouter({
                 updatedAt: new Date(),
               })
               .where(whereClause)
-              .returning({ id: bookings.id, usedRideCode: bookings.rideCode });
+              .returning({
+                id: bookings.id,
+                usedRideCode: bookings.rideCode,
+                createdBy: bookings.created_by,
+              });
 
             if (!cancelledBookingId) {
               throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: `Booking ID not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${bookingId}`,
+                code: "INTERNAL_SERVER_ERROR",
+                message: `Booking ID not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
               });
             }
 
@@ -657,12 +685,102 @@ export const bookingsRouter = createTRPCRouter({
                       userUsedRideCode.rideCode,
                       cancelledBookingId.usedRideCode,
                     ),
-                    eq(userUsedRideCode.userId, ctx.session.user.id),
+                    eq(userUsedRideCode.userId, cancelledBookingId.createdBy),
                   ),
                 );
             }
-          }
-        });
+
+            //--Initiate refund--
+            if (
+              (ctx.session.user.role === UserRoles.ADMIN &&
+                originalBooking.status !== BookingStatus.PENDING &&
+                originalBooking.status !== BookingStatus.CANCELLED) ||
+              ctx.session.user.role === UserRoles.DRIVER
+            ) {
+              if (
+                originalBooking.paymentMethod === PaymentMethods.CREDIT_CARD
+              ) {
+                let rideCodeDiscount = 0;
+                if (originalBooking.rideCode) {
+                  const [rideCodeResult] = await tx
+                    .select({
+                      discount: rideCodes.discount,
+                    })
+                    .from(rideCodes)
+                    .where(eq(rideCodes.code, originalBooking.rideCode));
+                  if (!rideCodeResult) {
+                    throw new TRPCError({
+                      code: "BAD_REQUEST",
+                      message: `Found unknown ride code on booking ID: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+                    });
+                  }
+                  rideCodeDiscount = rideCodeResult.discount / 100;
+                }
+
+                const discount =
+                  BOOKING_COSTS[originalBooking.type] * 100 * rideCodeDiscount;
+                const cost =
+                  BOOKING_COSTS[originalBooking.type] * 100 - discount;
+                const roundedCost = Math.round(cost);
+                if (roundedCost >= 50) {
+                  //At least $0.50 was charged
+                  if (!originalBooking.paymentIntentId) {
+                    throw new TRPCError({
+                      code: "INTERNAL_SERVER_ERROR",
+                      message: `Payment intent missing when initiating a stripe refund for booking ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+                    });
+                  }
+
+                  const stripeRefundResult = await stripe.refunds.create(
+                    {
+                      payment_intent: originalBooking.paymentIntentId,
+                      reason: `requested_by_customer`,
+                    },
+                    {
+                      idempotencyKey: `refund-booking-${bookingId}`,
+                    },
+                  );
+
+                  const [insertedRefundResult] = await tx
+                    .update(bookings)
+                    .set({
+                      stripeRefundId: stripeRefundResult.id,
+                    })
+                    .where(eq(bookings.id, bookingId))
+                    .returning();
+                  if (!insertedRefundResult) {
+                    throw new TRPCError({
+                      code: "INTERNAL_SERVER_ERROR",
+                      message: `Attaching stripe refund ID failed on booking ID: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+                    });
+                  }
+                }
+              } else if (
+                originalBooking.paymentMethod === PaymentMethods.RIDES &&
+                originalBooking.type === BookingValueTypes.IN_TOWN
+              ) {
+                const [updatedProfileRow] = await tx
+                  .update(profile)
+                  .set({
+                    numberOfRides: sql`${profile.numberOfRides} + 1`,
+                  })
+                  .where(eq(profile.belongsTo, cancelledBookingId.createdBy))
+                  .returning();
+
+                if (!updatedProfileRow) {
+                  throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: `Could not refund ride credits for booking ID: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+                  });
+                }
+              }
+            }
+            //--Initiate refund--
+          });
+          unfinishedBookings = unfinishedBookings.filter(
+            (id) => id !== bookingId,
+          );
+        }
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -695,14 +813,14 @@ export const bookingsRouter = createTRPCRouter({
       ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Not allowed to bulk cancel trips",
+          message: "Not allowed to bulk accept trips",
         });
       }
 
       //--Input check on optional fields--
       let newRideCode = "" as string;
       if (input.newRideCode) {
-        const rideCodeCheck = checkRedeemedCode(input.newRideCode);
+        const rideCodeCheck = checkRedeemCode(input.newRideCode);
         if (rideCodeCheck.isProper) {
           newRideCode = rideCodeCheck.formattedInput;
         } else {
@@ -728,122 +846,132 @@ export const bookingsRouter = createTRPCRouter({
       }
       //--Input check on optional fields--
 
+      let unfinishedBookings = [...input.bookingIds] as number[];
       try {
-        await db.transaction(async (tx) => {
-          //--members: Update payment information in booking form before accepting--
-          if (ctx.session.user.role === UserRoles.MEMBER) {
-            //--Input checks on optional fields--
-            if (!input.newPaymentMethod) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Payment method required",
-              });
-            }
-            const [returnedBooking] = await tx
-              .select()
-              .from(bookings)
-              .where(
-                and(
-                  eq(bookings.id, input.bookingIds[0] as number),
-                  eq(bookings.created_by, ctx.session.user.id),
-                ),
-              );
-            if (!returnedBooking) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "No booking found",
-              });
-            } else if (
-              returnedBooking.bookingType === BookingValueTypes.OUT_OF_TOWN &&
-              newPaymentMethod === PaymentMethods.RIDES
-            ) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message:
-                  "Ride credits cannot be used to cover out of town trips",
-              });
-            } else if (
-              newPaymentMethod === PaymentMethods.CREDIT_CARD &&
-              !input.newStripePaymentId
-            ) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Missing stripe payment ID",
-              });
-            }
-
-            if (returnedBooking.rideCode) {
-              //--Free up ride code used in the booking to accept--
-              await tx
-                .delete(userUsedRideCode)
-                .where(
-                  and(
-                    eq(userUsedRideCode.rideCode, returnedBooking.rideCode),
-                    eq(userUsedRideCode.userId, ctx.session.user.id),
-                  ),
-                );
-              //--Free up ride code used in the booking to accept--
-            }
-
-            if (input.newRideCode) {
-              const [retrievedCode] = await tx
-                .select({ code: rideCodes.code, discount: rideCodes.discount })
-                .from(rideCodes)
-                .where(eq(rideCodes.code, newRideCode));
-
-              if (!retrievedCode) {
+        for (const bookingId of input.bookingIds) {
+          await db.transaction(async (tx) => {
+            //--members: Update payment information in booking form before accepting--
+            if (ctx.session.user.role === UserRoles.MEMBER) {
+              //--Input checks on optional fields--
+              if (!input.newPaymentMethod) {
                 throw new TRPCError({
                   code: "BAD_REQUEST",
-                  message: "Code does not exist",
+                  message: "Payment method required",
                 });
               }
-
-              const [userUsedCode] = await tx
+              const [returnedBooking] = await tx
                 .select()
-                .from(userUsedRideCode)
+                .from(bookings)
                 .where(
                   and(
-                    eq(userUsedRideCode.rideCode, newRideCode),
-                    eq(userUsedRideCode.userId, ctx.session.user.id),
+                    eq(bookings.id, input.bookingIds[0] as number),
+                    eq(bookings.created_by, ctx.session.user.id),
+                    eq(bookings.requiresAdjustment, true),
+                    eq(bookings.status, BookingStatus.PENDING),
                   ),
                 );
-
-              if (userUsedCode) {
+              if (!returnedBooking) {
                 throw new TRPCError({
                   code: "BAD_REQUEST",
-                  message: "Code already redeemed",
+                  message: "No booking found",
+                });
+              } else if (
+                returnedBooking.bookingType === BookingValueTypes.OUT_OF_TOWN &&
+                newPaymentMethod === PaymentMethods.RIDES
+              ) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message:
+                    "Ride credits cannot be used to cover out of town trips",
+                });
+              } else if (
+                newPaymentMethod === PaymentMethods.CREDIT_CARD &&
+                !input.newStripePaymentId
+              ) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Missing stripe payment ID",
                 });
               }
 
-              await tx.insert(userUsedRideCode).values({
-                rideCode: newRideCode,
-                userId: ctx.session.user.id,
-              });
-            }
-            //--Input checks on optional fields--
+              if (returnedBooking.rideCode) {
+                //--Free up ride code used in the booking to accept--
+                await tx
+                  .delete(userUsedRideCode)
+                  .where(
+                    and(
+                      eq(userUsedRideCode.rideCode, returnedBooking.rideCode),
+                      eq(userUsedRideCode.userId, ctx.session.user.id),
+                    ),
+                  );
+                //--Free up ride code used in the booking to accept--
+              }
 
-            await tx
-              .update(bookings)
-              .set({
-                paymentMethod: newPaymentMethod,
-                ...(newPaymentMethod === PaymentMethods.CREDIT_CARD
-                  ? { stripePaymentMethodId: input.newStripePaymentId }
-                  : { stripePaymentMethodId: null }),
-                ...(input.newRideCode &&
+              if (
+                input.newRideCode &&
                 newPaymentMethod !== PaymentMethods.RIDES
-                  ? { rideCode: newRideCode }
-                  : { rideCode: null }),
-              })
-              .where(eq(bookings.id, input.bookingIds[0] as number));
-          }
-          //--members: Update payment information in booking form before accepting--
+              ) {
+                const [retrievedCode] = await tx
+                  .select({
+                    code: rideCodes.code,
+                    discount: rideCodes.discount,
+                  })
+                  .from(rideCodes)
+                  .where(eq(rideCodes.code, newRideCode));
 
-          for (const bookingId of input.bookingIds) {
+                if (!retrievedCode) {
+                  throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "Code does not exist",
+                  });
+                }
+
+                const [userUsedCode] = await tx
+                  .select()
+                  .from(userUsedRideCode)
+                  .where(
+                    and(
+                      eq(userUsedRideCode.rideCode, newRideCode),
+                      eq(userUsedRideCode.userId, ctx.session.user.id),
+                    ),
+                  );
+
+                if (userUsedCode) {
+                  throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "Code already redeemed",
+                  });
+                }
+
+                await tx.insert(userUsedRideCode).values({
+                  rideCode: newRideCode,
+                  userId: ctx.session.user.id,
+                });
+              }
+              //--Input checks on optional fields--
+
+              await tx
+                .update(bookings)
+                .set({
+                  paymentMethod: newPaymentMethod,
+                  ...(newPaymentMethod === PaymentMethods.CREDIT_CARD
+                    ? { stripePaymentMethodId: input.newStripePaymentId }
+                    : { stripePaymentMethodId: null }),
+                  ...(input.newRideCode &&
+                  newPaymentMethod !== PaymentMethods.RIDES
+                    ? { rideCode: newRideCode }
+                    : { rideCode: null }),
+                })
+                .where(eq(bookings.id, input.bookingIds[0] as number));
+            }
+            //--members: Update payment information in booking form before accepting--
+
             const whereClause =
               ctx.session.user.role === UserRoles.DRIVER
                 ? and(
                     eq(bookings.id, bookingId),
                     eq(bookings.status, BookingStatus.PENDING),
+                    eq(bookings.requiresAdjustment, false),
                   )
                 : ctx.session.user.role === UserRoles.MEMBER
                   ? and(
@@ -851,7 +979,11 @@ export const bookingsRouter = createTRPCRouter({
                       eq(bookings.status, BookingStatus.PENDING),
                       eq(bookings.created_by, ctx.session.user.id),
                     )
-                  : eq(bookings.id, bookingId);
+                  : and(
+                      eq(bookings.id, bookingId),
+                      eq(bookings.requiresAdjustment, false),
+                      eq(bookings.status, BookingStatus.PENDING),
+                    );
 
             const [result] = await tx
               .select()
@@ -863,7 +995,7 @@ export const bookingsRouter = createTRPCRouter({
             if (!result) {
               throw new TRPCError({
                 code: "BAD_REQUEST",
-                message: `Booking ID ${bookingId} not found`,
+                message: `Booking ID ${bookingId} not found. Skipped bookings: ${unfinishedBookings}`,
               });
             }
 
@@ -878,7 +1010,7 @@ export const bookingsRouter = createTRPCRouter({
               if (!redeemedCode) {
                 throw new TRPCError({
                   code: "INTERNAL_SERVER_ERROR",
-                  message: `Failed to find the discount rate for ride code ${result.bookings.rideCode}`,
+                  message: `Failed to find the discount rate for ride code ${result.bookings.rideCode} on booking ID ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
                 });
               } else {
                 rideCodeDiscount = redeemedCode.discount / 100;
@@ -886,72 +1018,7 @@ export const bookingsRouter = createTRPCRouter({
               //--------------------------
             }
 
-            //--Charge by payment method--
-            if (result.bookings.paymentMethod === PaymentMethods.CREDIT_CARD) {
-              if (!result.bookings.stripePaymentMethodId) {
-                throw new TRPCError({
-                  code: "INTERNAL_SERVER_ERROR",
-                  message: `Booking ID ${bookingId} missing stripe payment ID`,
-                });
-              }
-
-              const paymentMethod = await stripe.paymentMethods.retrieve(
-                result.bookings.stripePaymentMethodId,
-              );
-              if (paymentMethod.customer !== result.user.stripeCustomerId) {
-                throw new TRPCError({
-                  code: "FORBIDDEN",
-                  message: "Payment method ID does not belong to user",
-                });
-              }
-
-              try {
-                const discount =
-                  BOOKING_COSTS[result.bookings.bookingType] *
-                  100 *
-                  rideCodeDiscount;
-                await stripe.paymentIntents.create({
-                  //charge the user's credit card
-                  amount:
-                    BOOKING_COSTS[result.bookings.bookingType] * 100 - discount,
-                  currency: "cad",
-                  customer: result.user.stripeCustomerId!,
-                  payment_method: result.bookings.stripePaymentMethodId,
-                  off_session: true,
-                  confirm: true,
-                });
-              } catch (error) {
-                throw new TRPCError({
-                  code: "INTERNAL_SERVER_ERROR",
-                  message: `Stripe payment encountered an error on booking ID ${result.bookings.id}`,
-                });
-              }
-            } else if (result.bookings.paymentMethod === PaymentMethods.RIDES) {
-              if (result.profile.numberOfRides === 0) {
-                throw new TRPCError({
-                  code: "BAD_REQUEST",
-                  message: `Booking ID ${bookingId} does not have enough ride credits to cover the trip`,
-                });
-              }
-
-              const [updatedUser] = await tx
-                .update(profile)
-                .set({
-                  numberOfRides: result.profile.numberOfRides - 1,
-                })
-                .where(eq(profile.belongsTo, result.user.id))
-                .returning();
-
-              if (!updatedUser) {
-                throw new TRPCError({
-                  code: "INTERNAL_SERVER_ERROR",
-                  message: `Failed to update ride credits for user ${result.user.id}`,
-                });
-              }
-            }
-            //--Charge by payment method--
-
-            await tx
+            const [updatedBooking] = await tx
               .update(bookings)
               .set({
                 ...(result.bookings.paymentMethod === PaymentMethods.CREDIT_CARD
@@ -963,13 +1030,120 @@ export const bookingsRouter = createTRPCRouter({
                 ...(result.bookings.paymentMethod === PaymentMethods.CASH
                   ? { paid: false }
                   : {}),
+                requiresAdjustment: false,
                 status: BookingStatus.IN_PROGRESS,
                 updatedAt: new Date(),
               })
               .where(whereClause)
               .returning({ id: bookings.id });
-          }
-        });
+            if (!updatedBooking) {
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: `Booking ID ${bookingId} pay status was not successfully updated. Skipped bookings: ${unfinishedBookings}`,
+              });
+            }
+
+            //--Charge by payment method--
+            if (result.bookings.paymentMethod === PaymentMethods.CREDIT_CARD) {
+              if (!result.bookings.stripePaymentMethodId) {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: `Booking ID ${bookingId} missing stripe payment ID. Skipped bookings: ${unfinishedBookings}`,
+                });
+              }
+
+              const paymentMethod = await stripe.paymentMethods.retrieve(
+                result.bookings.stripePaymentMethodId,
+              );
+              if (paymentMethod.customer !== result.user.stripeCustomerId) {
+                throw new TRPCError({
+                  code: "FORBIDDEN",
+                  message: `Payment method ID does not belong to user on booking ID ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+                });
+              }
+
+              try {
+                const discount =
+                  BOOKING_COSTS[result.bookings.bookingType] *
+                  100 *
+                  rideCodeDiscount;
+                const cost =
+                  BOOKING_COSTS[result.bookings.bookingType] * 100 - discount;
+                const roundedCost = Math.round(cost);
+                if (roundedCost >= 50) {
+                  //at least $0.50, since that's the minimum amount stripe accepts
+                  const paymentIntent = await stripe.paymentIntents.create(
+                    {
+                      //charge the user's credit card
+                      amount: roundedCost,
+                      currency: "cad",
+                      customer: result.user.stripeCustomerId!,
+                      payment_method: result.bookings.stripePaymentMethodId,
+                      off_session: true,
+                      confirm: true,
+                    },
+                    {
+                      idempotencyKey: `booking-order-${bookingId}-${result.bookings.stripePaymentMethodId}-${roundedCost}`,
+                    },
+                  );
+
+                  const [insertStripePaymentId] = await tx
+                    .update(bookings)
+                    .set({
+                      stripePaymentIntentId: paymentIntent.id,
+                    })
+                    .where(eq(bookings.id, bookingId))
+                    .returning();
+                  if (!insertStripePaymentId) {
+                    throw new TRPCError({
+                      code: "INTERNAL_SERVER_ERROR",
+                      message: `Could not append payment intent ID to booking ${result.bookings.id}. Skipped bookings: ${unfinishedBookings}`,
+                    });
+                  }
+                }
+              } catch (error) {
+                if (error instanceof TRPCError) {
+                  throw error;
+                }
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: `Stripe payment encountered an error on booking ID ${result.bookings.id}. Skipped bookings: ${unfinishedBookings}`,
+                });
+              }
+            } else if (result.bookings.paymentMethod === PaymentMethods.RIDES) {
+              if (result.profile.numberOfRides === 0) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: `Booking ID ${bookingId} does not have enough ride credits to cover the trip. Skipped bookings: ${unfinishedBookings}`,
+                });
+              }
+
+              const [updatedUser] = await tx
+                .update(profile)
+                .set({
+                  numberOfRides: result.profile.numberOfRides - 1,
+                })
+                .where(
+                  and(
+                    eq(profile.belongsTo, result.user.id),
+                    gt(profile.numberOfRides, 0),
+                  ),
+                )
+                .returning();
+
+              if (!updatedUser) {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: `Failed to decrement ride credits for user ${result.user.id}. Skipped bookings: ${unfinishedBookings}`,
+                });
+              }
+            }
+            //--Charge by payment method--
+          });
+          unfinishedBookings = unfinishedBookings.filter(
+            (id) => id !== bookingId,
+          );
+        }
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -1078,12 +1252,7 @@ export const bookingsRouter = createTRPCRouter({
       const [bookingToUpdate] = await db
         .select()
         .from(bookings)
-        .where(
-          and(
-            eq(bookings.id, input.bookingId),
-            eq(bookings.created_by, ctx.session.user.id),
-          ),
-        );
+        .where(eq(bookings.id, input.bookingId));
 
       if (!bookingToUpdate) {
         throw new TRPCError({
