@@ -137,7 +137,7 @@ export default function EditTripsTable({
           </Table.Td>
           {!isMobile && (
             <>
-              <Table.Td>{formatString(booking.payment)}</Table.Td>
+              <Table.Td>{formatString(booking.paymentMethod)}</Table.Td>
               <Table.Td>
                 {booking.tripReason.length > 30
                   ? `${booking.tripReason.slice(0, 27)}...`

@@ -2,6 +2,7 @@
 
 import {
   Accordion,
+  Box,
   Button,
   CloseButton,
   Flex,
@@ -16,6 +17,7 @@ import {
 import { useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { LockSimpleIcon, MoneyWavyIcon, UserIcon } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
 import { type JSX, useCallback, useEffect, useState } from "react";
 import { IMaskInput } from "react-imask";
 import { checkEmail, checkName, checkPhoneNumber } from "~/lib/input-checkers";
@@ -24,6 +26,7 @@ import { api } from "~/trpc/react";
 import { UserRoles } from "~/types/types";
 import AlertPopup from "../alert/alert";
 import ChangePhoneNumberModal from "../changePhoneNumber/change-phone-number";
+import ViewPaymentMethodsModal from "../managePaymentMethods/view-payment-method-modal";
 import NameNumberPresetModal from "../namePhonePreset/name-number-preset-modal";
 
 function AccordionLabel({
@@ -69,6 +72,11 @@ export default function ManageAccountModal({
   const [
     presetModalOpened,
     { open: openPresetModal, close: closePresetModal },
+  ] = useDisclosure(false);
+  const router = useRouter();
+  const [
+    paymentMethodsModalOpened,
+    { open: openPaymentMethodsModal, close: closePaymentMethodsModal },
   ] = useDisclosure(false);
 
   const getUsersQuery = api.users.getSelf.useQuery(undefined, {
@@ -301,7 +309,7 @@ export default function ManageAccountModal({
       id: "account_information",
       icon: <LockSimpleIcon size={20} />,
       label: "Account Information",
-      description: "Phone number and email address",
+      description: "Phone number, email address, form presets",
       content: (
         <Stack>
           <Flex direction={isPhone ? "column" : "row"} gap={"md"}>
@@ -369,31 +377,31 @@ export default function ManageAccountModal({
       content: (
         <Flex direction={isTablet ? "column" : "row"} gap={"md"}>
           <Flex
-            align={isPhone ? "flex-start" : "stretch"}
-            direction={isPhone ? "column" : "row"}
+            direction={isTablet && !isPhone ? "row" : "column"}
             flex={1}
-            justify="space-between"
-            wrap="wrap"
+            gap={"md"}
           >
-            <TextInput
-              defaultValue={"Not Registered"}
-              description={"Used to pay for rides within the app"}
-              label={"Credit Card"}
-              readOnly
-              variant="unstyled"
-            />
-            <Stack justify="flex-end" pb={"xs"}>
+            <Box flex={1}>
+              <Input.Label>Credit Cards</Input.Label>
+              <Input.Description>
+                Used to pay for rides within the app
+              </Input.Description>
+            </Box>
+            <Group
+              flex={1}
+              justify={isTablet && !isPhone ? "flex-end" : "flex-start"}
+            >
               <Button
                 c={"black"}
                 color="buttonColor"
-                onClick={() => {}}
+                onClick={() => openPaymentMethodsModal()}
                 size="compact-sm"
                 type="button"
                 variant="filled"
               >
-                Add Credit Card
+                Edit Credit Cards
               </Button>
-            </Stack>
+            </Group>
           </Flex>
           <Flex
             align={isPhone ? "flex-start" : "stretch"}
@@ -413,12 +421,14 @@ export default function ManageAccountModal({
               <Button
                 c={"black"}
                 color="buttonColor"
-                onClick={() => {}}
+                disabled={!form.getValues().isResident}
+                onClick={() => router.push("/buy-rides")}
                 size="compact-sm"
                 type="button"
                 variant="filled"
               >
-                Buy More Rides
+                {form.getValues().isResident && "Buy More Rides"}
+                {!form.getValues().isResident && "Residents Only"}
               </Button>
             </Stack>
           </Flex>
@@ -429,6 +439,11 @@ export default function ManageAccountModal({
 
   return (
     <>
+      <ViewPaymentMethodsModal
+        closeModal={closePaymentMethodsModal}
+        modalOpened={paymentMethodsModalOpened}
+        openModal={openPaymentMethodsModal}
+      />
       <NameNumberPresetModal
         closeModal={closePresetModal}
         loadPreset={false}

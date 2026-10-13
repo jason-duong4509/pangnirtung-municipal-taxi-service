@@ -10,7 +10,12 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { BookingStatus, PaymentMethods, UserRoles } from "~/types/types";
+import {
+  BookingStatus,
+  BookingValueTypes,
+  PaymentMethods,
+  UserRoles,
+} from "~/types/types";
 
 //==SCHEMA ENUMS==
 export const bookingStatus = pgEnum("bookingStatus", [
@@ -23,13 +28,18 @@ export const bookingStatus = pgEnum("bookingStatus", [
 export const paymentMethod = pgEnum("paymentMethod", [
   PaymentMethods.CREDIT_CARD,
   PaymentMethods.RIDES,
-  PaymentMethods.REDEEM_CODE,
+  PaymentMethods.CASH,
 ]);
 
 export const userRoles = pgEnum("userRoles", [
   UserRoles.ADMIN,
   UserRoles.DRIVER,
   UserRoles.MEMBER,
+]);
+
+export const bookingTypes = pgEnum("bookingTypes", [
+  BookingValueTypes.IN_TOWN,
+  BookingValueTypes.OUT_OF_TOWN,
 ]);
 //==SCHEMA ENUMS==
 
@@ -43,7 +53,12 @@ export const bookings = pgTable("bookings", {
   destAddr: text("destination_address").notNull(),
   name: text("name").notNull(),
   tripReason: text("reason_for_trip").notNull(),
-  payment: paymentMethod("payment_method").notNull(),
+  paymentMethod: paymentMethod("payment_method").notNull(),
+  stripePaymentMethodId: text("stripe_payment_method_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeRefundId: text("stripe_refund_id"),
+  paid: boolean("paid").notNull().default(false),
+  rideCode: text("ride_code").references(() => rideCodes.code),
   reminders: boolean("receive_reminders").notNull().default(false),
   requestVerification: boolean("request_verification").notNull().default(false),
   created_by: text("created_by")
@@ -58,6 +73,8 @@ export const bookings = pgTable("bookings", {
   status: bookingStatus("status").notNull().default(BookingStatus.PENDING),
   contactPhone: text("contact_phone_number").notNull(),
   contactEmail: text("contact_email"),
+  bookingType: bookingTypes("booking_type").notNull(),
+  requiresAdjustment: boolean("requires_adjustment").notNull().default(false),
 });
 
 export const appIssues = pgTable(
@@ -94,6 +111,22 @@ export const appIssuesTags = pgTable("app_issues_tags", {
   name: text("name").notNull().unique(),
 });
 
+export const rideCreditTransactions = pgTable("ride_credit_transactions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: text("user_id").references(() => user.id, {
+    onDelete: "cascade",
+  }),
+  numberOfRides: integer("number_of_rides").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
+  claimed: boolean("claimed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
 export const profile = pgTable("profile", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   isResident: boolean("is_resident").notNull().default(false),
@@ -106,8 +139,7 @@ export const profile = pgTable("profile", {
 export const rideCodes = pgTable(
   "ride_codes",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-    code: text("code").notNull(),
+    code: text("code").primaryKey().notNull(),
     discount: integer("discount").notNull(),
   },
   (table) => [
@@ -154,6 +186,7 @@ export const user = pgTable("user", {
   phoneNumber: text("phone_number").unique(),
   phoneNumberVerified: boolean("phone_number_verified"),
   role: userRoles("role").notNull().default(UserRoles.MEMBER),
+  stripeCustomerId: text("stripe_customer_id").unique(),
 });
 
 export const session = pgTable(
@@ -177,7 +210,7 @@ export const account = pgTable(
   "account",
   {
     id: text("id").primaryKey(),
-    issuer: text("issuer").notNull(),
+    issuer: text("issuer").notNull().default(""),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
@@ -240,9 +273,9 @@ export const userUsedRideCode = pgTable("user_used_ride_code", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  rideCodeId: integer("ride_code_id")
+  rideCode: text("ride_code")
     .notNull()
-    .references(() => rideCodes.id, { onDelete: "cascade" }),
+    .references(() => rideCodes.code, { onDelete: "cascade" }),
 });
 //==TABLE RELATIONS==
 
@@ -253,6 +286,33 @@ export const userRelations = relations(user, ({ many, one }) => ({
   altContactInfo: many(altContactInfo),
   UserUsedRideCode: many(userUsedRideCode),
   profile: one(profile),
+  bookings: many(bookings),
+  rideCreditTransactions: many(rideCreditTransactions),
+}));
+
+export const rideCreditTransactionsRelations = relations(
+  rideCreditTransactions,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [rideCreditTransactions.userId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const bookingRelations = relations(bookings, ({ one }) => ({
+  rideCodes: one(rideCodes, {
+    fields: [bookings.rideCode],
+    references: [rideCodes.code],
+  }),
+  user: one(user, {
+    fields: [bookings.created_by],
+    references: [user.id],
+  }),
+}));
+
+export const rideCodeRelations = relations(rideCodes, ({ many }) => ({
+  bookings: many(bookings),
 }));
 
 export const profileRelations = relations(profile, ({ one }) => ({
@@ -305,8 +365,8 @@ export const UserUsedRideCodesRelations = relations(
       references: [user.id],
     }),
     rideCodes: one(rideCodes, {
-      fields: [userUsedRideCode.rideCodeId],
-      references: [rideCodes.id],
+      fields: [userUsedRideCode.rideCode],
+      references: [rideCodes.code],
     }),
   }),
 );

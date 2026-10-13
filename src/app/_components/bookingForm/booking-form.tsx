@@ -14,6 +14,7 @@ import {
   Paper,
   Radio,
   ScrollArea,
+  Select,
   Stack,
   Text,
   Textarea,
@@ -27,12 +28,14 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   ArrowLeftIcon,
   CalendarBlankIcon,
+  ClipboardTextIcon,
   CurrencyCircleDollarIcon,
   DeviceMobileIcon,
   EnvelopeSimpleIcon,
   MapPinLineIcon,
   PathIcon,
   QuestionIcon,
+  RoadHorizonIcon,
   UserIcon,
 } from "@phosphor-icons/react";
 import {
@@ -51,8 +54,11 @@ import {
 } from "~/lib/helpers";
 import {
   checkAddress,
+  checkBookingType,
+  checkBookingTypeAndPaymentMethod,
   checkEmail,
   checkName,
+  checkPaymentMethodType,
   checkPhoneNumber,
   checkPickUpTime,
   checkTripReason,
@@ -61,9 +67,10 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import { PaymentMethods } from "~/types/types";
+import { BookingTypes, BookingValueTypes, PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
 import NameNumberPresetModal from "../common/namePhonePreset/name-number-preset-modal";
+import PaymentModal from "../common/payment/payment";
 import AddressDropdown from "./booking-form-components/address-drop-down-field";
 import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 
@@ -71,11 +78,12 @@ import PickupTimeInput from "./booking-form-components/pick-up-time-field";
 const BookingUIStates = {
   Where_To: "Where_to", //pickup time, to/from locations
   About_You: "About_You", //name + reason for trip
-  Payment: "Payment", //payment options screen
-  Buy_Rides: "Buy_Rides", //buy more rides screen (USES NEW COMPONENT)
-  Select_Pay: "Select_Pay", //select a credit card screen (USES NEW COMPONENT)
-  Confirm: "Confirm", //confirm user input screen
-  End: "End", //successfully booked trip
+  Payment: "Payment", //prompt user for trip type and payment method
+  Payment2: "Payment2", //initiate payment screen
+  Confirm: "Confirm", //confirm form details and payment screen
+  Loading: "Loading", //trip booking process loading, payment successful
+  Success: "Success", //booking is successful
+  Failed: "Failed", //booking was not successful (but payment was)
 } as const;
 type BookingUIStates = (typeof BookingUIStates)[keyof typeof BookingUIStates];
 
@@ -139,15 +147,32 @@ const BookingsDrawer = ({
     destAddr: string;
     name: string;
     reasonForTrip: string;
-    paymentMethod: string;
-    paymentCode: string | null;
+    paymentCode: string;
     id: number;
     status: string;
     createdAt: Date;
     updatedAt: Date;
     phoneNumber: string;
+    bookingType: BookingValueTypes;
+    paymentMethod: PaymentMethods;
   }>({
     mode: "uncontrolled",
+
+    initialValues: {
+      pickupTime: null as string | null,
+      pickupAddr: "",
+      destAddr: "",
+      name: "",
+      reasonForTrip: "",
+      phoneNumber: "",
+      bookingType: BookingValueTypes.IN_TOWN,
+      paymentMethod: PaymentMethods.CREDIT_CARD,
+      paymentCode: "",
+      id: 0,
+      status: "",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
 
     //Frontend field checks
     validate: {
@@ -205,6 +230,15 @@ const BookingsDrawer = ({
           return result.errorMessage;
         }
       },
+      bookingType: (value) => {
+        const result = checkBookingType(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
     },
   });
 
@@ -224,13 +258,14 @@ const BookingsDrawer = ({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: formatString(drawerContents.payment),
-      paymentCode: null, //TODO: add feature for this
+      paymentMethod: drawerContents.paymentMethod,
+      paymentCode: drawerContents.rideCode ?? "None Used",
       id: drawerContents.id,
       status: formatString(drawerContents.status),
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
       phoneNumber: drawerContents.contactPhone,
+      bookingType: drawerContents.bookingType,
     });
     bookingForm.setValues({
       pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
@@ -238,13 +273,14 @@ const BookingsDrawer = ({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: formatString(drawerContents.payment),
-      paymentCode: null, //TODO: add feature for this
+      paymentMethod: drawerContents.paymentMethod,
+      paymentCode: drawerContents.rideCode ?? "None Used",
       id: drawerContents.id,
       status: formatString(drawerContents.status),
       createdAt: drawerContents.createdAt,
       updatedAt: drawerContents.updatedAt,
       phoneNumber: drawerContents.contactPhone,
+      bookingType: drawerContents.bookingType,
     });
     //------------------------------------------
 
@@ -330,6 +366,7 @@ const BookingsDrawer = ({
           />
           <TextInput
             aria-label="Contact Name"
+            key={bookingForm.key("name")}
             label={"Contact Name"}
             leftSection={<UserIcon size={20} />}
             placeholder="Contact Name"
@@ -352,6 +389,12 @@ const BookingsDrawer = ({
               readOnly={bookingForm.getValues().status !== "Pending"}
             />
           </Input.Wrapper>
+          <TextInput
+            label="BookingType"
+            readOnly
+            value={formatString(bookingForm.getValues().bookingType)}
+            variant="unstyled"
+          />
           {bookingForm.getValues().status === "Pending" && (
             <>
               <PickupTimeInput
@@ -424,11 +467,7 @@ const BookingsDrawer = ({
             aria-label="Payment method"
             label="Payment Method"
             readOnly
-            value={
-              bookingForm.getValues().paymentMethod === "Redeem Code"
-                ? `Code (${bookingForm.getValues().paymentCode ?? "unable to retrieve code"})`
-                : bookingForm.getValues().paymentMethod
-            }
+            value={formatString(bookingForm.getValues().paymentMethod)}
             variant="unstyled"
           />
           <TextInput
@@ -454,8 +493,8 @@ const BookingsDrawer = ({
                     setAlertBodyComponent(
                       <>
                         <Text>
-                          A refund will be provided to trips that are still
-                          pending
+                          No charges will be made to trips that are cancelled
+                          while pending
                         </Text>
                         <Text>This action cannot be undone!</Text>
                       </>,
@@ -679,6 +718,11 @@ export default function BookingForm({
   const [presetPhoneNumber, setPresetPhoneNumber] = useState<
     string | undefined
   >(undefined);
+  const [
+    paymentModalOpened,
+    { open: openPaymentModal, close: closePaymentModal },
+  ] = useDisclosure(false);
+  const [discountCode, setDiscountCode] = useState<string | null>(null);
 
   const getUserQuery = api.users.getSelf.useQuery(undefined, {
     enabled: false,
@@ -706,11 +750,14 @@ export default function BookingForm({
   const createBookingMutation = api.bookings.create.useMutation({
     onSuccess: (data) => {
       setFormSubmitting(false);
-      setFormState(BookingUIStates.End);
+      setFormState(BookingUIStates.Success);
       setBookedTripId(data.id);
     },
     onError: (error) => {
-      showNotifications.error(error.message);
+      showNotifications.error(
+        `${error.message}. You have not been charged. Please try again later`,
+      );
+      setFormState(BookingUIStates.Failed);
       setFormSubmitting(false);
     },
   });
@@ -730,6 +777,10 @@ export default function BookingForm({
       requestVerification: false,
       contactEmail: "",
       contactPhone: "",
+      bookingType: BookingValueTypes.IN_TOWN,
+      paymentMethod: PaymentMethods.CREDIT_CARD,
+      code: null as null | string,
+      stripePaymentMethodId: null as null | string,
     },
 
     //Frontend field checks
@@ -843,36 +894,52 @@ export default function BookingForm({
           return null;
         }
       },
-    },
-  });
-
-  //Configure payment form
-  const paymentForm = useForm<{
-    paymentType: PaymentMethods;
-    enteredCode: string;
-  }>({
-    mode: "controlled",
-
-    initialValues: {
-      paymentType: PaymentMethods.CREDIT_CARD,
-      enteredCode: "",
-    },
-
-    validate: {
-      paymentType: (paymentType, formValues) => {
+      bookingType: (value, values) => {
         if (
-          paymentType !== PaymentMethods.REDEEM_CODE &&
-          paymentType !== PaymentMethods.CREDIT_CARD &&
-          paymentType !== PaymentMethods.RIDES
+          formState === BookingUIStates.Payment ||
+          formState === BookingUIStates.Confirm
         ) {
-          return "A selection must be made";
-        } else if (
-          paymentType === PaymentMethods.REDEEM_CODE &&
-          formValues.enteredCode === ""
-        ) {
-          return "Must input a valid code";
+          const result = checkBookingType(value);
+
+          if (result.isProper) {
+            const result2 = checkBookingTypeAndPaymentMethod(
+              value,
+              values.paymentMethod,
+            );
+
+            if (result2.isProper) {
+              return null;
+            } else {
+              return result2.errorMessage;
+            }
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
         }
-        return null;
+      },
+      paymentMethod: (value, values) => {
+        if (formState === BookingUIStates.Payment) {
+          const result = checkPaymentMethodType(value);
+
+          if (result.isProper) {
+            const result2 = checkBookingTypeAndPaymentMethod(
+              values.bookingType,
+              value,
+            );
+
+            if (result2.isProper) {
+              return null;
+            } else {
+              return result2.errorMessage;
+            }
+          } else {
+            return result.errorMessage;
+          }
+        } else {
+          return null;
+        }
       },
     },
   });
@@ -890,13 +957,20 @@ export default function BookingForm({
       name: values.name,
       pickupTime: values.pickupTime,
       tripReason: values.reasonForTrip,
-      payment: paymentForm.values.paymentType,
+      paymentMethod: values.paymentMethod,
       reminders: values.receiveReminders,
       requestVerification: values.requestVerification,
       contactEmail: sendReceiptToEmail ? values.contactEmail : "",
       contactPhone: values.contactPhone,
+      bookingType: values.bookingType,
+      redeemCode: values.code,
+      paymentMethodId: values.stripePaymentMethodId,
     });
   };
+
+  useEffect(() => {
+    bookingForm.setFieldValue("code", discountCode);
+  }, [discountCode, bookingForm.setFieldValue]);
 
   useEffect(() => {
     if (!getUserQuery.isLoading && getUserQuery.data?.[0]) {
@@ -929,6 +1003,11 @@ export default function BookingForm({
     }
   }, [presetName, presetPhoneNumber, bookingForm.setValues]);
 
+  if (formState === BookingUIStates.Payment2) {
+    openPaymentModal();
+    setFormState(BookingUIStates.Confirm);
+  }
+
   return (
     <Center
       h={"100%"}
@@ -948,6 +1027,221 @@ export default function BookingForm({
         openModal={openPresetModal}
         setName={setPresetName}
         setPhoneNumber={setPresetPhoneNumber}
+      />
+      <PaymentModal
+        asideContent={
+          <>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Name</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <TextInput
+                  aria-label="Text box with previously entered name"
+                  key={bookingForm.key("name")}
+                  leftSection={<UserIcon size={20} />}
+                  {...bookingForm.getInputProps("name")}
+                  placeholder="Name"
+                />
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Phone</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <Input.Wrapper
+                  aria-label="Text box for your phone number"
+                  error={bookingForm.errors.contactPhone}
+                >
+                  <Input
+                    component={IMaskInput}
+                    key={bookingForm.key("contactPhone")}
+                    mask="(000) 000-0000"
+                    placeholder="Phone Number"
+                    {...bookingForm.getInputProps("contactPhone")}
+                    leftSection={<DeviceMobileIcon size={20} />}
+                  />
+                </Input.Wrapper>
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Booking Type</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <Textarea
+                  aria-label="Booking Type"
+                  autosize
+                  leftSection={<RoadHorizonIcon size={20} />}
+                  minRows={1}
+                  readOnly
+                  value={formatString(bookingForm.getValues().bookingType)}
+                />
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Pick-up Address</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <AddressDropdown
+                  ariaLabel="Text box with previously entered pick-up address"
+                  changeValue={setPickupAddr}
+                  fieldName="pickupAddr"
+                  fieldValue={pickupAddr}
+                  form={bookingForm}
+                  icon={<MapPinLineIcon size={20} />}
+                  placeholder="Location"
+                />
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Pick-up Time</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Destination Address</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <AddressDropdown
+                  ariaLabel="Text box with previously entered destination address"
+                  changeValue={setDestAddr}
+                  fieldName="destAddr"
+                  fieldValue={destAddr}
+                  form={bookingForm}
+                  icon={<PathIcon size={20} />}
+                  placeholder="Location"
+                />
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Reason for Trip</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <Textarea
+                  aria-label="Text box with previously entered trip reason"
+                  key={bookingForm.key("reasonForTrip")}
+                  leftSection={<QuestionIcon size={20} />}
+                  {...bookingForm.getInputProps("reasonForTrip")}
+                  autosize
+                  maxRows={4}
+                  minRows={1}
+                  placeholder="Optional"
+                />
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Payment Method</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <Textarea
+                  aria-label="Previously entered payment type"
+                  autosize
+                  leftSection={<CurrencyCircleDollarIcon size={20} />}
+                  minRows={1}
+                  readOnly
+                  value={formatString(bookingForm.getValues().paymentMethod)}
+                />
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Receive Reminders?</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <MantineProvider theme={{ cursorType: "pointer" }}>
+                  <Checkbox
+                    aria-label="Consent to receive reminders check box"
+                    color="buttonColor"
+                    key={bookingForm.key("receiveReminders")}
+                    label="Yes"
+                    {...bookingForm.getInputProps("receiveReminders", {
+                      type: "checkbox",
+                    })}
+                  />
+                </MantineProvider>
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Request Resident Verification?</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <MantineProvider theme={{ cursorType: "pointer" }}>
+                  <Checkbox
+                    aria-label="Request to undergo resident verification"
+                    color="buttonColor"
+                    key={bookingForm.key("requestVerification")}
+                    label="Yes"
+                    {...bookingForm.getInputProps("requestVerification", {
+                      type: "checkbox",
+                    })}
+                  />
+                </MantineProvider>
+              </Grid.Col>
+            </Grid>
+            <Grid gutter={0}>
+              <Grid.Col span={6}>
+                <Text>Send Receipt to Email?</Text>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                <MantineProvider theme={{ cursorType: "pointer" }}>
+                  <Checkbox
+                    aria-label="Send receipt to email checkbox"
+                    checked={sendReceiptToEmail}
+                    color="buttonColor"
+                    label="Yes"
+                    onChange={() => setSendReceiptToEmail(!sendReceiptToEmail)}
+                  />
+                </MantineProvider>
+              </Grid.Col>
+            </Grid>
+            {sendReceiptToEmail && (
+              <TextInput
+                aria-label="Email address input"
+                key={bookingForm.key("contactEmail")}
+                leftSection={<EnvelopeSimpleIcon size={20} />}
+                {...bookingForm.getInputProps("contactEmail")}
+                placeholder="Email Address"
+              />
+            )}
+          </>
+        }
+        asideTabIcon={<ClipboardTextIcon size={19} />}
+        asideTabName="Details"
+        bookingType={bookingForm.getValues().bookingType}
+        closeModal={closePaymentModal}
+        modalOpened={paymentModalOpened}
+        onClose={() => {
+          setFormState(BookingUIStates.Payment);
+          setPrevFormState(BookingUIStates.Payment2);
+          setDiscountCode(null);
+        }}
+        onPaymentConfirm={() => {
+          const { hasErrors } = bookingForm.validate();
+
+          return {
+            proceedToPayment: !hasErrors,
+          };
+        }}
+        onPaymentSuccess={() => {
+          bookingForm.onSubmit(handleBookingSubmit)();
+          setFormState(BookingUIStates.Loading);
+          setPrevFormState(BookingUIStates.Payment);
+        }}
+        paymentMethod={bookingForm.getValues().paymentMethod}
+        setDiscountCode={setDiscountCode}
+        setStripePaymentMethodId={(value: string) => {
+          bookingForm.setFieldValue("stripePaymentMethodId", value);
+        }}
       />
       <FormUI
         body={
@@ -1058,59 +1352,50 @@ export default function BookingForm({
 
       <FormUI
         body={
-          <Radio.Group
-            aria-label="Select payment method"
-            {...paymentForm.getInputProps("paymentType")}
-            error={null}
-            size="md"
-          >
-            <Stack>
-              <Radio
-                color="buttonColor"
-                label="Pay with Credit Card"
-                value={PaymentMethods.CREDIT_CARD}
-              />
-              <Radio
-                color="buttonColor"
-                label="Redeem Code"
-                value={PaymentMethods.REDEEM_CODE}
-              />
-              {paymentForm.values.paymentType ===
-                PaymentMethods.REDEEM_CODE && (
-                <TextInput
-                  aria-label="Redeem code text input"
-                  error={paymentForm.errors.paymentType}
-                  onChange={(event) => {
-                    paymentForm.values.enteredCode = event.currentTarget.value;
-                    paymentForm.clearErrors();
-                  }}
-                  placeholder="Enter Code"
-                  value={paymentForm.values.enteredCode}
-                />
-              )}
-              <Radio
-                color="buttonColor"
-                label="Pay with Rides"
-                value={PaymentMethods.RIDES}
-              />
-              {paymentForm.values.paymentType === PaymentMethods.RIDES && (
-                <Text>
-                  <Text span>
-                    This trip costs 1 Ride. You will have 40 Rides remaining.{" "}
-                  </Text>
-                  <Text span>Buy More</Text>
-                </Text>
-              )}
-            </Stack>
-          </Radio.Group>
+          <Stack>
+            <Radio.Group
+              key={bookingForm.key("bookingType")}
+              label="Select a Trip Type"
+              {...bookingForm.getInputProps("bookingType")}
+            >
+              <Group mt="xs">
+                {BookingTypes.map((json) => (
+                  <Radio
+                    color="backgroundColor"
+                    iconColor="black"
+                    key={json.value}
+                    label={json.label}
+                    value={json.value}
+                  />
+                ))}
+              </Group>
+            </Radio.Group>
+            <Radio.Group
+              key={bookingForm.key("paymentMethod")}
+              label="Select a Payment Method"
+              {...bookingForm.getInputProps("paymentMethod")}
+            >
+              <Group mt="xs">
+                {Object.values(PaymentMethods).map((method) => (
+                  <Radio
+                    color="backgroundColor"
+                    iconColor="black"
+                    key={method}
+                    label={formatString(method)}
+                    value={method}
+                  />
+                ))}
+              </Group>
+            </Radio.Group>
+          </Stack>
         }
         changeFormState={setFormState}
         changePrevFormState={setPrevFormState}
         currentFormState={formState}
-        form={paymentForm}
+        form={bookingForm}
         isMobile={isMobile}
         nextButtonText={"Continue"}
-        nextUIType={BookingUIStates.Confirm}
+        nextUIType={BookingUIStates.Payment2}
         openLoginModal={openLoginModal}
         prevFormState={prevFormState}
         prevUIType={BookingUIStates.About_You}
@@ -1119,197 +1404,73 @@ export default function BookingForm({
         uiType={BookingUIStates.Payment}
       />
 
-      <FormUI
-        body={
-          <>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Name</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <TextInput
-                  aria-label="Text box with previously entered name"
-                  key={bookingForm.key("name")}
-                  leftSection={<UserIcon size={20} />}
-                  {...bookingForm.getInputProps("name")}
-                  placeholder="Name"
-                />
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Phone</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <Input.Wrapper
-                  aria-label="Text box for your phone number"
-                  error={bookingForm.errors.contactPhone}
-                >
-                  <Input
-                    component={IMaskInput}
-                    key={bookingForm.key("contactPhone")}
-                    mask="(000) 000-0000"
-                    placeholder="Phone Number"
-                    {...bookingForm.getInputProps("contactPhone")}
-                    leftSection={<DeviceMobileIcon size={20} />}
-                  />
-                </Input.Wrapper>
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Pick-up Address</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <AddressDropdown
-                  ariaLabel="Text box with previously entered pick-up address"
-                  changeValue={setPickupAddr}
-                  fieldName="pickupAddr"
-                  fieldValue={pickupAddr}
-                  form={bookingForm}
-                  icon={<MapPinLineIcon size={20} />}
-                  placeholder="Location"
-                />
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Pick-up Time</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <PickupTimeInput form={bookingForm} formField={"pickupTime"} />
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Destination Address</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <AddressDropdown
-                  ariaLabel="Text box with previously entered destination address"
-                  changeValue={setDestAddr}
-                  fieldName="destAddr"
-                  fieldValue={destAddr}
-                  form={bookingForm}
-                  icon={<PathIcon size={20} />}
-                  placeholder="Location"
-                />
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Reason for Trip</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <Textarea
-                  aria-label="Text box with previously entered trip reason"
-                  key={bookingForm.key("reasonForTrip")}
-                  leftSection={<QuestionIcon size={20} />}
-                  {...bookingForm.getInputProps("reasonForTrip")}
-                  autosize
-                  maxRows={4}
-                  minRows={1}
-                  placeholder="Optional"
-                />
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Payment Method</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <Textarea
-                  aria-label="Previously entered payment type"
-                  autosize
-                  leftSection={<CurrencyCircleDollarIcon size={20} />}
-                  minRows={1}
-                  readOnly
-                  value={formatString(paymentForm.values.paymentType)}
-                />
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Receive Reminders?</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <MantineProvider theme={{ cursorType: "pointer" }}>
-                  <Checkbox
-                    aria-label="Consent to receive reminders check box"
-                    color="buttonColor"
-                    key={bookingForm.key("receiveReminders")}
-                    label="Yes"
-                    {...bookingForm.getInputProps("receiveReminders", {
-                      type: "checkbox",
-                    })}
-                  />
-                </MantineProvider>
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Request Resident Verification?</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <MantineProvider theme={{ cursorType: "pointer" }}>
-                  <Checkbox
-                    aria-label="Request to undergo resident verification"
-                    color="buttonColor"
-                    key={bookingForm.key("requestVerification")}
-                    label="Yes"
-                    {...bookingForm.getInputProps("requestVerification", {
-                      type: "checkbox",
-                    })}
-                  />
-                </MantineProvider>
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Send Receipt to Email?</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <MantineProvider theme={{ cursorType: "pointer" }}>
-                  <Checkbox
-                    aria-label="Send receipt to email checkbox"
-                    checked={sendReceiptToEmail}
-                    color="buttonColor"
-                    label="Yes"
-                    onChange={() => setSendReceiptToEmail(!sendReceiptToEmail)}
-                  />
-                </MantineProvider>
-              </Grid.Col>
-            </Grid>
-            {sendReceiptToEmail && (
-              <TextInput
-                aria-label="Email address input"
-                key={bookingForm.key("contactEmail")}
-                leftSection={<EnvelopeSimpleIcon size={20} />}
-                {...bookingForm.getInputProps("contactEmail")}
-                placeholder="Email Address"
-              />
-            )}
-          </>
-        }
-        changeFormState={setFormState}
-        changePrevFormState={setPrevFormState}
-        currentFormState={formState}
-        form={bookingForm}
-        formSubmitting={formSubmitting}
-        handleSubmit={handleBookingSubmit}
-        isMobile={isMobile}
-        nextButtonText={"Book"}
-        nextUIType={BookingUIStates.End}
-        openLoginModal={openLoginModal}
-        prevFormState={prevFormState}
-        prevUIType={BookingUIStates.Payment}
-        showBackButton={true}
-        title={"Confirm"}
-        uiType={BookingUIStates.Confirm}
-      />
       <Transition
         duration={1000}
-        mounted={formState === BookingUIStates.End}
+        mounted={formState === BookingUIStates.Loading}
+        timingFunction="ease"
+        transition={
+          formState === BookingUIStates.Loading ? "slide-left" : "slide-right"
+        }
+      >
+        {(transitionStyle) => (
+          <Paper
+            bg={"primaryColor"}
+            mah={{ base: "350px", smMd: "400px" }}
+            p={"xl"}
+            pos={"absolute"}
+            radius="lg"
+            shadow="xl"
+            style={transitionStyle}
+            w={{ base: "350px", smMd: "400px" }}
+          >
+            <Stack align="center" h="100%" justify="center">
+              <Title order={4}>Processing Booking Request...</Title>
+              <Loader color="black" />
+            </Stack>
+          </Paper>
+        )}
+      </Transition>
+
+      <Transition
+        duration={1000}
+        mounted={formState === BookingUIStates.Failed}
+        timingFunction="ease"
+        transition={"slide-left"}
+      >
+        {(transitionStyle) => (
+          <Paper
+            bg={"primaryColor"}
+            mah={{ base: "350px", smMd: "400px" }}
+            p={"xl"}
+            pos={"absolute"}
+            radius="lg"
+            shadow="xl"
+            style={transitionStyle}
+            w={{ base: "350px", smMd: "400px" }}
+          >
+            <Stack gap={"lg"}>
+              <Title order={4}>Booking Failed</Title>
+              <Text>
+                We are unable to process your request at this time. You have not
+                been charged. Please try again later
+              </Text>
+
+              <Button
+                c={"black"}
+                color="buttonColor"
+                onClick={() => window.location.reload()}
+                type="button"
+              >
+                Start from Beginning
+              </Button>
+            </Stack>
+          </Paper>
+        )}
+      </Transition>
+
+      <Transition
+        duration={1000}
+        mounted={formState === BookingUIStates.Success}
         timingFunction="ease"
         transition={"slide-left"}
       >

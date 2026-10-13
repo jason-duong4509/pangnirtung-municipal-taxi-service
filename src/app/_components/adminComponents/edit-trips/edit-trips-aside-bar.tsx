@@ -13,9 +13,11 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api, type RouterOutputs } from "~/trpc/react";
 import AlertPopup from "../../common/alert/alert";
 import AsideButton from "../../common/appShell/aside-button";
-import ConfirmResidencyModal from "../../driverComponents/confirm-residency-modal";
+import ConfirmExtraInfoModal from "../../driverComponents/confirm-extra-info-modal";
 
-type verifiedResidents = RouterOutputs["bookings"]["complete"];
+type usersRequestingResidency =
+  RouterOutputs["bookings"]["complete"]["requestedVerification"];
+type usersPaidWithCash = RouterOutputs["bookings"]["complete"]["paidWithCash"];
 
 export default function EditTripsAsideBar({
   isSelecting,
@@ -42,8 +44,14 @@ export default function EditTripsAsideBar({
     ConfirmResidencyModalOpened,
     { open: openConfirmResidencyModal, close: closeConfirmResidencyModal },
   ] = useDisclosure();
+  const [
+    ConfirmCashPaymentModalOpened,
+    { open: openConfirmCashPaymentModal, close: closeConfirmCashPaymentModal },
+  ] = useDisclosure();
   const [confirmResidencyData, setConfirmResidencyData] =
-    useState<verifiedResidents>([]);
+    useState<usersRequestingResidency>([]);
+  const [confirmCashPaymentData, setConfirmCashPaymentData] =
+    useState<usersPaidWithCash>([]);
 
   const getBookingsQuery = api.bookings.get.useQuery(undefined, {
     //Forces manual fetching
@@ -51,17 +59,22 @@ export default function EditTripsAsideBar({
   });
 
   const completeBookingMutation = api.bookings.complete.useMutation({
-    onSuccess: (requestedVerification) => {
+    onSuccess: (data) => {
       showNotifications.success("Completed successfully");
       setIsMutating(false);
       getBookingsQuery.refetch();
       setIsSelecting(false);
       setSelectedRows([]);
       closeAlertModal();
-      if (requestedVerification.length !== 0) {
+      if (data.requestedVerification.length !== 0) {
         //Someone requested verification
-        setConfirmResidencyData(requestedVerification);
+        setConfirmResidencyData(data.requestedVerification);
         openConfirmResidencyModal();
+      }
+      if (data.paidWithCash.length !== 0) {
+        //Someone paid with cash
+        setConfirmCashPaymentData(data.paidWithCash);
+        openConfirmCashPaymentModal();
       }
     },
     onError: (error) => {
@@ -102,10 +115,17 @@ export default function EditTripsAsideBar({
 
   return (
     <>
-      <ConfirmResidencyModal
+      <ConfirmExtraInfoModal
         closeModal={closeConfirmResidencyModal}
+        data={confirmResidencyData}
+        dataType="users_requesting_residency"
         modalOpened={ConfirmResidencyModalOpened}
-        trips={confirmResidencyData}
+      />
+      <ConfirmExtraInfoModal
+        closeModal={closeConfirmCashPaymentModal}
+        data={confirmCashPaymentData}
+        dataType="users_paid_with_cash"
+        modalOpened={ConfirmCashPaymentModalOpened}
       />
       <AsideButton
         buttonIcon={

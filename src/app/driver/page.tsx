@@ -22,13 +22,17 @@ import {
   XSquareIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { type JSX, useEffect, useState } from "react";
+import { type JSX, useEffect, useRef, useState } from "react";
 import { dbTimeToPrettyString, formatString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import { BookingStatus, UserRoles } from "~/types/types";
+import {
+  BookingStatus,
+  type BookingValueTypes,
+  UserRoles,
+} from "~/types/types";
 import AlertPopup from "../_components/common/alert/alert";
 import CustomAppShell from "../_components/common/appShell/app-shell";
 import AsideButton from "../_components/common/appShell/aside-button";
@@ -37,10 +41,13 @@ import NavbarOption from "../_components/common/appShell/navbar-option";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
-import ConfirmResidencyModal from "../_components/driverComponents/confirm-residency-modal";
+import ConfirmExtraInfoModal from "../_components/driverComponents/confirm-extra-info-modal";
+import RequestAdjustmentModal from "../_components/driverComponents/request-adjustment-modal";
 import LogOutModal from "../_components/logout/logout";
 
-type verifiedResidents = RouterOutputs["bookings"]["complete"];
+type usersRequestingResidency =
+  RouterOutputs["bookings"]["complete"]["requestedVerification"];
+type usersPaidWithCash = RouterOutputs["bookings"]["complete"]["paidWithCash"];
 
 export default function DriverPage() {
   const [viewPendingTrips, setViewPendingTrips] = useState(false);
@@ -50,6 +57,10 @@ export default function DriverPage() {
   const [
     ConfirmResidencyModalOpened,
     { open: openConfirmResidencyModal, close: closeConfirmResidencyModal },
+  ] = useDisclosure();
+  const [
+    ConfirmCashPaymentModalOpened,
+    { open: openConfirmCashPaymentModal, close: closeConfirmCashPaymentModal },
   ] = useDisclosure();
   const [expandAside, setExpandAside] = useState(false);
   const [selectedRows, setSelectedRows] = useState<number[]>([]); //Each element is a booking's ID
@@ -68,7 +79,9 @@ export default function DriverPage() {
     <Text>Are you sure?</Text>,
   );
   const [confirmResidencyData, setConfirmResidencyData] =
-    useState<verifiedResidents>([]);
+    useState<usersRequestingResidency>([]);
+  const [confirmCashPaymentData, setConfirmCashPaymentData] =
+    useState<usersPaidWithCash>([]);
   const { data: session, isPending } = authClient.useSession();
   const [showLoadingUI, setShowLoadingUI] = useState(true);
   const router = useRouter();
@@ -80,6 +93,11 @@ export default function DriverPage() {
     logoutModalOpened,
     { open: openLogoutModal, close: closeLogoutModal },
   ] = useDisclosure(false);
+  const [
+    requestAdjustmentModalOpened,
+    { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
+  ] = useDisclosure(false);
+  const isMutatingRef = useRef(false);
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.DRIVER && showLoadingUI) {
@@ -110,6 +128,7 @@ export default function DriverPage() {
     updatedAt: Date;
     verificationRequested: boolean;
     phoneNumber: string;
+    bookingType: BookingValueTypes;
   }>({
     mode: "uncontrolled",
   });
@@ -125,15 +144,17 @@ export default function DriverPage() {
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);
+      isMutatingRef.current = false;
     },
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 
   const completeBookingMutation = api.bookings.complete.useMutation({
-    onSuccess: (requestedVerification) => {
+    onSuccess: (data) => {
       showNotifications.success("Completed successfully");
       setIsMutating(false);
       getBookingsQuery.refetch();
@@ -141,15 +162,22 @@ export default function DriverPage() {
       setIsSelecting(false);
       setSelectedRows([]);
       closeAlertModal();
-      if (requestedVerification.length !== 0) {
+      isMutatingRef.current = false;
+      if (data.requestedVerification.length !== 0) {
         //Someone requested verification
-        setConfirmResidencyData(requestedVerification);
+        setConfirmResidencyData(data.requestedVerification);
         openConfirmResidencyModal();
+      }
+      if (data.paidWithCash.length !== 0) {
+        //Someone paid with cash
+        setConfirmCashPaymentData(data.paidWithCash);
+        openConfirmCashPaymentModal();
       }
     },
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 
@@ -162,10 +190,12 @@ export default function DriverPage() {
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);
+      isMutatingRef.current = false;
     },
     onError: (error) => {
       showNotifications.error(error.message);
       setIsMutating(false);
+      isMutatingRef.current = false;
     },
   });
 
@@ -212,12 +242,13 @@ export default function DriverPage() {
               destAddr: booking.destAddr,
               name: booking.name,
               reasonForTrip: booking.tripReason,
-              paymentMethod: formatString(booking.payment),
+              paymentMethod: formatString(booking.paymentMethod),
               id: booking.id,
               createdAt: booking.createdAt,
               updatedAt: booking.updatedAt,
               verificationRequested: booking.requestVerification,
               phoneNumber: booking.contactPhone,
+              bookingType: booking.bookingType,
             });
 
             openDrawer();
@@ -253,7 +284,9 @@ export default function DriverPage() {
               ? `${booking.destAddr.slice(0, 12)}...`
               : booking.destAddr}
           </Table.Td>
-          {!isPhone && <Table.Td>{formatString(booking.payment)}</Table.Td>}
+          {!isPhone && (
+            <Table.Td>{formatString(booking.paymentMethod)}</Table.Td>
+          )}
           {!isMobile && (
             <Table.Td>{booking.requestVerification ? "Yes" : "No"}</Table.Td>
           )}
@@ -283,15 +316,28 @@ export default function DriverPage() {
   return (
     <>
       <aside>
+        <RequestAdjustmentModal
+          bookingId={form.getValues().id}
+          closeModal={closeRequestAdjustmentModal}
+          currentBookingType={form.getValues().bookingType}
+          modalOpened={requestAdjustmentModalOpened}
+        />
         <ManageAccountModal
           closeModal={closeManageAccountModal}
           modalOpened={manageAccountModalOpened}
         />
         <LogOutModal onClose={closeLogoutModal} opened={logoutModalOpened} />
-        <ConfirmResidencyModal
+        <ConfirmExtraInfoModal
           closeModal={closeConfirmResidencyModal}
+          data={confirmResidencyData}
+          dataType="users_requesting_residency"
           modalOpened={ConfirmResidencyModalOpened}
-          trips={confirmResidencyData}
+        />
+        <ConfirmExtraInfoModal
+          closeModal={closeConfirmCashPaymentModal}
+          data={confirmCashPaymentData}
+          dataType="users_paid_with_cash"
+          modalOpened={ConfirmCashPaymentModalOpened}
         />
         <ReportAppIssueModal
           closeModal={closeReportApp}
@@ -332,6 +378,12 @@ export default function DriverPage() {
               label="Contact Number"
               readOnly
               value={form.getValues().phoneNumber}
+              variant="unstyled"
+            />
+            <TextInput
+              label="Booking Type"
+              readOnly
+              value={formatString(form.getValues().bookingType ?? "")}
               variant="unstyled"
             />
             <TextInput
@@ -397,6 +449,10 @@ export default function DriverPage() {
                       setAlertTitleText("Cancel trip");
                       setAlertBodyComponent(<Text>Are you sure?</Text>);
                       setOnModalSubmit(() => () => {
+                        if (isMutatingRef.current) {
+                          return;
+                        }
+                        isMutatingRef.current = true;
                         setIsMutating(true);
                         cancelBookingMutation.mutate({
                           bookingIds: [form.getValues().id],
@@ -411,6 +467,19 @@ export default function DriverPage() {
                     Cancel Trip
                   </Button>
                 )}
+                {viewPendingTrips && (
+                  <Button
+                    c={"black"}
+                    color="buttonColor"
+                    onClick={() => openRequestAdjustmentModal()}
+                    p={0}
+                    size="compact-sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Request Adjustment
+                  </Button>
+                )}
                 <Button
                   c={"black"}
                   color="buttonColor"
@@ -420,6 +489,10 @@ export default function DriverPage() {
                     if (viewAcceptedTrips) {
                       setAlertTitleText("Complete trip");
                       setOnModalSubmit(() => () => {
+                        if (isMutatingRef.current) {
+                          return;
+                        }
+                        isMutatingRef.current = true;
                         setIsMutating(true);
                         completeBookingMutation.mutate({
                           bookingIds: [form.getValues().id],
@@ -428,6 +501,10 @@ export default function DriverPage() {
                     } else {
                       setAlertTitleText("Accept trip");
                       setOnModalSubmit(() => () => {
+                        if (isMutatingRef.current) {
+                          return;
+                        }
+                        isMutatingRef.current = true;
                         setIsMutating(true);
                         acceptBookingMutation.mutate({
                           bookingIds: [form.getValues().id],
@@ -488,6 +565,10 @@ export default function DriverPage() {
                         </Text>,
                       );
                       setOnModalSubmit(() => () => {
+                        if (isMutatingRef.current) {
+                          return;
+                        }
+                        isMutatingRef.current = true;
                         setIsMutating(true);
                         completeBookingMutation.mutate({
                           bookingIds: selectedRows,
@@ -512,6 +593,10 @@ export default function DriverPage() {
                         </Text>,
                       );
                       setOnModalSubmit(() => () => {
+                        if (isMutatingRef.current) {
+                          return;
+                        }
+                        isMutatingRef.current = true;
                         setIsMutating(true);
                         cancelBookingMutation.mutate({
                           bookingIds: selectedRows,
@@ -540,6 +625,10 @@ export default function DriverPage() {
                       </Text>,
                     );
                     setOnModalSubmit(() => () => {
+                      if (isMutatingRef.current) {
+                        return;
+                      }
+                      isMutatingRef.current = true;
                       setIsMutating(true);
                       acceptBookingMutation.mutate({
                         bookingIds: selectedRows,

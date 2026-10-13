@@ -168,7 +168,7 @@ export default function EditTripsDrawer({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: formatString(drawerContents.payment),
+      paymentMethod: formatString(drawerContents.paymentMethod),
       paymentCode: null, //TODO: add feature for this
       id: drawerContents.id,
       status: formatString(drawerContents.status),
@@ -183,7 +183,7 @@ export default function EditTripsDrawer({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: formatString(drawerContents.payment),
+      paymentMethod: formatString(drawerContents.paymentMethod),
       paymentCode: null, //TODO: add feature for this
       id: drawerContents.id,
       status: formatString(drawerContents.status),
