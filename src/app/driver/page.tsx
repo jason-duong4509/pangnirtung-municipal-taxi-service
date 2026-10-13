@@ -42,6 +42,7 @@ import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
 import ConfirmExtraInfoModal from "../_components/driverComponents/confirm-extra-info-modal";
+import DriverNotificationBar from "../_components/driverComponents/driver-notification-bar";
 import RequestAdjustmentModal from "../_components/driverComponents/request-adjustment-modal";
 import LogOutModal from "../_components/logout/logout";
 
@@ -316,6 +317,7 @@ export default function DriverPage() {
   return (
     <>
       <aside>
+        <DriverNotificationBar />
         <RequestAdjustmentModal
           bookingId={form.getValues().id}
           closeModal={closeRequestAdjustmentModal}
