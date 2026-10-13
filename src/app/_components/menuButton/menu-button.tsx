@@ -9,15 +9,20 @@ import {
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { authClient } from "~/server/better-auth/client";
+import InstallPwaPrompt from "../common/installPwaPrompt/install-pwa-prompt";
 import ManageAccountModal from "../common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../common/reportAppIssue/report-app-issue";
+import NotificationSubscription from "../notificationSubscription/notification-subscription";
 
 export default function MenuButton({
   openLoginModal,
+  burgerOpened,
+  toggleBurger,
 }: {
   openLoginModal: () => void;
+  burgerOpened: boolean;
+  toggleBurger: () => void;
 }) {
-  const [burgerOpened, { toggle: toggleBurger }] = useDisclosure();
   const [reportAppOpened, { open: openReportApp, close: closeReportApp }] =
     useDisclosure();
   const mantineTheme = useMantineTheme();
@@ -27,6 +32,12 @@ export default function MenuButton({
   const [
     manageAccountModalOpened,
     { open: openManageAccountModal, close: closeManageAccountModal },
+  ] = useDisclosure(false);
+  const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
+    useDisclosure(false);
+  const [
+    notificationModalOpened,
+    { open: openNotificationModal, close: closeNotificationModal },
   ] = useDisclosure(false);
   const { data: session } = authClient.useSession();
 
@@ -40,6 +51,14 @@ export default function MenuButton({
         <ManageAccountModal
           closeModal={closeManageAccountModal}
           modalOpened={manageAccountModalOpened}
+        />
+        <InstallPwaPrompt
+          closeModal={closePwaModal}
+          modalOpened={installPwaModalOpened}
+        />
+        <NotificationSubscription
+          closeModal={closeNotificationModal}
+          modalOpened={notificationModalOpened}
         />
       </aside>
       <Burger
@@ -80,6 +99,30 @@ export default function MenuButton({
               size="xs"
             >
               Report App Issue
+            </Button>
+            <Button
+              c={"black"}
+              color="customWhite"
+              onClick={openPwaModal}
+              radius="lg"
+              size="xs"
+            >
+              Download the App
+            </Button>
+            <Button
+              c={"black"}
+              color="customWhite"
+              onClick={() => {
+                if (session) {
+                  openNotificationModal();
+                } else {
+                  openLoginModal();
+                }
+              }}
+              radius="lg"
+              size="xs"
+            >
+              Enable App Notifications
             </Button>
           </Stack>
         </Collapse>
