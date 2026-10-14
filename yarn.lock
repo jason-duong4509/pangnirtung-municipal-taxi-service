@@ -1804,9 +1804,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ably@patch:ably@npm%3A2.29.0#./.yarn/patches/ably-npm-2.29.0-b0181e3188.patch::locator=u%40workspace%3A.":
+"ably@patch:ably@npm%3A2.29.0#~/.yarn/patches/ably-npm-2.29.0-b0181e3188.patch":
   version: 2.29.0
-  resolution: "ably@patch:ably@npm%3A2.29.0#./.yarn/patches/ably-npm-2.29.0-b0181e3188.patch::version=2.29.0&hash=78babb&locator=u%40workspace%3A."
+  resolution: "ably@patch:ably@npm%3A2.29.0#~/.yarn/patches/ably-npm-2.29.0-b0181e3188.patch::version=2.29.0&hash=78babb"
   dependencies:
     "@ably/msgpack-js": "npm:^0.4.0"
     dequal: "npm:^2.0.3"
@@ -3666,7 +3666,7 @@ __metadata:
     "@types/node": "npm:^20.14.10"
     "@types/react": "npm:^19.0.0"
     "@types/react-dom": "npm:^19.0.0"
-    ably: "patch:ably@npm%3A2.29.0#./.yarn/patches/ably-npm-2.29.0-b0181e3188.patch"
+    ably: "patch:ably@npm%3A2.29.0#~/.yarn/patches/ably-npm-2.29.0-b0181e3188.patch"
     better-auth: "npm:^1.6.20"
     dayjs: "npm:^1.11.21"
     drizzle-kit: "npm:^0.31.10"
