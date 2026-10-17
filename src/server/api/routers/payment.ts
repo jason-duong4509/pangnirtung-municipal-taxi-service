@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { db } from "~/server/db";
 import {
+  profile,
   rideCodes,
   rideCreditTransactions,
   user,
@@ -12,6 +13,7 @@ import {
 import {
   MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE,
   RIDE_CREDIT_COST,
+  UserRoles,
 } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -27,8 +29,18 @@ export const paymentRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (
+        input.numberOfRides < 1 ||
+        input.numberOfRides > MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Not allowed to purchase ${input.numberOfRides} ride credits`,
+        });
+      }
+
       const [returnedUser] = await db
-        .select({ stripeCustomerId: user.stripeCustomerId })
+        .select({ stripeCustomerId: user.stripeCustomerId, role: user.role })
         .from(user)
         .where(eq(user.id, ctx.session.user.id));
 
@@ -44,13 +56,23 @@ export const paymentRouter = createTRPCRouter({
         });
       }
 
-      if (
-        input.numberOfRides < 1 ||
-        input.numberOfRides > MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE
+      const [profileData] = await db
+        .select({ isResident: profile.isResident })
+        .from(profile)
+        .where(eq(profile.belongsTo, ctx.session.user.id));
+
+      if (!profileData) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Profile data does not exist for user",
+        });
+      } else if (
+        !profileData.isResident ||
+        returnedUser.role !== UserRoles.MEMBER
       ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `Not allowed to purchase ${input.numberOfRides} ride credits`,
+          message: "Not allowed to purchase ride credits",
         });
       }
 
