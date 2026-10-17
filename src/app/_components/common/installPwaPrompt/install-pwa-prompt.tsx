@@ -9,8 +9,8 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { useEffect, useState } from "react";
 import { showNotifications } from "~/lib/mantine-notifications-system";
+import { usePWA } from "../../providers/pwa-provider/pwa-provider";
 
 export default function InstallPwaPrompt({
   modalOpened,
@@ -19,26 +19,11 @@ export default function InstallPwaPrompt({
   modalOpened: boolean;
   closeModal: () => void;
 }) {
-  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
-  const isIOS =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      event.preventDefault();
-
-      setInstallPrompt(event);
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
-    };
-  }, []);
+  const { isIOS, installApp } = usePWA();
 
   const handleInstall = async () => {
+    const result = await installApp();
+
     const currentlyUsingPWA =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as Navigator & { standalone?: boolean }).standalone ===
@@ -46,22 +31,12 @@ export default function InstallPwaPrompt({
     if (currentlyUsingPWA) {
       showNotifications.error("App already installed");
       return;
-    } else if (!installPrompt) {
+    } else if (result === "unavailable") {
       showNotifications.error(
         "Browser unable to create app. Try again or switch to a supported browser",
       );
       return;
     }
-
-    const event = installPrompt as Event & {
-      prompt: () => Promise<void>;
-      userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-    };
-
-    await event.prompt();
-    await event.userChoice;
-
-    setInstallPrompt(null);
   };
 
   return (
