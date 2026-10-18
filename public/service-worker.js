@@ -20,7 +20,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || "/";
+  const url = "/"; //only need to navigate to home for this project
 
   event.waitUntil(clients.openWindow(url));
 });

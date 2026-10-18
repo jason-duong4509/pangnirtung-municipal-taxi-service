@@ -96,6 +96,7 @@ const BookingDetails = ({
         }}
         currentBookingType={bookingData.bookingType}
         modalOpened={requestAdjustmentModalOpened}
+        onSuccess={closeModal}
       />
       <Modal
         centered

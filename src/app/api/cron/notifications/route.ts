@@ -7,6 +7,7 @@ import { db } from "~/server/db";
 import { bookings, enabledPushNotifications } from "~/server/db/schema";
 import { sendPushNotification } from "~/server/send-notifications";
 import { IANA_TIME_ZONE } from "~/types/constants";
+import { BookingStatus } from "~/types/types";
 
 //--Add UTC and timezone conversion features for dayjs--
 dayjs.extend(utc);
@@ -22,12 +23,14 @@ export async function GET(request: Request) {
   }
 
   const upcomingBookings = await db.query.bookings.findMany({
-    where: (bookings, { lte, and, eq }) =>
+    where: (bookings, { lte, and, eq, gte }) =>
       and(
         lte(
           bookings.pickupTime,
           dayjs().tz(IANA_TIME_ZONE).add(30, "minutes").toDate(),
         ), //within 30 mins
+        gte(bookings.pickupTime, dayjs().tz(IANA_TIME_ZONE).toDate()), //excludes past bookings
+        eq(bookings.status, BookingStatus.IN_PROGRESS),
         eq(bookings.reminders, true),
         eq(bookings.sentReminder, false),
       ),

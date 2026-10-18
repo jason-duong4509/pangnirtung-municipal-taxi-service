@@ -26,11 +26,13 @@ export default function RequestAdjustmentModal({
   modalOpened,
   closeModal,
   currentBookingType,
+  onSuccess,
 }: {
   bookingId: number;
   modalOpened: boolean;
   closeModal: () => void;
   currentBookingType: BookingValueTypes;
+  onSuccess: () => void;
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
@@ -41,8 +43,9 @@ export default function RequestAdjustmentModal({
       onSuccess: () => {
         showNotifications.success("Request successful");
         setIsLoading(false);
-        closeModal();
         closeAlertModal();
+        closeModal();
+        onSuccess();
       },
       onError: (error) => {
         showNotifications.error(error.message);

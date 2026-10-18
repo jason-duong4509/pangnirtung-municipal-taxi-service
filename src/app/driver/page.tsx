@@ -328,9 +328,13 @@ export default function DriverPage() {
         <DriverNotificationBar />
         <RequestAdjustmentModal
           bookingId={form.getValues().id}
-          closeModal={closeRequestAdjustmentModal}
+          closeModal={() => {
+            closeRequestAdjustmentModal();
+            openDrawer();
+          }}
           currentBookingType={form.getValues().bookingType}
           modalOpened={requestAdjustmentModalOpened}
+          onSuccess={closeDrawer}
         />
         <ManageAccountModal
           closeModal={closeManageAccountModal}
@@ -489,7 +493,10 @@ export default function DriverPage() {
                   <Button
                     c={"black"}
                     color="buttonColor"
-                    onClick={() => openRequestAdjustmentModal()}
+                    onClick={() => {
+                      openRequestAdjustmentModal();
+                      closeDrawer();
+                    }}
                     p={0}
                     size="compact-sm"
                     type="button"
