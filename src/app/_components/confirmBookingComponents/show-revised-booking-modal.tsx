@@ -27,6 +27,7 @@ import { PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
 import PaymentModal from "../common/payment/payment";
 import TripLoading from "../common/trips/trip-loading";
+import LogOutModal from "../logout/logout";
 
 type bookingsData = RouterOutputs["bookings"]["getOne"];
 
@@ -198,6 +199,12 @@ const ComponentContents = ({
     { open: openGetPaymentDetailsModal, close: closeGetPaymentDetailsModal },
   ] = useDisclosure(false);
   const utils = api.useUtils();
+  const moveLogoutButton = useMediaQuery("(max-width: 750px)");
+  const shrinkText = useMediaQuery("(max-width: 500px)");
+  const [
+    logoutModalOpened,
+    { open: openLogoutModal, close: closeLogoutModal },
+  ] = useDisclosure(false);
   //TODO: finish populating with booking fields
 
   const cancelBookingMutation = api.bookings.cancel.useMutation({
@@ -237,6 +244,7 @@ const ComponentContents = ({
         onConfirm={onAlertSubmit}
         titleText={alertTitleText}
       />
+      <LogOutModal onClose={closeLogoutModal} opened={logoutModalOpened} />
       {bookingDetails && (
         <GetPaymentDetailsModal
           bookingDetails={bookingDetails}
@@ -246,7 +254,36 @@ const ComponentContents = ({
       )}
       <Stack gap={"lg"} h={"100%"}>
         <header>
-          <Title order={4}>Confirm Booking</Title>
+          <Group justify="space-between">
+            <Title order={4}>Confirm Booking</Title>
+            {moveLogoutButton && (
+              <Button
+                c={"black"}
+                color={"buttonColor"}
+                onClick={openLogoutModal}
+                radius={"lg"}
+                size="xs"
+                type="button"
+              >
+                Log out
+              </Button>
+            )}
+            {!moveLogoutButton && (
+              <Button
+                c={"black"}
+                color={"customWhite"}
+                onClick={openLogoutModal}
+                pos={"absolute"}
+                radius={"lg"}
+                right={"5%"}
+                size="xs"
+                top={"5%"}
+                type="button"
+              >
+                Log out
+              </Button>
+            )}
+          </Group>
         </header>
         {!bookingDetails && <TripLoading />}
         {bookingDetails && (
@@ -315,7 +352,8 @@ const ComponentContents = ({
                   type="button"
                   variant="outline"
                 >
-                  Decline and Cancel Trip
+                  {shrinkText && "Decline"}
+                  {!shrinkText && "Decline and Cancel Trip"}
                 </Button>
                 <Button
                   c={"black"}
@@ -334,7 +372,8 @@ const ComponentContents = ({
                   type="button"
                   variant="filled"
                 >
-                  Accept and Finalize Trip
+                  {shrinkText && "Accept"}
+                  {!shrinkText && "Accept and Finalize Trip"}
                 </Button>
               </Group>
             </footer>

@@ -15,6 +15,12 @@ dayjs.extend(timezone);
 //------------------------------------------------------
 
 export async function GET(request: Request) {
+  if (!process.env.CRON_SECRET) {
+    return new NextResponse("No CRON key set", {
+      status: 500,
+    });
+  }
+
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new NextResponse("Unauthorized", {

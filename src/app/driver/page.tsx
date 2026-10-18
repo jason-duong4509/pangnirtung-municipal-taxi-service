@@ -46,7 +46,6 @@ import ConfirmExtraInfoModal from "../_components/driverComponents/confirm-extra
 import DriverNotificationBar from "../_components/driverComponents/driver-notification-bar";
 import RequestAdjustmentModal from "../_components/driverComponents/request-adjustment-modal";
 import LogOutModal from "../_components/logout/logout";
-import NotificationSubscription from "../_components/notificationSubscription/notification-subscription";
 
 type usersRequestingResidency =
   RouterOutputs["bookings"]["complete"]["requestedVerification"];
@@ -102,10 +101,6 @@ export default function DriverPage() {
   ] = useDisclosure(false);
   const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
     useDisclosure(false);
-  const [
-    notificationModalOpened,
-    { open: openNotificationModal, close: closeNotificationModal },
-  ] = useDisclosure(false);
   const isMutatingRef = useRef(false);
 
   useEffect(() => {
@@ -360,10 +355,6 @@ export default function DriverPage() {
         <InstallPwaPrompt
           closeModal={closePwaModal}
           modalOpened={installPwaModalOpened}
-        />
-        <NotificationSubscription
-          closeModal={closeNotificationModal}
-          modalOpened={notificationModalOpened}
         />
         <AlertPopup
           abortButtonText={"Back"}
@@ -749,10 +740,6 @@ export default function DriverPage() {
                 <NavbarOption
                   onClick={() => openPwaModal()}
                   text={"Download PWA App"}
-                />
-                <NavbarOption
-                  onClick={() => openNotificationModal()}
-                  text={"Enable PWA Notifications"}
                 />
               </AppShell.Section>
             </Stack>

@@ -17,12 +17,14 @@ import {
 import { db } from "~/server/db";
 import {
   bookings,
+  enabledPushNotifications,
   profile,
   rideCodes,
   user,
   userUsedRideCode,
 } from "~/server/db/schema";
 import { notifyDriver } from "~/server/push-driver-notifications";
+import { sendPushNotification } from "~/server/send-notifications";
 import {
   BOOKING_COSTS,
   BookingStatus,
@@ -130,7 +132,10 @@ export const bookingsRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx }) => {
     try {
       if (ctx.session.user.role === UserRoles.ADMIN) {
-        const result = await db.select().from(bookings);
+        const result = await db
+          .select()
+          .from(bookings)
+          .where(eq(bookings.requiresAdjustment, false));
 
         return result;
       } else if (ctx.session.user.role === UserRoles.DRIVER) {
@@ -138,9 +143,12 @@ export const bookingsRouter = createTRPCRouter({
           .select()
           .from(bookings)
           .where(
-            or(
-              eq(bookings.status, BookingStatus.PENDING),
-              eq(bookings.status, BookingStatus.IN_PROGRESS),
+            and(
+              or(
+                eq(bookings.status, BookingStatus.PENDING),
+                eq(bookings.status, BookingStatus.IN_PROGRESS),
+              ),
+              eq(bookings.requiresAdjustment, false),
             ),
           );
 
@@ -149,7 +157,12 @@ export const bookingsRouter = createTRPCRouter({
         const result = await db
           .select()
           .from(bookings)
-          .where(eq(bookings.created_by, ctx.session.user.id));
+          .where(
+            and(
+              eq(bookings.created_by, ctx.session.user.id),
+              eq(bookings.requiresAdjustment, false),
+            ),
+          );
 
         return result;
       }
@@ -1278,6 +1291,11 @@ export const bookingsRouter = createTRPCRouter({
           code: "BAD_REQUEST",
           message: "Booking already of this type",
         });
+      } else if (bookingToUpdate.requiresAdjustment) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Already requested adjustment on this booking",
+        });
       }
 
       //--Input checking--
@@ -1308,6 +1326,28 @@ export const bookingsRouter = createTRPCRouter({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "No bookings found to update",
+          });
+        }
+
+        const [userSubscriptionInfo] = await db
+          .select({
+            auth: enabledPushNotifications.auth,
+            p256dh: enabledPushNotifications.p256dh,
+            endpoint: enabledPushNotifications.deviceEndpoint,
+          })
+          .from(enabledPushNotifications)
+          .where(eq(enabledPushNotifications.belongsTo, result.created_by));
+
+        if (userSubscriptionInfo) {
+          await sendPushNotification({
+            endpoint: userSubscriptionInfo.endpoint,
+            p256dh: userSubscriptionInfo.p256dh,
+            auth: userSubscriptionInfo.auth,
+            payload: {
+              title: "Requested changes",
+              body: "A driver has requested changes to a recently made booking. Open the app to review the changes.",
+              url: "/",
+            },
           });
         }
       } catch (error) {

@@ -1156,7 +1156,7 @@ export default function BookingForm({
             </Grid>
             <Grid gutter={0}>
               <Grid.Col span={6}>
-                <Text>Receive Reminders?</Text>
+                <Text>Receive Reminders? (requires app)</Text>
               </Grid.Col>
               <Grid.Col span={6}>
                 <MantineProvider theme={{ cursorType: "pointer" }}>

@@ -20,7 +20,6 @@ import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
 import LogOutModal from "../_components/logout/logout";
-import NotificationSubscription from "../_components/notificationSubscription/notification-subscription";
 
 enum PageView { //Enum string values double as app shell header text
   Trips = "- Trips",
@@ -52,10 +51,6 @@ export default function AdminPage() {
   ] = useDisclosure(false);
   const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
     useDisclosure(false);
-  const [
-    notificationModalOpened,
-    { open: openNotificationModal, close: closeNotificationModal },
-  ] = useDisclosure(false);
   const [issuesTableFilters, setIssuesTableFilters] = useState<string[]>([]);
   const { data: session, isPending } = authClient.useSession();
   const [showLoadingUI, setShowLoadingUI] = useState(true);
@@ -157,10 +152,6 @@ export default function AdminPage() {
             closeModal={closePwaModal}
             modalOpened={installPwaModalOpened}
           />
-          <NotificationSubscription
-            closeModal={closeNotificationModal}
-            modalOpened={notificationModalOpened}
-          />
         </>
       }
       navbarComponent={
@@ -222,10 +213,6 @@ export default function AdminPage() {
             <NavbarOption
               onClick={() => openPwaModal()}
               text={"Download PWA App"}
-            />
-            <NavbarOption
-              onClick={() => openNotificationModal()}
-              text={"Enable PWA Notifications"}
             />
           </AppShell.Section>
         </Stack>
