@@ -38,6 +38,7 @@ import CustomAppShell from "../_components/common/appShell/app-shell";
 import AsideButton from "../_components/common/appShell/aside-button";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
+import InstallPwaPrompt from "../_components/common/installPwaPrompt/install-pwa-prompt";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
@@ -45,6 +46,7 @@ import ConfirmExtraInfoModal from "../_components/driverComponents/confirm-extra
 import DriverNotificationBar from "../_components/driverComponents/driver-notification-bar";
 import RequestAdjustmentModal from "../_components/driverComponents/request-adjustment-modal";
 import LogOutModal from "../_components/logout/logout";
+import NotificationSubscription from "../_components/notificationSubscription/notification-subscription";
 
 type usersRequestingResidency =
   RouterOutputs["bookings"]["complete"]["requestedVerification"];
@@ -97,6 +99,12 @@ export default function DriverPage() {
   const [
     requestAdjustmentModalOpened,
     { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
+  ] = useDisclosure(false);
+  const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
+    useDisclosure(false);
+  const [
+    notificationModalOpened,
+    { open: openNotificationModal, close: closeNotificationModal },
   ] = useDisclosure(false);
   const isMutatingRef = useRef(false);
 
@@ -320,9 +328,13 @@ export default function DriverPage() {
         <DriverNotificationBar />
         <RequestAdjustmentModal
           bookingId={form.getValues().id}
-          closeModal={closeRequestAdjustmentModal}
+          closeModal={() => {
+            closeRequestAdjustmentModal();
+            openDrawer();
+          }}
           currentBookingType={form.getValues().bookingType}
           modalOpened={requestAdjustmentModalOpened}
+          onSuccess={closeDrawer}
         />
         <ManageAccountModal
           closeModal={closeManageAccountModal}
@@ -344,6 +356,14 @@ export default function DriverPage() {
         <ReportAppIssueModal
           closeModal={closeReportApp}
           modalOpened={reportAppOpened}
+        />
+        <InstallPwaPrompt
+          closeModal={closePwaModal}
+          modalOpened={installPwaModalOpened}
+        />
+        <NotificationSubscription
+          closeModal={closeNotificationModal}
+          modalOpened={notificationModalOpened}
         />
         <AlertPopup
           abortButtonText={"Back"}
@@ -473,7 +493,10 @@ export default function DriverPage() {
                   <Button
                     c={"black"}
                     color="buttonColor"
-                    onClick={() => openRequestAdjustmentModal()}
+                    onClick={() => {
+                      openRequestAdjustmentModal();
+                      closeDrawer();
+                    }}
                     p={0}
                     size="compact-sm"
                     type="button"
@@ -722,6 +745,14 @@ export default function DriverPage() {
                 <NavbarOption
                   onClick={openReportApp}
                   text={"Report App Issue"}
+                />
+                <NavbarOption
+                  onClick={() => openPwaModal()}
+                  text={"Download PWA App"}
+                />
+                <NavbarOption
+                  onClick={() => openNotificationModal()}
+                  text={"Enable PWA Notifications"}
                 />
               </AppShell.Section>
             </Stack>

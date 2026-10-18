@@ -60,6 +60,7 @@ export const bookings = pgTable("bookings", {
   paid: boolean("paid").notNull().default(false),
   rideCode: text("ride_code").references(() => rideCodes.code),
   reminders: boolean("receive_reminders").notNull().default(false),
+  sentReminder: boolean("sent_reminder").notNull().default(false),
   requestVerification: boolean("request_verification").notNull().default(false),
   created_by: text("created_by")
     .notNull()
@@ -75,6 +76,22 @@ export const bookings = pgTable("bookings", {
   contactEmail: text("contact_email"),
   bookingType: bookingTypes("booking_type").notNull(),
   requiresAdjustment: boolean("requires_adjustment").notNull().default(false),
+});
+
+export const enabledPushNotifications = pgTable("enabled_push_notifications", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  deviceEndpoint: text("device_endpoint").unique().notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  belongsTo: text("belongs_to")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
 });
 
 export const appIssues = pgTable(
@@ -288,6 +305,7 @@ export const userRelations = relations(user, ({ many, one }) => ({
   profile: one(profile),
   bookings: many(bookings),
   rideCreditTransactions: many(rideCreditTransactions),
+  enabledPushNotifications: many(enabledPushNotifications),
 }));
 
 export const rideCreditTransactionsRelations = relations(
@@ -310,6 +328,16 @@ export const bookingRelations = relations(bookings, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const pushNotificationsRelations = relations(
+  enabledPushNotifications,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [enabledPushNotifications.belongsTo],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const rideCodeRelations = relations(rideCodes, ({ many }) => ({
   bookings: many(bookings),

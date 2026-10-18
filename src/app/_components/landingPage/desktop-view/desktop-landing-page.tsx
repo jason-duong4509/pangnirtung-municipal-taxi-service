@@ -21,6 +21,7 @@ export default function DesktopLandingPage({
     { open: openLogoutModal, close: closeLogoutModal },
   ] = useDisclosure(false);
   const [firstRender, setFirstRender] = useState(true);
+  const [burgerOpened, { toggle: toggleBurger }] = useDisclosure();
 
   if (!isPending && firstRender) {
     setFirstRender(false);
@@ -46,7 +47,10 @@ export default function DesktopLandingPage({
         </Paper>
 
         <Flex align={"center"} flex={1} justify={"center"} pos={"relative"}>
-          <BookingForm openLoginModal={openLoginModal} />
+          <BookingForm
+            openLoginModal={openLoginModal}
+            toggleBurger={toggleBurger}
+          />
           <Group justify="flex-end" pos={"absolute"} right={"5%"} top={"5%"}>
             <Button
               c={"black"}
@@ -83,7 +87,11 @@ export default function DesktopLandingPage({
               {!session && "Log in"}
               {session && "Log out"}
             </Button>
-            <MenuButton openLoginModal={openLoginModal} />
+            <MenuButton
+              burgerOpened={burgerOpened}
+              openLoginModal={openLoginModal}
+              toggleBurger={toggleBurger}
+            />
           </Group>
         </Flex>
       </Flex>

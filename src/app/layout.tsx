@@ -14,6 +14,8 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
+import { PWAProvider } from "./_components/providers/pwa-provider/pwa-provider";
+import { ServiceWorkerRegistration } from "./_components/serviceWorkerRegistration/service-worker-registration";
 
 export const metadata: Metadata = {
   title: "Pangnirtung Taxi App",
@@ -96,8 +98,11 @@ export default function RootLayout({
 
       <body>
         <MantineProvider theme={mantineTheme}>
-          <Notifications />
-          <TRPCReactProvider>{children}</TRPCReactProvider>
+          <PWAProvider>
+            <ServiceWorkerRegistration />
+            <Notifications />
+            <TRPCReactProvider>{children}</TRPCReactProvider>
+          </PWAProvider>
         </MantineProvider>
       </body>
     </html>

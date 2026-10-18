@@ -683,8 +683,10 @@ const FormUI = ({
 
 export default function BookingForm({
   openLoginModal,
+  toggleBurger,
 }: {
   openLoginModal: () => void;
+  toggleBurger: () => void;
 }) {
   const [pickupAddr, setPickupAddr] = useState("");
   const [destAddr, setDestAddr] = useState("");
@@ -1485,7 +1487,7 @@ export default function BookingForm({
             style={transitionStyle}
             w={{ base: "350px", smMd: "400px" }}
           >
-            <Stack gap={"lg"}>
+            <Stack gap={"md"}>
               <Group gap={"xs"} justify="space-between">
                 <Title order={4}>You're Booked!</Title>
                 <Button
@@ -1503,12 +1505,30 @@ export default function BookingForm({
               </Group>
               <Text>
                 <Text component="span">
-                  Your trip has been successfully booked. You can still make
-                  changes to it until the trip is accepted by clicking the
-                  button below or by visiting your{" "}
+                  You can still make changes until the trip is accepted by
+                  clicking the button below or by visiting your{" "}
                 </Text>
                 <Anchor href="/booking-history">Trip History</Anchor>
               </Text>
+
+              <Text>
+                Download the app to receive in-app notifications and an app-like
+                experience
+              </Text>
+              <Group justify="flex-start">
+                <Button
+                  c={"black"}
+                  fw={"normal"}
+                  onClick={() => toggleBurger()}
+                  p={0}
+                  size="compact-sm"
+                  style={{ textDecoration: "underline" }}
+                  type="button"
+                  variant="transparent"
+                >
+                  Download the app
+                </Button>
+              </Group>
 
               <Button
                 c={"black"}
