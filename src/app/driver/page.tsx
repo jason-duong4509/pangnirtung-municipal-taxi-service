@@ -3,14 +3,18 @@ import {
   AppShell,
   Button,
   Checkbox,
+  CloseButton,
   Drawer,
   Group,
+  Modal,
   Paper,
+  ScrollArea,
   Skeleton,
   Stack,
   Table,
   Text,
   TextInput,
+  Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
@@ -38,6 +42,7 @@ import CustomAppShell from "../_components/common/appShell/app-shell";
 import AsideButton from "../_components/common/appShell/aside-button";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
+import BookingFormFull from "../_components/common/bookingFormFull/booking-form-full";
 import InstallPwaPrompt from "../_components/common/installPwaPrompt/install-pwa-prompt";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
@@ -102,6 +107,10 @@ export default function DriverPage() {
   const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
     useDisclosure(false);
   const isMutatingRef = useRef(false);
+  const [
+    addTripModalOpened,
+    { open: openAddTripModal, close: closeAddTripModal },
+  ] = useDisclosure(false);
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.DRIVER && showLoadingUI) {
@@ -366,6 +375,23 @@ export default function DriverPage() {
           onConfirm={() => onModalSubmit()}
           titleText={alertTitleText}
         />
+        <Modal
+          centered
+          onClose={closeAddTripModal}
+          opened={addTripModalOpened}
+          radius={"lg"}
+          scrollAreaComponent={ScrollArea.Autosize}
+          withCloseButton={false}
+          zIndex={300}
+        >
+          <Stack gap={"sm"}>
+            <Group justify="space-between">
+              <Title order={4}>Add a Trip</Title>
+              <CloseButton onClick={closeAddTripModal} />
+            </Group>
+            <BookingFormFull onSuccess={closeAddTripModal} />
+          </Stack>
+        </Modal>
         <Drawer
           offset={8}
           onClose={closeDrawer}
@@ -719,6 +745,7 @@ export default function DriverPage() {
                   }}
                   text={"Pending Trips"}
                 />
+                <NavbarOption onClick={openAddTripModal} text={"Add a Trip"} />
               </AppShell.Section>
               <AppShell.Section>
                 <NavbarHeader text={"Account"} />

@@ -483,6 +483,161 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
+  createForAnother: protectedProcedure
+    .input(
+      z.object({
+        pickupTime: z.string().nullable(),
+        pickupAddr: z.string(),
+        destAddr: z.string(),
+        name: z.string(),
+        tripReason: z.string(),
+        reminders: z.boolean(),
+        contactPhone: z.string(),
+        bookingType: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.session.user.role !== UserRoles.DRIVER) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not allowed to perform this action",
+        });
+      }
+
+      //--Input checking--
+      const pickupTimeCheck = checkPickUpTime(input.pickupTime);
+      let pickupTime = undefined as undefined | Date;
+      if (pickupTimeCheck.isProper) {
+        pickupTime = pickupTimeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupTimeCheck.errorMessage,
+        });
+      }
+      const pickupAddrCheck = checkAddress(input.pickupAddr);
+      let pickupAddr = "" as string;
+      if (pickupAddrCheck.isProper) {
+        pickupAddr = pickupAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupAddrCheck.errorMessage,
+        });
+      }
+      const destAddrCheck = checkAddress(input.destAddr);
+      let destAddr = "" as string;
+      if (destAddrCheck.isProper) {
+        destAddr = destAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: destAddrCheck.errorMessage,
+        });
+      }
+      const nameCheck = checkName(input.name);
+      let name = "" as string;
+      if (nameCheck.isProper) {
+        name = nameCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: nameCheck.errorMessage,
+        });
+      }
+      const tripReasonCheck = checkTripReason(input.tripReason);
+      let tripReason = "" as string;
+      if (tripReasonCheck.isProper) {
+        tripReason = tripReasonCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: tripReasonCheck.errorMessage,
+        });
+      }
+      const phoneNumberCheck = checkPhoneNumber(input.contactPhone);
+      let phoneNumber = "" as string;
+      if (phoneNumberCheck.isProper) {
+        phoneNumber = phoneNumberCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: phoneNumberCheck.errorMessage,
+        });
+      }
+      const bookingTypeCheck = checkBookingType(input.bookingType);
+      let bookingType = undefined as BookingValueTypes | undefined;
+      if (bookingTypeCheck.isProper) {
+        bookingType = bookingTypeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: bookingTypeCheck.errorMessage,
+        });
+      }
+      //------------------
+
+      try {
+        const result = await db.transaction(async (tx) => {
+          const [userRecord] = await tx
+            .select({
+              id: user.id,
+              role: user.role,
+            })
+            .from(user)
+            .where(eq(user.phoneNumber, phoneNumber));
+          if (!userRecord) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `No user has primary number ${phoneNumber}`,
+            });
+          } else if (userRecord.role !== UserRoles.MEMBER) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "A trip cannot be made for this user as they are not a member",
+            });
+          }
+
+          const [insertedBooking] = await tx
+            .insert(bookings)
+            .values({
+              pickupAddr: pickupAddr,
+              destAddr: destAddr,
+              name: name,
+              pickupTime: pickupTime,
+              tripReason: tripReason,
+              paymentMethod: PaymentMethods.CASH,
+              reminders: input.reminders,
+              created_by: ctx.session.user.id,
+              requestVerification: false,
+              contactEmail: null,
+              contactPhone: phoneNumber,
+              bookingType: bookingType,
+            })
+            .returning();
+
+          if (!insertedBooking) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Unable to create booking",
+            });
+          }
+
+          return insertedBooking;
+        });
+        return result;
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create booking",
+          cause: error,
+        });
+      }
+    }),
   update: protectedProcedure
     .input(
       z.object({
