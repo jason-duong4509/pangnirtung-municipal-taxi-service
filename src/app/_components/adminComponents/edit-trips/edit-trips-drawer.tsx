@@ -15,23 +15,31 @@ import {
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
+import { BookingStatus } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 import BookingContents from "../../common/bookingContents/booking-contents";
+import RequestAdjustmentModal from "../../driverComponents/request-adjustment-modal";
 
 type bookingsData = RouterOutputs["bookings"]["get"][0];
 
 export default function EditTripsDrawer({
   closeDrawer,
+  openDrawer,
   drawerOpened,
   drawerContents,
 }: {
   closeDrawer: () => void;
+  openDrawer: () => void;
   drawerOpened: boolean;
   drawerContents: bookingsData | undefined;
 }) {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
+  const [
+    requestAdjustmentModalOpened,
+    { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
+  ] = useDisclosure(false);
 
   const getBookingsQuery = api.bookings.get.useQuery(undefined, {
     //Forces manual fetching
@@ -171,6 +179,10 @@ export default function EditTripsDrawer({
     });
   };
 
+  if (!drawerContents) {
+    return;
+  }
+
   return (
     <>
       <AlertPopup
@@ -182,6 +194,16 @@ export default function EditTripsDrawer({
         modalOpened={modalOpened}
         onConfirm={() => bookingForm.onSubmit(handleFormOnSubmit)()}
         titleText={"Confirm Action"}
+      />
+      <RequestAdjustmentModal
+        bookingId={drawerContents.id}
+        closeModal={() => {
+          closeRequestAdjustmentModal();
+          openDrawer();
+        }}
+        currentBookingType={drawerContents.bookingType}
+        modalOpened={requestAdjustmentModalOpened}
+        onSuccess={closeDrawer}
       />
       <Drawer
         offset={8}
@@ -205,6 +227,22 @@ export default function EditTripsDrawer({
             )}
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
               <Group bg={"primaryColor"} grow py={"md"}>
+                {drawerContents.status === BookingStatus.PENDING && (
+                  <Button
+                    c={"black"}
+                    color="buttonColor"
+                    onClick={() => {
+                      openRequestAdjustmentModal();
+                      closeDrawer();
+                    }}
+                    p={0}
+                    size="compact-sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Request Adjustment
+                  </Button>
+                )}
                 <Button
                   c={bookingForm.isDirty() ? "black" : undefined}
                   color="buttonColor"

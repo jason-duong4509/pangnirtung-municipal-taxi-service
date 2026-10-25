@@ -83,6 +83,7 @@ export default function DriverPage() {
   const isTablet = useMediaQuery("(max-width: 750px)");
   const isMobile = useMediaQuery("(max-width: 620px)");
   const isPhone = useMediaQuery("(max-width: 550px)");
+  const shortenTripReason = useMediaQuery("(max-width: 850px)");
   const [alertTitleText, setAlertTitleText] = useState("Confirm Action");
   const [alertBodyComponent, setAlertBodyComponent] = useState(
     <Text>Are you sure?</Text>,
@@ -311,9 +312,11 @@ export default function DriverPage() {
           )}
           {!isTablet && (
             <Table.Td>
-              {booking.tripReason.length > 30
-                ? `${booking.tripReason.slice(0, 27)}...`
-                : booking.tripReason}
+              {shortenTripReason && booking.tripReason.length > 15
+                ? `${booking.tripReason.slice(0, 12)}...`
+                : booking.tripReason.length > 30
+                  ? `${booking.tripReason.slice(0, 27)}...`
+                  : booking.tripReason}
             </Table.Td>
           )}
         </Table.Tr>
@@ -418,7 +421,11 @@ export default function DriverPage() {
                     onClick={() => {
                       openAlertModal();
                       setAlertTitleText("Cancel trip");
-                      setAlertBodyComponent(<Text>Are you sure?</Text>);
+                      setAlertBodyComponent(
+                        <Text>
+                          A refund will be issued to the user. Are you sure?
+                        </Text>,
+                      );
                       setOnModalSubmit(() => () => {
                         if (isMutatingRef.current) {
                           return;
@@ -563,7 +570,8 @@ export default function DriverPage() {
                       setAlertTitleText("Cancel trips");
                       setAlertBodyComponent(
                         <Text>
-                          All selected trips will be cancelled. Are you sure?
+                          All selected trips will be cancelled and refunds will
+                          be issued. Are you sure?
                         </Text>,
                       );
                       setOnModalSubmit(() => () => {

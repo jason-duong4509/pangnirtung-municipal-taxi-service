@@ -805,15 +805,10 @@ export const bookingsRouter = createTRPCRouter({
                     eq(bookings.id, bookingId),
                     eq(bookings.status, BookingStatus.PENDING),
                   )
-                : ctx.session.user.role === UserRoles.DRIVER
-                  ? and(
-                      eq(bookings.id, bookingId),
-                      eq(bookings.status, BookingStatus.IN_PROGRESS),
-                    )
-                  : and(
-                      eq(bookings.id, bookingId),
-                      ne(bookings.status, BookingStatus.CANCELLED),
-                    );
+                : and(
+                    eq(bookings.id, bookingId),
+                    eq(bookings.status, BookingStatus.IN_PROGRESS),
+                  );
 
             const [originalBooking] = await tx
               .select({
@@ -829,7 +824,7 @@ export const bookingsRouter = createTRPCRouter({
             if (!originalBooking) {
               throw new TRPCError({
                 code: "BAD_REQUEST",
-                message: `Booking ID not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+                message: `Booking ID not found or cannot be cancelled: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
               });
             }
 
@@ -1144,23 +1139,18 @@ export const bookingsRouter = createTRPCRouter({
             //--members: Update payment information in booking form before accepting--
 
             const whereClause =
-              ctx.session.user.role === UserRoles.DRIVER
+              ctx.session.user.role === UserRoles.MEMBER
                 ? and(
                     eq(bookings.id, bookingId),
                     eq(bookings.status, BookingStatus.PENDING),
-                    eq(bookings.requiresAdjustment, false),
+                    eq(bookings.created_by, ctx.session.user.id),
+                    eq(bookings.requiresAdjustment, true),
                   )
-                : ctx.session.user.role === UserRoles.MEMBER
-                  ? and(
-                      eq(bookings.id, bookingId),
-                      eq(bookings.status, BookingStatus.PENDING),
-                      eq(bookings.created_by, ctx.session.user.id),
-                    )
-                  : and(
-                      eq(bookings.id, bookingId),
-                      eq(bookings.requiresAdjustment, false),
-                      eq(bookings.status, BookingStatus.PENDING),
-                    );
+                : and(
+                    eq(bookings.id, bookingId),
+                    eq(bookings.requiresAdjustment, false),
+                    eq(bookings.status, BookingStatus.PENDING),
+                  );
 
             const [result] = await tx
               .select()
@@ -1356,13 +1346,10 @@ export const bookingsRouter = createTRPCRouter({
 
       try {
         const updatedUsers = await db.transaction(async (tx) => {
-          const whereClause =
-            ctx.session.user.role === UserRoles.DRIVER
-              ? and(
-                  inArray(bookings.id, input.bookingIds),
-                  eq(bookings.status, BookingStatus.IN_PROGRESS),
-                )
-              : inArray(bookings.id, input.bookingIds);
+          const whereClause = and(
+            inArray(bookings.id, input.bookingIds),
+            eq(bookings.status, BookingStatus.IN_PROGRESS),
+          );
 
           const updatedBookingIds = await tx
             .update(bookings)
@@ -1381,7 +1368,7 @@ export const bookingsRouter = createTRPCRouter({
 
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Booking IDs not found${ctx.session.user.role === UserRoles.DRIVER ? " or not in progress" : ""}: ${missingBookingIds}`,
+              message: `Booking IDs not found or not in progress: ${missingBookingIds}`,
             });
           }
           return updatedBookingIds;

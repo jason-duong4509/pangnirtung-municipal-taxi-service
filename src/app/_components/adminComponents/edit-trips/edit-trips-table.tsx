@@ -37,10 +37,14 @@ export default function EditTripsTable({
   isSelecting,
   selectedRows,
   setSelectedRows,
+  setTable,
+  table,
 }: {
   isSelecting: boolean;
   selectedRows: number[];
   setSelectedRows: Dispatch<SetStateAction<number[]>>;
+  setTable: Dispatch<SetStateAction<string>>;
+  table: string;
 }) {
   const isSuperSmall = useMediaQuery("(max-width: 520px)");
   const isMobile = useMediaQuery("(max-width: 635px)");
@@ -50,7 +54,6 @@ export default function EditTripsTable({
   const [drawerContents, setDrawerContents] = useState<
     bookingsData | undefined
   >(undefined);
-  const [table, setTable] = useState("pending");
 
   const getBookingsQuery = api.bookings.get.useQuery();
 
@@ -167,6 +170,7 @@ export default function EditTripsTable({
         closeDrawer={closeDrawer}
         drawerContents={drawerContents}
         drawerOpened={drawerOpened}
+        openDrawer={openDrawer}
       />
       <Stack h={"100%"}>
         <SegmentedControl
@@ -209,7 +213,10 @@ export default function EditTripsTable({
             },
           ]}
           fullWidth
-          onChange={setTable}
+          onChange={(value) => {
+            setTable(value);
+            setSelectedRows([]);
+          }}
           value={table}
         />
         <Table.ScrollContainer minWidth={0} style={{ flex: 1, minHeight: 0 }}>

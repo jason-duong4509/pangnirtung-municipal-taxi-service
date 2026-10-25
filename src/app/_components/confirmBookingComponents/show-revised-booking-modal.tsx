@@ -18,13 +18,14 @@ import { useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useRouter } from "next/navigation";
 import { type JSX, useEffect, useState } from "react";
-import { dbTimeToPrettyString, formatString } from "~/lib/helpers";
+import { formatString } from "~/lib/helpers";
 import { checkBookingTypeAndPaymentMethod } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
 import { PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
+import BookingContents from "../common/bookingContents/booking-contents";
 import PaymentModal from "../common/payment/payment";
 import TripLoading from "../common/trips/trip-loading";
 import LogOutModal from "../logout/logout";
@@ -205,7 +206,6 @@ const ComponentContents = ({
     logoutModalOpened,
     { open: openLogoutModal, close: closeLogoutModal },
   ] = useDisclosure(false);
-  //TODO: finish populating with booking fields
 
   const cancelBookingMutation = api.bookings.cancel.useMutation({
     onSuccess: async () => {
@@ -303,29 +303,14 @@ const ComponentContents = ({
                   value={formatString(bookingDetails.bookingType)}
                 />
               </Group>
-              <Divider label="Booking Details" labelPosition="center" my="xs" />
+              <Divider
+                label="Full Booking Details"
+                labelPosition="center"
+                my="xs"
+              />
               <ScrollArea>
                 <Stack>
-                  <Group>
-                    <Text flex={1}>Booking ID:</Text>
-                    <TextInput flex={1} readOnly value={bookingDetails.id} />
-                  </Group>
-                  <Group>
-                    <Text flex={1}>Pick-up Time:</Text>
-                    <TextInput
-                      flex={1}
-                      readOnly
-                      value={dbTimeToPrettyString(bookingDetails.pickupTime)}
-                    />
-                  </Group>
-                  <Group>
-                    <Text flex={1}>Pick-up Location:</Text>
-                    <TextInput
-                      flex={1}
-                      readOnly
-                      value={bookingDetails.pickupAddr}
-                    />
-                  </Group>
+                  <BookingContents bookingData={bookingDetails} readOnly />
                 </Stack>
               </ScrollArea>
             </Stack>
@@ -394,7 +379,7 @@ export default function ShowRevisedBookingModal({
     bookingsData | undefined
   >(undefined);
   const deviceIsShort = useMediaQuery("(max-height: 550px)");
-  const deviceIsTall = useMediaQuery("(max-height: 1000px)"); //TODO: change the value to a height just large enough to cover the entire form without scrolling
+  const deviceIsTall = useMediaQuery("(max-height: 1400px)"); //height dependent on the minimum screen height needed to show the entire UI without vertical scrolling
 
   const bookingId = Number(bookingIdString);
   const notANumber = Number.isNaN(bookingId);

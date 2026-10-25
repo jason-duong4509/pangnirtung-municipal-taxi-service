@@ -56,6 +56,7 @@ export default function AdminPage() {
   const [showLoadingUI, setShowLoadingUI] = useState(true);
   const router = useRouter();
   const isMobile = useMediaQuery("(max-width: 500px)");
+  const [tripTable, setTripTable] = useState("pending");
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.ADMIN && showLoadingUI) {
@@ -76,15 +77,17 @@ export default function AdminPage() {
     <CustomAppShell
       asideComponent={
         <>
-          {pageView === PageView.Trips && (
-            <EditTripsAsideBar
-              expandAside={expandAside}
-              isSelecting={isSelecting}
-              selectedRows={selectedRows}
-              setIsSelecting={setIsSelecting}
-              setSelectedRows={setSelectedRows}
-            />
-          )}
+          {pageView === PageView.Trips &&
+            (tripTable === "pending" || tripTable === "in_progress") && (
+              <EditTripsAsideBar
+                expandAside={expandAside}
+                isSelecting={isSelecting}
+                selectedRows={selectedRows}
+                setIsSelecting={setIsSelecting}
+                setSelectedRows={setSelectedRows}
+                table={tripTable}
+              />
+            )}
           {pageView === PageView.ViewAppIssues && (
             <ViewAppIssuesAsideBar
               expandAside={expandAside}
@@ -131,6 +134,8 @@ export default function AdminPage() {
               isSelecting={isSelecting}
               selectedRows={selectedRows}
               setSelectedRows={setSelectedRows}
+              setTable={setTripTable}
+              table={tripTable}
             />
           )}
           {pageView === PageView.ViewAppIssues && (
