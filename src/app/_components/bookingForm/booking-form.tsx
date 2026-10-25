@@ -27,7 +27,6 @@ import { type UseFormReturnType, useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   ArrowLeftIcon,
-  CalendarBlankIcon,
   ClipboardTextIcon,
   CurrencyCircleDollarIcon,
   DeviceMobileIcon,
@@ -47,11 +46,7 @@ import {
   useState,
 } from "react";
 import { IMaskInput } from "react-imask";
-import {
-  dbTimeToLocalTime,
-  dbTimeToPrettyString,
-  formatString,
-} from "~/lib/helpers";
+import { dbTimeToLocalTime, formatString } from "~/lib/helpers";
 import {
   checkAddress,
   checkBookingType,
@@ -67,8 +62,14 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import { BookingTypes, BookingValueTypes, PaymentMethods } from "~/types/types";
+import {
+  BookingStatus,
+  BookingTypes,
+  BookingValueTypes,
+  PaymentMethods,
+} from "~/types/types";
 import AlertPopup from "../common/alert/alert";
+import BookingContents from "../common/bookingContents/booking-contents";
 import NameNumberPresetModal from "../common/namePhonePreset/name-number-preset-modal";
 import PaymentModal from "../common/payment/payment";
 import AddressDropdown from "./booking-form-components/address-drop-down-field";
@@ -104,8 +105,6 @@ const BookingsDrawer = ({
   const formSubmittingRef = useRef(false);
   const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
     useDisclosure(false);
-  const [pickupAddr, setPickupAddr] = useState("");
-  const [destAddr, setDestAddr] = useState("");
   const [alertBodyComponent, setAlertBodyComponent] = useState(
     <Text>Are you sure?</Text>,
   );
@@ -142,19 +141,12 @@ const BookingsDrawer = ({
   });
 
   const bookingForm = useForm<{
-    pickupTime: string | null | Date;
+    pickupTime: string | null;
     pickupAddr: string;
     destAddr: string;
     name: string;
     reasonForTrip: string;
-    paymentCode: string;
-    id: number;
-    status: string;
-    createdAt: Date;
-    updatedAt: Date;
     phoneNumber: string;
-    bookingType: BookingValueTypes;
-    paymentMethod: PaymentMethods;
   }>({
     mode: "uncontrolled",
 
@@ -165,13 +157,6 @@ const BookingsDrawer = ({
       name: "",
       reasonForTrip: "",
       phoneNumber: "",
-      bookingType: BookingValueTypes.IN_TOWN,
-      paymentMethod: PaymentMethods.CREDIT_CARD,
-      paymentCode: "",
-      id: 0,
-      status: "",
-      createdAt: new Date(),
-      updatedAt: new Date(),
     },
 
     //Frontend field checks
@@ -230,15 +215,6 @@ const BookingsDrawer = ({
           return result.errorMessage;
         }
       },
-      bookingType: (value) => {
-        const result = checkBookingType(value);
-
-        if (result.isProper) {
-          return null;
-        } else {
-          return result.errorMessage;
-        }
-      },
     },
   });
 
@@ -247,10 +223,6 @@ const BookingsDrawer = ({
       return;
     }
 
-    //Prefill mantine controlled fields with booking data
-    setPickupAddr(drawerContents.pickupAddr);
-    setDestAddr(drawerContents.destAddr);
-
     //--Prefill mantine form with booking data--
     bookingForm.setInitialValues({
       pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
@@ -258,14 +230,7 @@ const BookingsDrawer = ({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: drawerContents.paymentMethod,
-      paymentCode: drawerContents.rideCode ?? "None Used",
-      id: drawerContents.id,
-      status: formatString(drawerContents.status),
-      createdAt: drawerContents.createdAt,
-      updatedAt: drawerContents.updatedAt,
       phoneNumber: drawerContents.contactPhone,
-      bookingType: drawerContents.bookingType,
     });
     bookingForm.setValues({
       pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
@@ -273,14 +238,7 @@ const BookingsDrawer = ({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: drawerContents.paymentMethod,
-      paymentCode: drawerContents.rideCode ?? "None Used",
-      id: drawerContents.id,
-      status: formatString(drawerContents.status),
-      createdAt: drawerContents.createdAt,
-      updatedAt: drawerContents.updatedAt,
       phoneNumber: drawerContents.contactPhone,
-      bookingType: drawerContents.bookingType,
     });
     //------------------------------------------
 
@@ -293,7 +251,7 @@ const BookingsDrawer = ({
   ]);
 
   const handleFormOnSubmit = async (values: typeof bookingForm.values) => {
-    if (formSubmittingRef.current) {
+    if (formSubmittingRef.current || !drawerContents) {
       //If form is already submitting
       return;
     }
@@ -305,7 +263,7 @@ const BookingsDrawer = ({
       destAddr: values.destAddr,
       name: values.name,
       pickupTime: values.pickupTime as string | null,
-      bookingId: values.id,
+      bookingId: drawerContents.id,
       tripReason: values.reasonForTrip,
       contactPhone: values.phoneNumber,
     });
@@ -323,6 +281,9 @@ const BookingsDrawer = ({
     });
   };
 
+  if (!drawerContents) {
+    return;
+  }
   return (
     <>
       <AlertPopup
@@ -341,203 +302,84 @@ const BookingsDrawer = ({
         opened={drawerOpened}
         radius="md"
         styles={
-          bookingForm.getValues().status === "Pending"
+          drawerContents.status === BookingStatus.PENDING
             ? { body: { paddingBottom: 0 } }
             : undefined
         }
         title={
-          bookingForm.getValues().status === "Pending"
+          drawerContents.status === BookingStatus.PENDING
             ? "Edit Trip"
             : "View Trip"
         }
       >
         <Stack h={"calc(100dvh - 75px)"}>
-          <TextInput
-            label="Trip Status"
-            readOnly
-            value={bookingForm.getValues().status}
-            variant="unstyled"
-          />
-          <TextInput
-            label="Booking ID"
-            readOnly
-            value={bookingForm.getValues().id}
-            variant="unstyled"
-          />
-          <TextInput
-            aria-label="Contact Name"
-            key={bookingForm.key("name")}
-            label={"Contact Name"}
-            leftSection={<UserIcon size={20} />}
-            placeholder="Contact Name"
-            {...bookingForm.getInputProps("name")}
-            readOnly={bookingForm.getValues().status !== "Pending"}
-            withAsterisk
-          />
-          <Input.Wrapper
-            aria-label="Contact Number"
-            error={bookingForm.errors.phoneNumber}
-          >
-            <Input.Label required>Contact Number</Input.Label>
-            <Input
-              component={IMaskInput}
-              key={bookingForm.key("phoneNumber")}
-              mask="(000) 000-0000"
-              placeholder="Contact Phone Number"
-              {...bookingForm.getInputProps("phoneNumber")}
-              leftSection={<DeviceMobileIcon size={20} />}
-              readOnly={bookingForm.getValues().status !== "Pending"}
-            />
-          </Input.Wrapper>
-          <TextInput
-            label="BookingType"
-            readOnly
-            value={formatString(bookingForm.getValues().bookingType)}
-            variant="unstyled"
-          />
-          {bookingForm.getValues().status === "Pending" && (
-            <>
-              <PickupTimeInput
-                form={bookingForm}
-                formField={"pickupTime"}
-                useLabel
-                withAsterisk
-              />
-              <AddressDropdown
-                ariaLabel="Pick-up address field"
-                changeValue={setPickupAddr}
-                fieldName="pickupAddr"
-                fieldValue={pickupAddr}
-                form={bookingForm}
-                icon={<MapPinLineIcon size={20} />}
-                label="Pick-up Address"
-                placeholder="Pick-up Address"
-                withAsterisk
-              />
-              <AddressDropdown
-                ariaLabel="Destination address field"
-                changeValue={setDestAddr}
-                fieldName="destAddr"
-                fieldValue={destAddr}
-                form={bookingForm}
-                icon={<PathIcon size={20} />}
-                label="Destination Address"
-                placeholder="Destination Address"
-                withAsterisk
-              />
-            </>
+          {drawerContents.status !== BookingStatus.PENDING && (
+            <BookingContents bookingData={drawerContents} readOnly={true} />
           )}
-          {bookingForm.getValues().status !== "Pending" && (
+          {drawerContents.status === BookingStatus.PENDING && (
             <>
-              <TextInput
-                label={"Pick-up Time"}
-                leftSection={<CalendarBlankIcon size={20} />}
-                readOnly
-                value={dbTimeToPrettyString(
-                  bookingForm.getValues().pickupTime as Date,
-                )}
+              <BookingContents
+                bookingData={drawerContents}
+                form={bookingForm}
+                readOnly={false}
               />
-              <TextInput
-                label={"Pick-up Address"}
-                leftSection={<MapPinLineIcon size={20} />}
-                readOnly
-                value={bookingForm.getValues().pickupAddr}
-              />
-              <TextInput
-                label={"Destination Address"}
-                leftSection={<PathIcon size={20} />}
-                readOnly
-                value={bookingForm.getValues().destAddr}
-              />
-            </>
-          )}
-          <Textarea
-            aria-label="Reason for trip"
-            key={bookingForm.key("reasonForTrip")}
-            leftSection={<QuestionIcon size={20} />}
-            {...bookingForm.getInputProps("reasonForTrip")}
-            autosize
-            label="Reason for Trip"
-            maxRows={4}
-            minRows={1}
-            placeholder="Optional"
-            readOnly={bookingForm.getValues().status !== "Pending"}
-          />
-          <TextInput
-            aria-label="Payment method"
-            label="Payment Method"
-            readOnly
-            value={formatString(bookingForm.getValues().paymentMethod)}
-            variant="unstyled"
-          />
-          <TextInput
-            label="Created On"
-            readOnly
-            value={dbTimeToPrettyString(bookingForm.getValues().createdAt)}
-            variant="unstyled"
-          />
-          <TextInput
-            label="Last Updated"
-            readOnly
-            value={dbTimeToPrettyString(bookingForm.getValues().updatedAt)}
-            variant="unstyled"
-          />
-          {bookingForm.getValues().status === "Pending" && (
-            <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
-              <Group bg={"primaryColor"} grow py={"md"}>
-                <Button
-                  c={"black"}
-                  color="buttonColor"
-                  onClick={() => {
-                    openAlertModal();
-                    setAlertBodyComponent(
-                      <>
-                        <Text>
-                          No charges will be made to trips that are cancelled
-                          while pending
-                        </Text>
-                        <Text>This action cannot be undone!</Text>
-                      </>,
-                    );
-                    setOnModalSubmit(
-                      () => () => handleDelete(bookingForm.getValues().id),
-                    );
-                  }}
-                  p={0}
-                  size="compact-sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Cancel Trip
-                </Button>
-                <Button
-                  c={bookingForm.isDirty() ? "black" : undefined}
-                  color="buttonColor"
-                  disabled={!bookingForm.isDirty()}
-                  form="booking-form"
-                  onClick={() => {
-                    bookingForm.validate();
-                    if (bookingForm.isValid()) {
+              <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
+                <Group bg={"primaryColor"} grow py={"md"}>
+                  <Button
+                    c={"black"}
+                    color="buttonColor"
+                    onClick={() => {
                       openAlertModal();
                       setAlertBodyComponent(
-                        <Text>
-                          Trip information will be changed. Are you sure?
-                        </Text>,
+                        <>
+                          <Text>
+                            No charges will be made to trips that are cancelled
+                            while pending
+                          </Text>
+                          <Text>This action cannot be undone!</Text>
+                        </>,
                       );
                       setOnModalSubmit(
-                        () => () => bookingForm.onSubmit(handleFormOnSubmit)(),
+                        () => () => handleDelete(drawerContents.id),
                       );
-                    }
-                  }}
-                  p={0}
-                  size="compact-sm"
-                  type="button"
-                  variant="filled"
-                >
-                  Update Trip
-                </Button>
-              </Group>
-            </Stack>
+                    }}
+                    p={0}
+                    size="compact-sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Cancel Trip
+                  </Button>
+                  <Button
+                    c={bookingForm.isDirty() ? "black" : undefined}
+                    color="buttonColor"
+                    disabled={!bookingForm.isDirty()}
+                    form="booking-form"
+                    onClick={() => {
+                      bookingForm.validate();
+                      if (bookingForm.isValid()) {
+                        openAlertModal();
+                        setAlertBodyComponent(
+                          <Text>
+                            Trip information will be changed. Are you sure?
+                          </Text>,
+                        );
+                        setOnModalSubmit(
+                          () => () =>
+                            bookingForm.onSubmit(handleFormOnSubmit)(),
+                        );
+                      }
+                    }}
+                    p={0}
+                    size="compact-sm"
+                    type="button"
+                    variant="filled"
+                  >
+                    Update Trip
+                  </Button>
+                </Group>
+              </Stack>
+            </>
           )}
         </Stack>
       </Drawer>

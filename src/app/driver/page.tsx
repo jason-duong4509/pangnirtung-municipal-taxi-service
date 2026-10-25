@@ -42,6 +42,7 @@ import CustomAppShell from "../_components/common/appShell/app-shell";
 import AsideButton from "../_components/common/appShell/aside-button";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
+import BookingContents from "../_components/common/bookingContents/booking-contents";
 import BookingFormFull from "../_components/common/bookingFormFull/booking-form-full";
 import InstallPwaPrompt from "../_components/common/installPwaPrompt/install-pwa-prompt";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
@@ -55,6 +56,7 @@ import LogOutModal from "../_components/logout/logout";
 type usersRequestingResidency =
   RouterOutputs["bookings"]["complete"]["requestedVerification"];
 type usersPaidWithCash = RouterOutputs["bookings"]["complete"]["paidWithCash"];
+type bookingsData = RouterOutputs["bookings"]["get"][0];
 
 export default function DriverPage() {
   const [viewPendingTrips, setViewPendingTrips] = useState(false);
@@ -111,6 +113,9 @@ export default function DriverPage() {
     addTripModalOpened,
     { open: openAddTripModal, close: closeAddTripModal },
   ] = useDisclosure(false);
+  const [drawerContents, setDrawerContents] = useState<
+    bookingsData | undefined
+  >(undefined);
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.DRIVER && showLoadingUI) {
@@ -264,6 +269,7 @@ export default function DriverPage() {
               bookingType: booking.bookingType,
             });
 
+            setDrawerContents(booking);
             openDrawer();
           }}
           style={{ cursor: "pointer" }}
@@ -382,7 +388,6 @@ export default function DriverPage() {
           radius={"lg"}
           scrollAreaComponent={ScrollArea.Autosize}
           withCloseButton={false}
-          zIndex={300}
         >
           <Stack gap={"sm"}>
             <Group justify="space-between">
@@ -401,82 +406,9 @@ export default function DriverPage() {
           title={"View Trip"}
         >
           <Stack h={"calc(100dvh - 75px)"}>
-            <TextInput
-              label="Booking ID"
-              readOnly
-              value={form.getValues().id}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Name"
-              readOnly
-              value={form.getValues().name}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Contact Number"
-              readOnly
-              value={form.getValues().phoneNumber}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Booking Type"
-              readOnly
-              value={formatString(form.getValues().bookingType ?? "")}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Pick-up Time"
-              readOnly
-              value={dbTimeToPrettyString(form.getValues().pickupTime)}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Pick-up Address"
-              readOnly
-              value={form.getValues().pickupAddr}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Destination Address"
-              readOnly
-              value={form.getValues().destAddr}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Resident Verification Requested?"
-              readOnly
-              value={form.getValues().verificationRequested ? "Yes" : "No"}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Reason for Trip"
-              readOnly
-              value={
-                form.getValues().reasonForTrip === ""
-                  ? "None Given"
-                  : form.getValues().reasonForTrip
-              }
-              variant="unstyled"
-            />
-            <TextInput
-              label="Payment Method"
-              readOnly
-              value={form.getValues().paymentMethod}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Created At"
-              readOnly
-              value={dbTimeToPrettyString(form.getValues().createdAt)}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Updated At"
-              readOnly
-              value={dbTimeToPrettyString(form.getValues().updatedAt)}
-              variant="unstyled"
-            />
+            {drawerContents && (
+              <BookingContents bookingData={drawerContents} readOnly />
+            )}
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
               <Group bg={"primaryColor"} grow py={"md"}>
                 {viewAcceptedTrips && (

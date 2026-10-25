@@ -609,7 +609,7 @@ export const bookingsRouter = createTRPCRouter({
               tripReason: tripReason,
               paymentMethod: PaymentMethods.CASH,
               reminders: input.reminders,
-              created_by: ctx.session.user.id,
+              created_by: userRecord.id,
               requestVerification: false,
               contactEmail: null,
               contactPhone: phoneNumber,
