@@ -199,15 +199,13 @@ export const reportAppRouter = createTRPCRouter({
         });
       }
     }),
-  createIssue: publicProcedure
+  createIssue: protectedProcedure
     .input(
       z.object({
         comments: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //todo: maybe make this a protected procedure?
-
       //--Input checking--
       const reportAppCommentsCheck = checkReportAppComments(input.comments);
       let comments = undefined as undefined | string;
