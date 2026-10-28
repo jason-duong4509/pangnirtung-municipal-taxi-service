@@ -37,6 +37,7 @@ export default function InstallPwaPrompt({
       );
       return;
     }
+    closeModal();
   };
 
   return (

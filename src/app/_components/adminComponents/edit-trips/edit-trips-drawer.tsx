@@ -1,31 +1,10 @@
 "use client";
 
-import {
-  Button,
-  Drawer,
-  Group,
-  Input,
-  Stack,
-  Text,
-  Textarea,
-  TextInput,
-} from "@mantine/core";
+import { Button, Drawer, Group, Stack, Text } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
-import {
-  DeviceMobileIcon,
-  MapPinLineIcon,
-  PathIcon,
-  QuestionIcon,
-  UserIcon,
-} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { IMaskInput } from "react-imask";
-import {
-  dbTimeToLocalTime,
-  dbTimeToPrettyString,
-  formatString,
-} from "~/lib/helpers";
+import { dbTimeToLocalTime } from "~/lib/helpers";
 import {
   checkAddress,
   checkName,
@@ -36,26 +15,31 @@ import {
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
-import AddressDropdown from "../../bookingForm/booking-form-components/address-drop-down-field";
-import PickupTimeInput from "../../bookingForm/booking-form-components/pick-up-time-field";
+import { BookingStatus } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
+import BookingContents from "../../common/bookingContents/booking-contents";
+import RequestAdjustmentModal from "../../driverComponents/request-adjustment-modal";
 
 type bookingsData = RouterOutputs["bookings"]["get"][0];
 
 export default function EditTripsDrawer({
   closeDrawer,
+  openDrawer,
   drawerOpened,
   drawerContents,
 }: {
   closeDrawer: () => void;
+  openDrawer: () => void;
   drawerOpened: boolean;
   drawerContents: bookingsData | undefined;
 }) {
-  const [pickupAddr, setPickupAddr] = useState("");
-  const [destAddr, setDestAddr] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
+  const [
+    requestAdjustmentModalOpened,
+    { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
+  ] = useDisclosure(false);
 
   const getBookingsQuery = api.bookings.get.useQuery(undefined, {
     //Forces manual fetching
@@ -82,13 +66,6 @@ export default function EditTripsDrawer({
     destAddr: string;
     name: string;
     reasonForTrip: string;
-    paymentMethod: string;
-    paymentCode: string | null;
-    id: number;
-    status: string;
-    createdAt: Date;
-    updatedAt: Date;
-    requestedVerification: boolean;
     phoneNumber: string;
   }>({
     mode: "uncontrolled",
@@ -157,10 +134,6 @@ export default function EditTripsDrawer({
       return;
     }
 
-    //Prefill mantine controlled fields with booking data
-    setPickupAddr(drawerContents.pickupAddr);
-    setDestAddr(drawerContents.destAddr);
-
     //--Prefill mantine form with booking data--
     bookingForm.setInitialValues({
       pickupTime: dbTimeToLocalTime(drawerContents.pickupTime),
@@ -168,13 +141,6 @@ export default function EditTripsDrawer({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: formatString(drawerContents.paymentMethod),
-      paymentCode: null, //TODO: add feature for this
-      id: drawerContents.id,
-      status: formatString(drawerContents.status),
-      createdAt: drawerContents.createdAt,
-      updatedAt: drawerContents.updatedAt,
-      requestedVerification: drawerContents.requestVerification,
       phoneNumber: drawerContents.contactPhone,
     });
     bookingForm.setValues({
@@ -183,13 +149,6 @@ export default function EditTripsDrawer({
       destAddr: drawerContents.destAddr,
       name: drawerContents.name,
       reasonForTrip: drawerContents.tripReason,
-      paymentMethod: formatString(drawerContents.paymentMethod),
-      paymentCode: null, //TODO: add feature for this
-      id: drawerContents.id,
-      status: formatString(drawerContents.status),
-      createdAt: drawerContents.createdAt,
-      updatedAt: drawerContents.updatedAt,
-      requestedVerification: drawerContents.requestVerification,
       phoneNumber: drawerContents.contactPhone,
     });
     //------------------------------------------
@@ -203,7 +162,7 @@ export default function EditTripsDrawer({
   ]);
 
   const handleFormOnSubmit = async (values: typeof bookingForm.values) => {
-    if (formSubmitting) {
+    if (formSubmitting || !drawerContents) {
       //If form is already submitting
       return;
     }
@@ -214,11 +173,15 @@ export default function EditTripsDrawer({
       destAddr: values.destAddr,
       name: values.name,
       pickupTime: values.pickupTime as string | null,
-      bookingId: values.id,
+      bookingId: drawerContents.id,
       tripReason: values.reasonForTrip,
       contactPhone: values.phoneNumber,
     });
   };
+
+  if (!drawerContents) {
+    return;
+  }
 
   return (
     <>
@@ -231,6 +194,16 @@ export default function EditTripsDrawer({
         modalOpened={modalOpened}
         onConfirm={() => bookingForm.onSubmit(handleFormOnSubmit)()}
         titleText={"Confirm Action"}
+      />
+      <RequestAdjustmentModal
+        bookingId={drawerContents.id}
+        closeModal={() => {
+          closeRequestAdjustmentModal();
+          openDrawer();
+        }}
+        currentBookingType={drawerContents.bookingType}
+        modalOpened={requestAdjustmentModalOpened}
+        onSuccess={closeDrawer}
       />
       <Drawer
         offset={8}
@@ -245,113 +218,31 @@ export default function EditTripsDrawer({
           onSubmit={bookingForm.onSubmit(handleFormOnSubmit)}
         >
           <Stack h={"calc(100dvh - 75px)"}>
-            <TextInput
-              label="Trip Status"
-              readOnly
-              value={bookingForm.getValues().status}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Booking ID"
-              readOnly
-              value={bookingForm.getValues().id}
-              variant="unstyled"
-            />
-            <TextInput
-              aria-label="Name"
-              label={"Name"}
-              leftSection={<UserIcon size={20} />}
-              placeholder="Your Name"
-              {...bookingForm.getInputProps("name")}
-              key={bookingForm.key("name")}
-              withAsterisk
-            />
-            <Input.Wrapper
-              aria-label="Contact Number"
-              error={bookingForm.errors.phoneNumber}
-            >
-              <Input.Label required>Contact Number</Input.Label>
-              <Input
-                component={IMaskInput}
-                key={bookingForm.key("phoneNumber")}
-                mask="(000) 000-0000"
-                placeholder="Contact Phone Number"
-                {...bookingForm.getInputProps("phoneNumber")}
-                leftSection={<DeviceMobileIcon size={20} />}
+            {drawerContents && (
+              <BookingContents
+                bookingData={drawerContents}
+                form={bookingForm}
+                readOnly={false}
               />
-            </Input.Wrapper>
-            <PickupTimeInput
-              form={bookingForm}
-              formField={"pickupTime"}
-              useLabel
-              withAsterisk
-            />
-            <AddressDropdown
-              ariaLabel="Pick-up address field"
-              changeValue={setPickupAddr}
-              fieldName="pickupAddr"
-              fieldValue={pickupAddr}
-              form={bookingForm}
-              icon={<MapPinLineIcon size={20} />}
-              label="Pick-up Address"
-              placeholder="Pick-up Address"
-              withAsterisk
-            />
-            <AddressDropdown
-              ariaLabel="Destination address field"
-              changeValue={setDestAddr}
-              fieldName="destAddr"
-              fieldValue={destAddr}
-              form={bookingForm}
-              icon={<PathIcon size={20} />}
-              label="Destination Address"
-              placeholder="Destination Address"
-              withAsterisk
-            />
-            <TextInput
-              label="Resident Verification Requested?"
-              readOnly
-              value={
-                bookingForm.getValues().requestedVerification ? "Yes" : "No"
-              }
-              variant="unstyled"
-            />
-            <Textarea
-              aria-label="Reason for trip"
-              key={bookingForm.key("reasonForTrip")}
-              leftSection={<QuestionIcon size={20} />}
-              {...bookingForm.getInputProps("reasonForTrip")}
-              autosize
-              label="Reason for Trip"
-              maxRows={4}
-              minRows={1}
-              placeholder="Optional"
-            />
-            <TextInput
-              aria-label="Payment method"
-              label="Payment Method"
-              readOnly
-              value={
-                bookingForm.getValues().paymentMethod === "Redeem Code"
-                  ? `Code (${bookingForm.getValues().paymentCode ?? "unable to retrieve code"})`
-                  : bookingForm.getValues().paymentMethod
-              }
-              variant="unstyled"
-            />
-            <TextInput
-              label="Created On"
-              readOnly
-              value={dbTimeToPrettyString(bookingForm.getValues().createdAt)}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Last Updated"
-              readOnly
-              value={dbTimeToPrettyString(bookingForm.getValues().updatedAt)}
-              variant="unstyled"
-            />
+            )}
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
               <Group bg={"primaryColor"} grow py={"md"}>
+                {drawerContents.status === BookingStatus.PENDING && (
+                  <Button
+                    c={"black"}
+                    color="buttonColor"
+                    onClick={() => {
+                      openRequestAdjustmentModal();
+                      closeDrawer();
+                    }}
+                    p={0}
+                    size="compact-sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Request Adjustment
+                  </Button>
+                )}
                 <Button
                   c={bookingForm.isDirty() ? "black" : undefined}
                   color="buttonColor"

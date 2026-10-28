@@ -521,3 +521,21 @@ export const checkRedeemCode = (
     formattedInput: input.toLowerCase(),
   };
 };
+
+export const checkNumberOfRides = (
+  input: number,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: number } => {
+  if (input >= 0 && input <= 999999999) {
+    return {
+      isProper: true,
+      formattedInput: input,
+    };
+  } else {
+    return {
+      isProper: false,
+      errorMessage: "Give number is either negative or too large",
+    };
+  }
+};

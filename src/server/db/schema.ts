@@ -83,6 +83,9 @@ export const enabledPushNotifications = pgTable("enabled_push_notifications", {
   deviceEndpoint: text("device_endpoint").unique().notNull(),
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),
+  sessionId: text("session_id").references(() => session.id, {
+    onDelete: "set null",
+  }),
   belongsTo: text("belongs_to")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),

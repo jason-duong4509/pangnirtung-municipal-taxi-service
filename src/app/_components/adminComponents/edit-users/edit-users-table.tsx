@@ -50,7 +50,7 @@ export default function EditUsersTable({
   );
   const [columnFilter, setColumnFilter] = useState<string | null>(null);
   const [filterKeyword, setFilterKeyword] = useState<string>("");
-  const isTablet = useMediaQuery("(max-width: 660px)");
+  const isTablet = useMediaQuery("(max-width: 690px)");
   const isPhone = useMediaQuery("(max-width: 480px)");
   const isSuperSmall = useMediaQuery("(max-width: 400px)");
 

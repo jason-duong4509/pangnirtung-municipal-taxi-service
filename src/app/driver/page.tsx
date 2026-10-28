@@ -3,14 +3,18 @@ import {
   AppShell,
   Button,
   Checkbox,
+  CloseButton,
   Drawer,
   Group,
+  Modal,
   Paper,
+  ScrollArea,
   Skeleton,
   Stack,
   Table,
   Text,
   TextInput,
+  Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
@@ -38,6 +42,8 @@ import CustomAppShell from "../_components/common/appShell/app-shell";
 import AsideButton from "../_components/common/appShell/aside-button";
 import NavbarHeader from "../_components/common/appShell/navbar-header";
 import NavbarOption from "../_components/common/appShell/navbar-option";
+import BookingContents from "../_components/common/bookingContents/booking-contents";
+import BookingFormFull from "../_components/common/bookingFormFull/booking-form-full";
 import InstallPwaPrompt from "../_components/common/installPwaPrompt/install-pwa-prompt";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
@@ -46,11 +52,11 @@ import ConfirmExtraInfoModal from "../_components/driverComponents/confirm-extra
 import DriverNotificationBar from "../_components/driverComponents/driver-notification-bar";
 import RequestAdjustmentModal from "../_components/driverComponents/request-adjustment-modal";
 import LogOutModal from "../_components/logout/logout";
-import NotificationSubscription from "../_components/notificationSubscription/notification-subscription";
 
 type usersRequestingResidency =
   RouterOutputs["bookings"]["complete"]["requestedVerification"];
 type usersPaidWithCash = RouterOutputs["bookings"]["complete"]["paidWithCash"];
+type bookingsData = RouterOutputs["bookings"]["get"][0];
 
 export default function DriverPage() {
   const [viewPendingTrips, setViewPendingTrips] = useState(false);
@@ -77,6 +83,7 @@ export default function DriverPage() {
   const isTablet = useMediaQuery("(max-width: 750px)");
   const isMobile = useMediaQuery("(max-width: 620px)");
   const isPhone = useMediaQuery("(max-width: 550px)");
+  const shortenTripReason = useMediaQuery("(max-width: 850px)");
   const [alertTitleText, setAlertTitleText] = useState("Confirm Action");
   const [alertBodyComponent, setAlertBodyComponent] = useState(
     <Text>Are you sure?</Text>,
@@ -102,11 +109,14 @@ export default function DriverPage() {
   ] = useDisclosure(false);
   const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
     useDisclosure(false);
-  const [
-    notificationModalOpened,
-    { open: openNotificationModal, close: closeNotificationModal },
-  ] = useDisclosure(false);
   const isMutatingRef = useRef(false);
+  const [
+    addTripModalOpened,
+    { open: openAddTripModal, close: closeAddTripModal },
+  ] = useDisclosure(false);
+  const [drawerContents, setDrawerContents] = useState<
+    bookingsData | undefined
+  >(undefined);
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.DRIVER && showLoadingUI) {
@@ -260,6 +270,7 @@ export default function DriverPage() {
               bookingType: booking.bookingType,
             });
 
+            setDrawerContents(booking);
             openDrawer();
           }}
           style={{ cursor: "pointer" }}
@@ -301,9 +312,11 @@ export default function DriverPage() {
           )}
           {!isTablet && (
             <Table.Td>
-              {booking.tripReason.length > 30
-                ? `${booking.tripReason.slice(0, 27)}...`
-                : booking.tripReason}
+              {shortenTripReason && booking.tripReason.length > 15
+                ? `${booking.tripReason.slice(0, 12)}...`
+                : booking.tripReason.length > 30
+                  ? `${booking.tripReason.slice(0, 27)}...`
+                  : booking.tripReason}
             </Table.Td>
           )}
         </Table.Tr>
@@ -361,10 +374,6 @@ export default function DriverPage() {
           closeModal={closePwaModal}
           modalOpened={installPwaModalOpened}
         />
-        <NotificationSubscription
-          closeModal={closeNotificationModal}
-          modalOpened={notificationModalOpened}
-        />
         <AlertPopup
           abortButtonText={"Back"}
           body={alertBodyComponent}
@@ -375,6 +384,22 @@ export default function DriverPage() {
           onConfirm={() => onModalSubmit()}
           titleText={alertTitleText}
         />
+        <Modal
+          centered
+          onClose={closeAddTripModal}
+          opened={addTripModalOpened}
+          radius={"lg"}
+          scrollAreaComponent={ScrollArea.Autosize}
+          withCloseButton={false}
+        >
+          <Stack gap={"sm"}>
+            <Group justify="space-between">
+              <Title order={4}>Add a Trip</Title>
+              <CloseButton onClick={closeAddTripModal} />
+            </Group>
+            <BookingFormFull onSuccess={closeAddTripModal} />
+          </Stack>
+        </Modal>
         <Drawer
           offset={8}
           onClose={closeDrawer}
@@ -384,82 +409,9 @@ export default function DriverPage() {
           title={"View Trip"}
         >
           <Stack h={"calc(100dvh - 75px)"}>
-            <TextInput
-              label="Booking ID"
-              readOnly
-              value={form.getValues().id}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Name"
-              readOnly
-              value={form.getValues().name}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Contact Number"
-              readOnly
-              value={form.getValues().phoneNumber}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Booking Type"
-              readOnly
-              value={formatString(form.getValues().bookingType ?? "")}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Pick-up Time"
-              readOnly
-              value={dbTimeToPrettyString(form.getValues().pickupTime)}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Pick-up Address"
-              readOnly
-              value={form.getValues().pickupAddr}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Destination Address"
-              readOnly
-              value={form.getValues().destAddr}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Resident Verification Requested?"
-              readOnly
-              value={form.getValues().verificationRequested ? "Yes" : "No"}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Reason for Trip"
-              readOnly
-              value={
-                form.getValues().reasonForTrip === ""
-                  ? "None Given"
-                  : form.getValues().reasonForTrip
-              }
-              variant="unstyled"
-            />
-            <TextInput
-              label="Payment Method"
-              readOnly
-              value={form.getValues().paymentMethod}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Created At"
-              readOnly
-              value={dbTimeToPrettyString(form.getValues().createdAt)}
-              variant="unstyled"
-            />
-            <TextInput
-              label="Updated At"
-              readOnly
-              value={dbTimeToPrettyString(form.getValues().updatedAt)}
-              variant="unstyled"
-            />
+            {drawerContents && (
+              <BookingContents bookingData={drawerContents} readOnly />
+            )}
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
               <Group bg={"primaryColor"} grow py={"md"}>
                 {viewAcceptedTrips && (
@@ -469,7 +421,11 @@ export default function DriverPage() {
                     onClick={() => {
                       openAlertModal();
                       setAlertTitleText("Cancel trip");
-                      setAlertBodyComponent(<Text>Are you sure?</Text>);
+                      setAlertBodyComponent(
+                        <Text>
+                          A refund will be issued to the user. Are you sure?
+                        </Text>,
+                      );
                       setOnModalSubmit(() => () => {
                         if (isMutatingRef.current) {
                           return;
@@ -614,7 +570,8 @@ export default function DriverPage() {
                       setAlertTitleText("Cancel trips");
                       setAlertBodyComponent(
                         <Text>
-                          All selected trips will be cancelled. Are you sure?
+                          All selected trips will be cancelled and refunds will
+                          be issued. Are you sure?
                         </Text>,
                       );
                       setOnModalSubmit(() => () => {
@@ -728,6 +685,7 @@ export default function DriverPage() {
                   }}
                   text={"Pending Trips"}
                 />
+                <NavbarOption onClick={openAddTripModal} text={"Add a Trip"} />
               </AppShell.Section>
               <AppShell.Section>
                 <NavbarHeader text={"Account"} />
@@ -749,10 +707,6 @@ export default function DriverPage() {
                 <NavbarOption
                   onClick={() => openPwaModal()}
                   text={"Download PWA App"}
-                />
-                <NavbarOption
-                  onClick={() => openNotificationModal()}
-                  text={"Enable PWA Notifications"}
                 />
               </AppShell.Section>
             </Stack>

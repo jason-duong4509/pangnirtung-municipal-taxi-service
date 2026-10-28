@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   checkEmail,
   checkName,
+  checkNumberOfRides,
   checkOTP,
   checkPhoneNumber,
 } from "~/lib/input-checkers";
@@ -50,6 +51,8 @@ export const usersRouter = createTRPCRouter({
         email: z.string(),
         phoneNumber: z.string(),
         role: z.nativeEnum(UserRoles),
+        numberOfRides: z.number(),
+        isResident: z.boolean(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -95,6 +98,16 @@ export const usersRouter = createTRPCRouter({
           });
         }
       }
+      const numberOfRidesCheck = checkNumberOfRides(input.numberOfRides);
+      let numberOfRides = 0 as number;
+      if (numberOfRidesCheck.isProper) {
+        numberOfRides = numberOfRidesCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: numberOfRidesCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
@@ -114,7 +127,23 @@ export const usersRouter = createTRPCRouter({
           if (!updatedUserId) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Could not update user ${input.id}`,
+              message: `Could not update user record ${input.id}`,
+            });
+          }
+
+          const [updatedProfileId] = await tx
+            .update(profile)
+            .set({
+              isResident: input.isResident,
+              numberOfRides: numberOfRides,
+            })
+            .where(eq(profile.belongsTo, input.id))
+            .returning({ id: profile.id });
+
+          if (!updatedProfileId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Could not update profile record for user ${input.id}`,
             });
           }
         });
