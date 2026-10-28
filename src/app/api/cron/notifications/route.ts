@@ -4,7 +4,11 @@ import utc from "dayjs/plugin/utc";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "~/server/db";
-import { bookings, enabledPushNotifications } from "~/server/db/schema";
+import {
+  bookings,
+  enabledPushNotifications,
+  session,
+} from "~/server/db/schema";
 import { sendPushNotification } from "~/server/send-notifications";
 import { IANA_TIME_ZONE } from "~/types/constants";
 import { BookingStatus } from "~/types/types";
@@ -55,7 +59,20 @@ export async function GET(request: Request) {
       if (booking.user?.enabledPushNotifications) {
         for (const notificationSubscription of booking.user
           .enabledPushNotifications) {
+          if (!notificationSubscription.sessionId) {
+            //no valid session ID associated with the subscription
+            continue;
+          }
           try {
+            const sessionStillValid = db
+              .select({ id: session.id })
+              .from(session)
+              .where(eq(session.id, notificationSubscription.sessionId));
+            if (!sessionStillValid) {
+              //current subscription has no valid session ID
+              continue;
+            }
+
             const timeDifference = dayjs(booking.pickupTime)
               .tz(IANA_TIME_ZONE)
               .diff(dayjs().tz(IANA_TIME_ZONE), "minute");

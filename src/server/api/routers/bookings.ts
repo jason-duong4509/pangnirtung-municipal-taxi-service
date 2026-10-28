@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, ne, or, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
 import {
@@ -20,6 +20,7 @@ import {
   enabledPushNotifications,
   profile,
   rideCodes,
+  session,
   user,
   userUsedRideCode,
 } from "~/server/db/schema";
@@ -1471,20 +1472,32 @@ export const bookingsRouter = createTRPCRouter({
           });
         }
 
-        const [userSubscriptionInfo] = await db
+        const userSubscriptionInfo = await db
           .select({
             auth: enabledPushNotifications.auth,
             p256dh: enabledPushNotifications.p256dh,
             endpoint: enabledPushNotifications.deviceEndpoint,
           })
           .from(enabledPushNotifications)
-          .where(eq(enabledPushNotifications.belongsTo, result.created_by));
+          .where(
+            and(
+              eq(enabledPushNotifications.belongsTo, result.created_by),
+              exists(
+                //checks if the session id on the enabled push notif record is still valid
+                db
+                  .select()
+                  .from(session)
+                  .where(eq(session.id, enabledPushNotifications.sessionId)),
+              ),
+            ),
+          );
 
-        if (userSubscriptionInfo) {
+        for (const subscription of userSubscriptionInfo) {
+          //send a notification to each registered device
           await sendPushNotification({
-            endpoint: userSubscriptionInfo.endpoint,
-            p256dh: userSubscriptionInfo.p256dh,
-            auth: userSubscriptionInfo.auth,
+            endpoint: subscription.endpoint,
+            p256dh: subscription.p256dh,
+            auth: subscription.auth,
             payload: {
               title: "Requested changes",
               body: "A driver has requested changes to a recently made booking. Open the app to review the changes.",
