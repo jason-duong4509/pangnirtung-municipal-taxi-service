@@ -125,7 +125,7 @@ const UserInfo = ({
           leftSection={<CarProfileIcon size={20} />}
           {...form.getInputProps("numberOfRides")}
           label="Ride Credits"
-          max={999999999}
+          max={999}
           min={0}
           placeholder="Integer"
         />
@@ -283,7 +283,8 @@ export default function EditUsersDrawer({
       phoneNumber: values.phoneNumber,
       role: values.role,
       isResident: values.isResident === "Yes" ? true : false,
-      numberOfRides: values.numberOfRides,
+      numOfRidesToAdd:
+        values.numberOfRides - drawerContents.profile.numberOfRides,
     });
   };
 

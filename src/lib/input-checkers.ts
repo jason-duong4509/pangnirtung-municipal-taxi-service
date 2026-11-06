@@ -522,20 +522,27 @@ export const checkRedeemCode = (
   };
 };
 
-export const checkNumberOfRides = (
+export const checkNumberOfRidesToAdd = (
   input: number,
 ):
   | { isProper: false; errorMessage: string }
   | { isProper: true; formattedInput: number } => {
-  if (input >= 0 && input <= 999999999) {
-    return {
-      isProper: true,
-      formattedInput: input,
-    };
-  } else {
+  if (input < -999) {
     return {
       isProper: false,
-      errorMessage: "Give number is either negative or too large",
+      errorMessage: "Cannot subtract more than 999 ride credits",
     };
   }
+
+  if (input > 999) {
+    return {
+      isProper: false,
+      errorMessage: "Cannot add more than 999 ride credits",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: input,
+  };
 };

@@ -147,14 +147,23 @@ export const rideCreditTransactions = pgTable("ride_credit_transactions", {
     .notNull(),
 });
 
-export const profile = pgTable("profile", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  isResident: boolean("is_resident").notNull().default(false),
-  numberOfRides: integer("number_of_rides").notNull().default(0),
-  belongsTo: text("belongs_to")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-});
+export const profile = pgTable(
+  "profile",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    isResident: boolean("is_resident").notNull().default(false),
+    numberOfRides: integer("number_of_rides").notNull().default(0),
+    belongsTo: text("belongs_to")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    check(
+      "number_of_possible_rides",
+      sql`${table.numberOfRides} >= 0 AND ${table.numberOfRides} <= 999`,
+    ),
+  ],
+);
 
 export const rideCodes = pgTable(
   "ride_codes",

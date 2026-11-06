@@ -1,12 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { APIError, generateId } from "better-auth";
 import dayjs from "dayjs";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   checkEmail,
   checkName,
-  checkNumberOfRides,
+  checkNumberOfRidesToAdd,
   checkOTP,
   checkPhoneNumber,
 } from "~/lib/input-checkers";
@@ -51,7 +51,7 @@ export const usersRouter = createTRPCRouter({
         email: z.string(),
         phoneNumber: z.string(),
         role: z.nativeEnum(UserRoles),
-        numberOfRides: z.number(),
+        numOfRidesToAdd: z.number(),
         isResident: z.boolean(),
       }),
     )
@@ -98,7 +98,7 @@ export const usersRouter = createTRPCRouter({
           });
         }
       }
-      const numberOfRidesCheck = checkNumberOfRides(input.numberOfRides);
+      const numberOfRidesCheck = checkNumberOfRidesToAdd(input.numOfRidesToAdd);
       let numberOfRides = 0 as number;
       if (numberOfRidesCheck.isProper) {
         numberOfRides = numberOfRidesCheck.formattedInput;
@@ -135,7 +135,7 @@ export const usersRouter = createTRPCRouter({
             .update(profile)
             .set({
               isResident: input.isResident,
-              numberOfRides: numberOfRides,
+              numberOfRides: sql`LEAST(GREATEST(${profile.numberOfRides} + ${numberOfRides}, 0), 999)`,
             })
             .where(eq(profile.belongsTo, input.id))
             .returning({ id: profile.id });
