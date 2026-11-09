@@ -112,6 +112,23 @@ export const usersRouter = createTRPCRouter({
 
       try {
         await db.transaction(async (tx) => {
+          const [preUpdateProfile] = await tx
+            .select({ numberOfRides: profile.numberOfRides })
+            .from(profile)
+            .where(eq(profile.belongsTo, input.id));
+          if (!preUpdateProfile) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Could not find profile record for user ID: ${input.id}`,
+            });
+          } else if (preUpdateProfile.numberOfRides + numberOfRides > 999) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "User owns too many ride credits to perform this action (max is 999)",
+            });
+          }
+
           const [updatedUserId] = await tx
             .update(user)
             .set({
@@ -135,7 +152,7 @@ export const usersRouter = createTRPCRouter({
             .update(profile)
             .set({
               isResident: input.isResident,
-              numberOfRides: sql`LEAST(GREATEST(${profile.numberOfRides} + ${numberOfRides}, 0), 999)`,
+              numberOfRides: sql`GREATEST(${profile.numberOfRides} + ${numberOfRides}, 0)`,
             })
             .where(eq(profile.belongsTo, input.id))
             .returning({ id: profile.id });

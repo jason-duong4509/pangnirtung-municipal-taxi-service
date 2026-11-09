@@ -751,6 +751,116 @@ export const bookingsRouter = createTRPCRouter({
             });
           }
 
+          //--Check and send a receipt--
+          if (input.email !== "") {
+            let totalCost = BOOKING_COSTS[result.bookingType];
+            if (result.rideCode) {
+              const [discount] = await db
+                .select({ amount: rideCodes.discount })
+                .from(rideCodes)
+                .where(eq(rideCodes.code, result.rideCode));
+              if (discount) {
+                totalCost =
+                  totalCost -
+                  (discount.amount / 100) * BOOKING_COSTS[result.bookingType];
+              }
+            }
+
+            sendEmail({
+              emailAddress: email,
+              emailSubject:
+                "Booking Receipt - Pangnirtung Municipal Taxi Service",
+              messageBody: `
+              
+              <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
+                <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
+                  Thanks for booking!
+                </h1>
+                
+                <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
+                  Here are your booking details:
+                </p>
+                
+                <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Name
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.name}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Contact Phone Number
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.contactPhone}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Booking Type
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.bookingType)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold;">
+                      Pick-up Time
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${dbTimeToPrettyString(result.pickupTime)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Pick-up Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.pickupAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Destination Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.destAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Payment Method
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.paymentMethod)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Cost
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      $${totalCost}
+                    </td>
+                  </tr>
+                </table>
+                
+                <p style="font-size: 14px; margin: 24px 0 0; color: #777777;">
+                  We look forward to seeing you!
+                </p>
+
+                <p style="font-size: 12px; margin: 24px 0 0; color: #777777;">
+                  Please note that booking details are not final until it has been accepted by a driver. Costs shown are not final and are subject to change based on the driver's discretion. If any changes are made, you will be notified and given the opportunity to accept or decline the changes.
+                </p>
+              </div>
+              `,
+            });
+          }
+          //----------------------------
+
           return insertedBooking;
         });
         return result;

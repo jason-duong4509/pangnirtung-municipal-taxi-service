@@ -22,7 +22,12 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { IMaskInput } from "react-imask";
-import { checkEmail, checkName, checkPhoneNumber } from "~/lib/input-checkers";
+import {
+  checkEmail,
+  checkName,
+  checkNumberOfRidesToAdd,
+  checkPhoneNumber,
+} from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { UserRoles } from "~/types/types";
@@ -221,6 +226,15 @@ export default function EditUsersDrawer({
       },
       phoneNumber: (value) => {
         const result = checkPhoneNumber(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
+      numberOfRides: (value) => {
+        const result = checkNumberOfRidesToAdd(value);
 
         if (result.isProper) {
           return null;

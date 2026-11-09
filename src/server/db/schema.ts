@@ -158,10 +158,7 @@ export const profile = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
   },
   (table) => [
-    check(
-      "number_of_possible_rides",
-      sql`${table.numberOfRides} >= 0 AND ${table.numberOfRides} <= 999`,
-    ),
+    check("number_of_possible_rides", sql`${table.numberOfRides} >= 0`),
   ],
 );
 

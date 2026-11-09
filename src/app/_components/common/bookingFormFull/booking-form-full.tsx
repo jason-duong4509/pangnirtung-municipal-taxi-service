@@ -146,12 +146,16 @@ export default function BookingFormFull({
         }
       },
       email: (value) => {
-        const result = checkEmail(value);
+        if (value !== "") {
+          const result = checkEmail(value);
 
-        if (result.isProper) {
-          return null;
+          if (result.isProper) {
+            return null;
+          } else {
+            return result.errorMessage;
+          }
         } else {
-          return result.errorMessage;
+          return null;
         }
       },
     },
@@ -263,7 +267,7 @@ export default function BookingFormFull({
           key={form.key("email")}
           leftSection={<EnvelopeSimpleIcon size={20} />}
           {...form.getInputProps("email")}
-          label="Client Email (for receipts and email reminders)"
+          label="Client Email (for receipts)"
           placeholder="Client Email (optional)"
         />
         <Textarea
