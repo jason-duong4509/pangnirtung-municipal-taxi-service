@@ -608,6 +608,7 @@ export const bookingsRouter = createTRPCRouter({
         reminders: z.boolean(),
         contactPhone: z.string(),
         bookingType: z.string(),
+        email: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -689,6 +690,18 @@ export const bookingsRouter = createTRPCRouter({
           message: bookingTypeCheck.errorMessage,
         });
       }
+      let email = "" as string;
+      if (input.email !== "") {
+        const emailCheck = checkEmail(input.email);
+        if (emailCheck.isProper) {
+          email = emailCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: emailCheck.errorMessage,
+          });
+        }
+      }
       //------------------
 
       try {
@@ -725,7 +738,7 @@ export const bookingsRouter = createTRPCRouter({
               reminders: input.reminders,
               created_by: userRecord.id,
               requestVerification: false,
-              contactEmail: null,
+              contactEmail: email === "" ? null : email,
               contactPhone: phoneNumber,
               bookingType: bookingType,
             })
@@ -947,6 +960,7 @@ export const bookingsRouter = createTRPCRouter({
               .set({
                 status: BookingStatus.CANCELLED,
                 updatedAt: new Date(),
+                requiresAdjustment: false,
               })
               .where(whereClause)
               .returning({

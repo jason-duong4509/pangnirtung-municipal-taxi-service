@@ -51,6 +51,8 @@ export default function LoginModal({
           `An error occurred while updating registering notifications. Please enable notifications manually to continue to receive notifications from the app: ${error.message}`,
         );
         setIsMutating(false);
+        closeVerifyModal();
+        otpForm.reset();
       },
     });
 
@@ -176,11 +178,12 @@ export default function LoginModal({
         error?.message ?? "An error occurred when validating OTP",
       );
       setIsMutating(false);
+      return;
     } else if (data.user.role === UserRoles.MEMBER) {
       //member
       const registration = await navigator.serviceWorker.ready;
       const existingSubscription =
-        await registration.pushManager.getSubscription(); //get current notification subscription
+        await registration.pushManager.getSubscription(); //get current notification subscription)
       if (existingSubscription) {
         //browser has already created a subscription
         subscribeMutation.mutate({

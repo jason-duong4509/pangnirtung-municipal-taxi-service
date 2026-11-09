@@ -121,6 +121,7 @@ const UserInfo = ({
           placeholder="someone@gmail.com"
         />
         <NumberInput
+          allowDecimal={false}
           key={form.key("numberOfRides")}
           leftSection={<CarProfileIcon size={20} />}
           {...form.getInputProps("numberOfRides")}

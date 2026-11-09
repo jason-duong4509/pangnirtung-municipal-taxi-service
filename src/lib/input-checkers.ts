@@ -527,6 +527,13 @@ export const checkNumberOfRidesToAdd = (
 ):
   | { isProper: false; errorMessage: string }
   | { isProper: true; formattedInput: number } => {
+  if (!Number.isInteger(input)) {
+    return {
+      isProper: false,
+      errorMessage: "Only integer values are accepted",
+    };
+  }
+
   if (input < -999) {
     return {
       isProper: false,

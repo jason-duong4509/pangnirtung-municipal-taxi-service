@@ -13,7 +13,7 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
-import { DateInput, DateTimePicker } from "@mantine/dates";
+import { DateInput } from "@mantine/dates";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   CarProfileIcon,
@@ -34,7 +34,6 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
 import { BookingStatus, PaymentMethods } from "~/types/types";
-import PickupTimeInput from "../../bookingForm/booking-form-components/pick-up-time-field";
 import TripLoading from "../../common/trips/trip-loading";
 import EditTripsDrawer from "./edit-trips-drawer";
 

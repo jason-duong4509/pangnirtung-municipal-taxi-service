@@ -58,6 +58,10 @@ export default function AdminPage() {
   const isMobile = useMediaQuery("(max-width: 500px)");
   const [tripTable, setTripTable] = useState("pending");
 
+  if (isSelecting && (tripTable === "cancelled" || tripTable === "completed")) {
+    setIsSelecting(false);
+  }
+
   useEffect(() => {
     if (session && session.user.role === UserRoles.ADMIN && showLoadingUI) {
       setShowLoadingUI(false);

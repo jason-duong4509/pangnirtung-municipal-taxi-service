@@ -18,6 +18,7 @@ import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
 import {
   DeviceMobileIcon,
+  EnvelopeSimpleIcon,
   InfoIcon,
   MapPinLineIcon,
   PathIcon,
@@ -29,6 +30,7 @@ import { IMaskInput } from "react-imask";
 import {
   checkAddress,
   checkBookingType,
+  checkEmail,
   checkName,
   checkPhoneNumber,
   checkPickUpTime,
@@ -62,6 +64,7 @@ export default function BookingFormFull({
     phoneNumber: string;
     bookingType: BookingValueTypes;
     sendReminders: boolean;
+    email: string;
   }>({
     mode: "uncontrolled",
 
@@ -74,6 +77,7 @@ export default function BookingFormFull({
       phoneNumber: "",
       bookingType: BookingValueTypes.IN_TOWN,
       sendReminders: false,
+      email: "",
     },
 
     //Frontend field checks
@@ -141,6 +145,15 @@ export default function BookingFormFull({
           return result.errorMessage;
         }
       },
+      email: (value) => {
+        const result = checkEmail(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
     },
   });
 
@@ -174,6 +187,7 @@ export default function BookingFormFull({
       reminders: values.sendReminders,
       contactPhone: values.phoneNumber,
       bookingType: values.bookingType,
+      email: values.email,
     });
   };
 
@@ -245,6 +259,13 @@ export default function BookingFormFull({
             leftSection={<DeviceMobileIcon size={20} />}
           />
         </Input.Wrapper>
+        <TextInput
+          key={form.key("email")}
+          leftSection={<EnvelopeSimpleIcon size={20} />}
+          {...form.getInputProps("email")}
+          label="Client Email (for receipts and email reminders)"
+          placeholder="Client Email (optional)"
+        />
         <Textarea
           key={form.key("reasonForTrip")}
           leftSection={<QuestionIcon size={20} />}
@@ -255,14 +276,16 @@ export default function BookingFormFull({
           placeholder="Reason for Trip (optional)"
         />
         <Box>
-          <Input.Label required>Send Reminders? (user needs app)</Input.Label>
+          <Input.Label required>
+            Send App Reminders? (user needs app)
+          </Input.Label>
           <MantineProvider theme={{ cursorType: "pointer" }}>
             <Checkbox
-              aria-label="Receive reminders check box"
+              aria-label="Enable reminders for user"
               color="buttonColor"
-              key={form.key("receiveReminders")}
+              key={form.key("sendReminders")}
               label="Yes"
-              {...form.getInputProps("receiveReminders", {
+              {...form.getInputProps("sendReminders", {
                 type: "checkbox",
               })}
             />
