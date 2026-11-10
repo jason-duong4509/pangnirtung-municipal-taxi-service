@@ -58,7 +58,11 @@ export default function AdminPage() {
   const isMobile = useMediaQuery("(max-width: 500px)");
   const [tripTable, setTripTable] = useState("pending");
 
-  if (isSelecting && (tripTable === "cancelled" || tripTable === "complete")) {
+  if (
+    pageView === PageView.Trips &&
+    isSelecting &&
+    (tripTable === "cancelled" || tripTable === "complete")
+  ) {
     setIsSelecting(false);
   }
 

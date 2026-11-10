@@ -179,21 +179,34 @@ export default function LoginModal({
       );
       setIsMutating(false);
       return;
-    } else if (data.user.role === UserRoles.MEMBER) {
-      //member
-      const registration = await navigator.serviceWorker.ready;
-      const existingSubscription =
-        await registration.pushManager.getSubscription(); //get current notification subscription)
-      if (existingSubscription) {
-        //browser has already created a subscription
-        subscribeMutation.mutate({
-          endpoint: existingSubscription.endpoint,
-          keys: {
-            p256dh: existingSubscription.toJSON().keys?.p256dh ?? "",
-            auth: existingSubscription.toJSON().keys?.auth ?? "",
-          },
-        });
-        return;
+    } else if (
+      data.user.role === UserRoles.MEMBER &&
+      "serviceWorker" in navigator
+    ) {
+      //is member and browser supports service workers
+      const registration = await Promise.race([
+        //Promise.race => return the first promise in the array (whichever is faster)
+        navigator.serviceWorker.ready,
+        new Promise<null>((promiseResolver) => {
+          //create a new promise that returns null after 5 secs
+          setTimeout(() => promiseResolver(null), 5000); //after 5 secs, resolve the promise with null as its value
+        }),
+      ]);
+
+      if (registration) {
+        const existingSubscription =
+          await registration.pushManager.getSubscription(); //get current notification subscription)
+        if (existingSubscription) {
+          //browser has already created a subscription
+          subscribeMutation.mutate({
+            endpoint: existingSubscription.endpoint,
+            keys: {
+              p256dh: existingSubscription.toJSON().keys?.p256dh ?? "",
+              auth: existingSubscription.toJSON().keys?.auth ?? "",
+            },
+          });
+          return;
+        }
       }
     }
     closeVerifyModal();

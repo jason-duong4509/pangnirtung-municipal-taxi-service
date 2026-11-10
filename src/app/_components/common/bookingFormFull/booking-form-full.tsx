@@ -162,8 +162,12 @@ export default function BookingFormFull({
   });
 
   const createBookingMutation = api.bookings.createForAnother.useMutation({
-    onSuccess: () => {
-      showNotifications.success("Successfully added trip");
+    onSuccess: (data) => {
+      if (data.warning) {
+        showNotifications.error(data.warning);
+      } else {
+        showNotifications.success("Successfully added trip");
+      }
       closeAlertModal();
       onSuccess();
       setIsLoading(false);

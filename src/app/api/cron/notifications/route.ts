@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, gte, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "~/server/db";
 import {
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   const upcomingBookings = await db.query.bookings.findMany({
-    where: (bookings, { lte, and, eq, gte }) =>
+    where: (bookings) =>
       and(
         lte(
           bookings.pickupTime,
@@ -64,10 +64,15 @@ export async function GET(request: Request) {
             continue;
           }
           try {
-            const sessionStillValid = db
+            const [sessionStillValid] = await db
               .select({ id: session.id })
               .from(session)
-              .where(eq(session.id, notificationSubscription.sessionId));
+              .where(
+                and(
+                  eq(session.id, notificationSubscription.sessionId),
+                  gt(session.expiresAt, new Date()),
+                ),
+              );
             if (!sessionStillValid) {
               //current subscription has no valid session ID
               continue;

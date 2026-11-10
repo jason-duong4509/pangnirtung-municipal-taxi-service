@@ -593,6 +593,9 @@ export default function BookingForm({
   //Create booking mutation
   const createBookingMutation = api.bookings.create.useMutation({
     onSuccess: (data) => {
+      if (data.warning) {
+        showNotifications.error(data.warning);
+      }
       setFormSubmitting(false);
       setFormState(BookingUIStates.Success);
       setBookedTripId(data.id);

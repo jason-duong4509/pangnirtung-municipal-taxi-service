@@ -41,8 +41,12 @@ export default function RequestAdjustmentModal({
 
   const requestAdjustmentMutation =
     api.bookings.requestBookingDetailAdjustment.useMutation({
-      onSuccess: () => {
-        showNotifications.success("Request successful");
+      onSuccess: (data) => {
+        if (data?.warning) {
+          showNotifications.error(data.warning);
+        } else {
+          showNotifications.success("Request successful");
+        }
         setIsLoading(false);
         closeAlertModal();
         closeModal();

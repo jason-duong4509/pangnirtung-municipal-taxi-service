@@ -336,6 +336,7 @@ export const bookingsRouter = createTRPCRouter({
       }
 
       try {
+        let warningMessage = "" as string;
         const result = await db.transaction(async (tx) => {
           const [userProfile] = await tx
             .select({
@@ -490,102 +491,117 @@ export const bookingsRouter = createTRPCRouter({
             }
           }
 
-          sendEmail({
-            emailAddress: email,
-            emailSubject:
-              "Booking Receipt - Pangnirtung Municipal Taxi Service",
-            messageBody: `
-            
-            <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
-              <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
-                Thanks for booking!
-              </h1>
+          try {
+            sendEmail({
+              emailAddress: email,
+              emailSubject:
+                "Booking Receipt - Pangnirtung Municipal Taxi Service",
+              messageBody: `
               
-              <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
-                Here are your booking details:
-              </p>
-              
-              <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                    Name
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    ${result.name}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                    Contact Phone Number
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    ${result.contactPhone}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                    Booking Type
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    ${formatString(result.bookingType)}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold;">
-                    Pick-up Time
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    ${dbTimeToPrettyString(result.pickupTime)}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                    Pick-up Address
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    ${result.pickupAddr}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                    Destination Address
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    ${result.destAddr}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                    Payment Method
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    ${formatString(result.paymentMethod)}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                    Cost
-                  </td>
-                  <td style="padding: 12px; border: 1px solid #dddddd;">
-                    $${totalCost}
-                  </td>
-                </tr>
-              </table>
-              
-              <p style="font-size: 14px; margin: 24px 0 0; color: #777777;">
-                We look forward to seeing you!
-              </p>
+              <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
+                <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
+                  Thanks for booking!
+                </h1>
+                
+                <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
+                  Here are your booking details:
+                </p>
+                
+                <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Name
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.name}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Contact Phone Number
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.contactPhone}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Booking Type
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.bookingType)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold;">
+                      Pick-up Time
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${dbTimeToPrettyString(result.pickupTime)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Pick-up Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.pickupAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Destination Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.destAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Payment Method
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.paymentMethod)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Cost
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      $${totalCost}
+                    </td>
+                  </tr>
+                </table>
+                
+                <p style="font-size: 14px; margin: 24px 0 0; color: #777777;">
+                  We look forward to seeing you!
+                </p>
 
-              <p style="font-size: 12px; margin: 24px 0 0; color: #777777;">
-                Please note that booking details are not final until it has been accepted by a driver. Costs shown are not final and are subject to change based on the driver's discretion. If any changes are made, you will be notified and given the opportunity to accept or decline the changes.
-              </p>
-            </div>
-            `,
-          });
+                <p style="font-size: 12px; margin: 24px 0 0; color: #777777;">
+                  Please note that booking details are not final until it has been accepted by a driver. Costs shown are not final and are subject to change based on the driver's discretion. If any changes are made, you will be notified and given the opportunity to accept or decline the changes.
+                </p>
+              </div>
+              `,
+            });
+          } catch (error) {
+            if (error instanceof Error) {
+              warningMessage = `Booking successfully created but email system failed with error: ${error.message}`;
+            }
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "Unknown error encountered while sending an email. Booking successfully created",
+              cause: error,
+            });
+          }
         }
         //----------------------------
 
-        return result;
+        return {
+          ...result,
+          ...(warningMessage !== "" && { warning: warningMessage }),
+        };
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -705,6 +721,7 @@ export const bookingsRouter = createTRPCRouter({
       //------------------
 
       try {
+        let warningMessage = "" as string;
         const result = await db.transaction(async (tx) => {
           const [userRecord] = await tx
             .select({
@@ -751,30 +768,23 @@ export const bookingsRouter = createTRPCRouter({
             });
           }
 
-          //--Check and send a receipt--
-          if (input.email !== "") {
-            let totalCost = BOOKING_COSTS[result.bookingType];
-            if (result.rideCode) {
-              const [discount] = await db
-                .select({ amount: rideCodes.discount })
-                .from(rideCodes)
-                .where(eq(rideCodes.code, result.rideCode));
-              if (discount) {
-                totalCost =
-                  totalCost -
-                  (discount.amount / 100) * BOOKING_COSTS[result.bookingType];
-              }
-            }
+          return insertedBooking;
+        });
 
+        //--Check and send a receipt--
+        if (email !== "") {
+          const totalCost = BOOKING_COSTS[result.bookingType];
+
+          try {
             sendEmail({
               emailAddress: email,
               emailSubject:
-                "Booking Receipt - Pangnirtung Municipal Taxi Service",
+                "You're Booked! - Pangnirtung Municipal Taxi Service",
               messageBody: `
               
               <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
                 <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
-                  Thanks for booking!
+                  Hey! A driver has made a booking for you.
                 </h1>
                 
                 <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
@@ -858,12 +868,24 @@ export const bookingsRouter = createTRPCRouter({
               </div>
               `,
             });
+          } catch (error) {
+            if (error instanceof Error) {
+              warningMessage = `Booking successfully created but email system failed with error: ${error.message}`;
+            }
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "Unknown error encountered while sending an email. Booking successfully created",
+              cause: error,
+            });
           }
-          //----------------------------
+        }
+        //----------------------------
 
-          return insertedBooking;
-        });
-        return result;
+        return {
+          ...result,
+          ...(warningMessage !== "" && { warning: warningMessage }),
+        };
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -1526,7 +1548,7 @@ export const bookingsRouter = createTRPCRouter({
               const [updatedUser] = await tx
                 .update(profile)
                 .set({
-                  numberOfRides: result.profile.numberOfRides - 1,
+                  numberOfRides: sql`${profile.numberOfRides} - 1`,
                 })
                 .where(
                   and(
@@ -1724,43 +1746,104 @@ export const bookingsRouter = createTRPCRouter({
                 db
                   .select()
                   .from(session)
-                  .where(eq(session.id, enabledPushNotifications.sessionId)),
+                  .where(
+                    and(
+                      eq(session.id, enabledPushNotifications.sessionId),
+                      gt(session.expiresAt, new Date()),
+                    ),
+                  ),
               ),
             ),
           );
 
+        let pushNotificationsAllSuccessful = true as boolean;
+        let pushNotificationsErrors = [] as string[];
+        let emailSuccessful = true as boolean;
+        let emailErrors = [] as string[];
         for (const subscription of userSubscriptionInfo) {
-          //send a notification to each registered device
-          await sendPushNotification({
-            endpoint: subscription.endpoint,
-            p256dh: subscription.p256dh,
-            auth: subscription.auth,
-            payload: {
-              title: "Requested changes",
-              body: "A driver has requested changes to a recently made booking. Open the app to review the changes.",
-              url: "/",
-            },
-          });
+          try {
+            //send a notification to each registered device
+            await sendPushNotification({
+              endpoint: subscription.endpoint,
+              p256dh: subscription.p256dh,
+              auth: subscription.auth,
+              payload: {
+                title: "Requested changes",
+                body: "A driver has requested changes to a recently made booking. Open the app to review the changes.",
+                url: "/",
+              },
+            });
+          } catch (error) {
+            if (error instanceof Error) {
+              pushNotificationsAllSuccessful = false;
+              pushNotificationsErrors = [
+                ...pushNotificationsErrors,
+                error.message,
+              ];
+            }
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "Unknown error encountered while sending push-notifications. Booking successfully changed",
+              cause: error,
+            });
+          }
         }
 
         if (result.contactEmail) {
-          sendEmail({
-            emailAddress: result.contactEmail,
-            emailSubject:
-              "Booking Changes - Pangnirtung Municipal Taxi Service",
-            messageBody: `
-            
-            <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
-              <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
-                A Driver has Requested Changes to Your Booking
-              </h1>
+          try {
+            sendEmail({
+              emailAddress: result.contactEmail,
+              emailSubject:
+                "Booking Changed - Pangnirtung Municipal Taxi Service",
+              messageBody: `
               
-              <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
-                Please review the requested changes online or in the app. Accept or decline them as needed. 
-              </p>
-            </div>
-            `,
-          });
+              <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
+                <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
+                  A Driver has Requested Changes to Your Booking
+                </h1>
+                
+                <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
+                  Please review the requested changes online or in the app. Accept or decline them as needed. 
+                </p>
+              </div>
+              `,
+            });
+          } catch (error) {
+            if (error instanceof Error) {
+              emailSuccessful = false;
+              emailErrors = [...emailErrors, error.message];
+            }
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "Unknown error encountered while sending an email. Booking successfully changed",
+              cause: error,
+            });
+          }
+        }
+
+        if (
+          emailSuccessful === false &&
+          pushNotificationsAllSuccessful === false
+        ) {
+          return {
+            warning: `Booking successfully changed but email and push notification systems failed with errors: ${emailErrors}, ${pushNotificationsErrors}`,
+          };
+        } else if (
+          emailSuccessful === false &&
+          pushNotificationsAllSuccessful === true
+        ) {
+          return {
+            warning: `Booking successfully changed but email system failed with error: ${emailErrors}`,
+          };
+        } else if (
+          emailSuccessful === true &&
+          pushNotificationsAllSuccessful === false
+        ) {
+          return {
+            warning: `Booking successfully changed but push notification system failed with error(s): ${pushNotificationsErrors}`,
+          };
         }
       } catch (error) {
         if (error instanceof TRPCError) {

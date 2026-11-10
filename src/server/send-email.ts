@@ -13,10 +13,20 @@ export async function sendEmail({
   messageBody: string;
   emailSubject: string;
 }) {
-  resend.emails.send({
-    from: "onboarding@resend.dev",
-    to: emailAddress,
-    subject: emailSubject,
-    html: messageBody,
-  });
+  try {
+    const { error } = await resend.emails.send({
+      from: "onboarding@resend.dev",
+      to: emailAddress,
+      subject: emailSubject,
+      html: messageBody,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (e) {
+    if (e instanceof Error) {
+      throw e;
+    }
+  }
 }
