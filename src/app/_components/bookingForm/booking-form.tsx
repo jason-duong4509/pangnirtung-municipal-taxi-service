@@ -594,7 +594,7 @@ export default function BookingForm({
   const createBookingMutation = api.bookings.create.useMutation({
     onSuccess: (data) => {
       if (data.warning) {
-        showNotifications.error(data.warning);
+        showNotifications.warning(data.warning);
       }
       setFormSubmitting(false);
       setFormState(BookingUIStates.Success);

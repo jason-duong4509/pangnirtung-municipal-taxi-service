@@ -111,6 +111,7 @@ export async function GET(request: Request) {
                   eq(enabledPushNotifications.id, notificationSubscription.id),
                 );
             }
+            continue;
           }
 
           await db
