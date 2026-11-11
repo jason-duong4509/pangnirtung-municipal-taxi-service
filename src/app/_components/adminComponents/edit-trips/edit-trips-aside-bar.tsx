@@ -25,12 +25,14 @@ export default function EditTripsAsideBar({
   setIsSelecting,
   selectedRows,
   setSelectedRows,
+  table,
 }: {
   isSelecting: boolean;
   expandAside: boolean;
   setIsSelecting: Dispatch<SetStateAction<boolean>>;
   selectedRows: number[];
   setSelectedRows: Dispatch<SetStateAction<number[]>>;
+  table: string;
 }) {
   const [alertBodyComponent, setAlertBodyComponent] = useState(
     <Text>Are you sure?</Text>,
@@ -156,79 +158,87 @@ export default function EditTripsAsideBar({
             onConfirm={() => onModalSubmit()}
             titleText={alertTitleText}
           />
-          <AsideButton
-            buttonIcon={<CheckSquareIcon size={20} />}
-            buttonText={"Accept Trips"}
-            expandButton={expandAside}
-            onClick={() => {
-              if (selectedRows.length === 0) {
-                showNotifications.error("No trips selected");
-                return;
-              }
-              openAlertModal();
-              setAlertTitleText("Accept trips");
-              setAlertBodyComponent(
-                <Text>
-                  All selected trips will be accepted and marked as in progress.
-                  Are you sure?
-                </Text>,
-              );
-              setOnModalSubmit(() => () => {
-                setIsMutating(true);
-                acceptBookingMutation.mutate({
-                  bookingIds: selectedRows,
+          {table === "pending" && (
+            <AsideButton
+              buttonIcon={<CheckSquareIcon size={20} />}
+              buttonText={"Accept Trips"}
+              expandButton={expandAside}
+              onClick={() => {
+                if (selectedRows.length === 0) {
+                  showNotifications.error("No trips selected");
+                  return;
+                }
+                openAlertModal();
+                setAlertTitleText("Accept trips");
+                setAlertBodyComponent(
+                  <Text>
+                    All selected trips will be accepted and marked as in
+                    progress. Are you sure?
+                  </Text>,
+                );
+                setOnModalSubmit(() => () => {
+                  setIsMutating(true);
+                  acceptBookingMutation.mutate({
+                    bookingIds: selectedRows,
+                  });
                 });
-              });
-            }}
-          />
-          <AsideButton
-            buttonIcon={<XSquareIcon size={20} />}
-            buttonText={"Cancel Trips"}
-            expandButton={expandAside}
-            onClick={() => {
-              if (selectedRows.length === 0) {
-                showNotifications.error("No trips selected");
-                return;
-              }
-              openAlertModal();
-              setAlertTitleText("Cancel trips");
-              setAlertBodyComponent(
-                <Text>
-                  All selected trips will be cancelled. Are you sure?
-                </Text>,
-              );
-              setOnModalSubmit(() => () => {
-                setIsMutating(true);
-                cancelBookingMutation.mutate({
-                  bookingIds: selectedRows,
-                });
-              });
-            }}
-          />
-          <AsideButton
-            buttonIcon={<CheckCircleIcon size={20} />}
-            buttonText={"Complete Trips"}
-            expandButton={expandAside}
-            onClick={() => {
-              if (selectedRows.length === 0) {
-                showNotifications.error("No trips selected");
-                return;
-              }
-              openAlertModal();
-              setAlertTitleText("Complete trips");
-              setAlertBodyComponent(
-                <Text>
-                  All selected trips will be marked as completed. Are you sure?
-                </Text>,
-              );
-              setOnModalSubmit(() => () => {
-                setIsMutating(true);
-                completeBookingMutation.mutate({
-                  bookingIds: selectedRows,
-                });
-              });
-            }}
-          />
+              }}
+            />
+          )}
+          {table === "in_progress" && (
+            <>
+              <AsideButton
+                buttonIcon={<XSquareIcon size={20} />}
+                buttonText={"Cancel Trips"}
+                expandButton={expandAside}
+                onClick={() => {
+                  if (selectedRows.length === 0) {
+                    showNotifications.error("No trips selected");
+                    return;
+                  }
+                  openAlertModal();
+                  setAlertTitleText("Cancel trips");
+                  setAlertBodyComponent(
+                    <Text>
+                      All selected trips will be cancelled and refunds will be
+                      issued. Are you sure?
+                    </Text>,
+                  );
+                  setOnModalSubmit(() => () => {
+                    setIsMutating(true);
+                    cancelBookingMutation.mutate({
+                      bookingIds: selectedRows,
+                    });
+                  });
+                }}
+              />
+              <AsideButton
+                buttonIcon={<CheckCircleIcon size={20} />}
+                buttonText={"Complete Trips"}
+                expandButton={expandAside}
+                onClick={() => {
+                  if (selectedRows.length === 0) {
+                    showNotifications.error("No trips selected");
+                    return;
+                  }
+                  openAlertModal();
+                  setAlertTitleText("Complete trips");
+                  setAlertBodyComponent(
+                    <Text>
+                      All selected trips will be marked as completed. Are you
+                      sure?
+                    </Text>,
+                  );
+                  setOnModalSubmit(() => () => {
+                    setIsMutating(true);
+                    completeBookingMutation.mutate({
+                      bookingIds: selectedRows,
+                    });
+                  });
+                }}
+              />
+            </>
+          )}
         </>
       )}
     </>

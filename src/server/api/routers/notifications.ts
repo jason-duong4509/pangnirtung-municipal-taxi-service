@@ -30,6 +30,7 @@ export const notificationsRouter = createTRPCRouter({
             .set({
               p256dh: input.keys.p256dh,
               auth: input.keys.auth,
+              sessionId: ctx.session.session.id,
               belongsTo: ctx.session.user.id,
               updatedAt: new Date(),
             })
@@ -61,6 +62,7 @@ export const notificationsRouter = createTRPCRouter({
               deviceEndpoint: input.endpoint,
               p256dh: input.keys.p256dh,
               auth: input.keys.auth,
+              sessionId: ctx.session.session.id,
               belongsTo: ctx.session.user.id,
             })
             .returning();

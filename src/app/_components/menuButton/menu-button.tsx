@@ -94,7 +94,13 @@ export default function MenuButton({
             <Button
               c={"black"}
               color="customWhite"
-              onClick={openReportApp}
+              onClick={() => {
+                if (session) {
+                  openReportApp();
+                } else {
+                  openLoginModal();
+                }
+              }}
               radius="lg"
               size="xs"
             >

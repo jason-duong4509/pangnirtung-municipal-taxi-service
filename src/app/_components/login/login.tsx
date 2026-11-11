@@ -18,6 +18,8 @@ import { IMaskInput } from "react-imask";
 import { checkOTP, checkPhoneNumber } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { authClient } from "~/server/better-auth/client";
+import { api } from "~/trpc/react";
+import { UserRoles } from "~/types/types";
 
 const MAX_COOLDOWN_SEC = 60;
 
@@ -35,6 +37,24 @@ export default function LoginModal({
   ] = useDisclosure(false);
   const [newOTPCooldown, setNewOTPCooldown] = useState(0);
   const [cooldownEndAt, setCooldownEndAt] = useState<dayjs.Dayjs | null>(null);
+
+  const subscribeMutation =
+    api.notifications.subscribeToNotifications.useMutation({
+      onSuccess: () => {
+        closeVerifyModal();
+        otpForm.reset();
+        showNotifications.success("Successfully logged in");
+        setIsMutating(false);
+      },
+      onError: (error) => {
+        showNotifications.error(
+          `An error occurred while updating registering notifications. Please enable notifications manually to continue to receive notifications from the app: ${error.message}`,
+        );
+        setIsMutating(false);
+        closeVerifyModal();
+        otpForm.reset();
+      },
+    });
 
   //use effect that decrements cooldown
   useEffect(() => {
@@ -148,7 +168,7 @@ export default function LoginModal({
   const handleCodeSubmit = async (values: typeof otpForm.values) => {
     setIsMutating(true);
 
-    const { error } = await authClient.phoneNumber.verify({
+    const { error, data } = await authClient.phoneNumber.verify({
       phoneNumber: values.phoneNumber,
       code: values.otp,
     });
@@ -157,11 +177,43 @@ export default function LoginModal({
       showNotifications.error(
         error?.message ?? "An error occurred when validating OTP",
       );
-    } else {
-      closeVerifyModal();
-      otpForm.reset();
-      showNotifications.success("Successfully logged in");
+      setIsMutating(false);
+      return;
+    } else if (
+      data.user.role === UserRoles.MEMBER &&
+      "serviceWorker" in navigator
+    ) {
+      try {
+        //is member and browser supports service workers
+        const registration = await Promise.race([
+          //Promise.race => return the first promise in the array (whichever is faster)
+          navigator.serviceWorker.ready,
+          new Promise<null>((promiseResolver) => {
+            //create a new promise that returns null after 5 secs
+            setTimeout(() => promiseResolver(null), 5000); //after 5 secs, resolve the promise with null as its value
+          }),
+        ]);
+
+        if (registration) {
+          const existingSubscription =
+            await registration.pushManager.getSubscription(); //get current notification subscription)
+          if (existingSubscription) {
+            //browser has already created a subscription
+            subscribeMutation.mutate({
+              endpoint: existingSubscription.endpoint,
+              keys: {
+                p256dh: existingSubscription.toJSON().keys?.p256dh ?? "",
+                auth: existingSubscription.toJSON().keys?.auth ?? "",
+              },
+            });
+            return;
+          }
+        }
+      } catch {} //no need to report the error, code in try catch is just attempt and move on if fail
     }
+    closeVerifyModal();
+    otpForm.reset();
+    showNotifications.success("Successfully logged in");
     setIsMutating(false);
   };
 

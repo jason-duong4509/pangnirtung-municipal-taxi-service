@@ -42,6 +42,17 @@ export default function NotificationSubscription({
       return;
     }
 
+    const currentlyUsingPWA =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone ===
+        true;
+    if (!currentlyUsingPWA) {
+      showNotifications.error(
+        "Notifications only work in an app. Please install the app and try again",
+      );
+      return;
+    }
+
     try {
       const subscription = await getNotificationSubscription();
 
@@ -77,7 +88,10 @@ export default function NotificationSubscription({
         </header>
         <main>
           <Stack gap={"xs"}>
-            <Text>Are you sure?</Text>
+            <Text>
+              The website's PWA must be installed to successfully use
+              notifications. Are you sure?
+            </Text>
           </Stack>
         </main>
         <footer>

@@ -13,4 +13,10 @@ export const showNotifications = {
       message: message,
       color: "red",
     }),
+  warning: (message: string) =>
+    notifications.show({
+      title: "Warning",
+      message: message,
+      color: "yellow",
+    }),
 };

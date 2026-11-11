@@ -521,3 +521,35 @@ export const checkRedeemCode = (
     formattedInput: input.toLowerCase(),
   };
 };
+
+export const checkNumberOfRidesToAdd = (
+  input: number,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: number } => {
+  if (!Number.isInteger(input)) {
+    return {
+      isProper: false,
+      errorMessage: "Only integer values are accepted",
+    };
+  }
+
+  if (input < -999) {
+    return {
+      isProper: false,
+      errorMessage: "Cannot subtract more than 999 ride credits",
+    };
+  }
+
+  if (input > 999) {
+    return {
+      isProper: false,
+      errorMessage: "Cannot add more than 999 ride credits",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: input,
+  };
+};

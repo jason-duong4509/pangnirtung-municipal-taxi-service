@@ -43,6 +43,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-imask": "^7.6.1",
+    "resend": "^6.35.0",
     "server-only": "^0.0.1",
     "stripe": "22.0.0",
     "superjson": "^2.2.1",

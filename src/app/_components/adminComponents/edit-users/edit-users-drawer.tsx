@@ -2,24 +2,143 @@
 
 import {
   Button,
+  Divider,
   Drawer,
   Group,
+  Input,
+  NumberInput,
   Select,
   Stack,
   Text,
   TextInput,
 } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { type UseFormReturnType, useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
+import {
+  CarProfileIcon,
+  DeviceMobileIcon,
+  EnvelopeSimpleIcon,
+  UserIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { dbTimeToPrettyString } from "~/lib/helpers";
-import { checkEmail, checkName, checkPhoneNumber } from "~/lib/input-checkers";
+import { IMaskInput } from "react-imask";
+import {
+  checkEmail,
+  checkName,
+  checkNumberOfRidesToAdd,
+  checkPhoneNumber,
+} from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { UserRoles } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 
-type usersData = RouterOutputs["users"]["getAll"][0];
+type userData = RouterOutputs["users"]["getAll"][0];
+type formType = {
+  name: string;
+  phoneNumber: string;
+  role: UserRoles;
+  isResident: "Yes" | "No";
+  email: string;
+  numberOfRides: number;
+};
+
+const UserInfo = ({
+  userInfo,
+  form,
+}: {
+  userInfo: userData;
+  form: UseFormReturnType<formType>;
+}) => {
+  return (
+    <>
+      <section>
+        <Group justify="space-between">
+          <Input.Label>User ID</Input.Label>
+          <Text>{userInfo.user.id}</Text>
+        </Group>
+        <Group justify="space-between">
+          <Input.Label>Stripe ID</Input.Label>
+          <Text>
+            {userInfo.user.stripeCustomerId ??
+              "ERROR: No Stripe customer ID associated with this account"}
+          </Text>
+        </Group>
+      </section>
+
+      <Divider
+        label="Main Information"
+        labelPosition="left"
+        mt="xs"
+        size={"md"}
+      />
+      <section>
+        <TextInput
+          key={form.key("name")}
+          leftSection={<UserIcon size={20} />}
+          {...form.getInputProps("name")}
+          label="Name"
+          placeholder="Name"
+        />
+        <Input.Wrapper
+          error={form.errors.phoneNumber}
+          label="Primary Phone Number"
+        >
+          <Input
+            component={IMaskInput}
+            key={form.key("phoneNumber")}
+            mask="(000) 000-0000"
+            placeholder="Phone Number"
+            {...form.getInputProps("phoneNumber")}
+            leftSection={<DeviceMobileIcon size={20} />}
+          />
+        </Input.Wrapper>
+        <Select
+          data={[UserRoles.ADMIN, UserRoles.DRIVER, UserRoles.MEMBER]}
+          key={form.key("role")}
+          placeholder="Role Selection"
+          {...form.getInputProps("role")}
+          allowDeselect={false}
+          label="User Role"
+        />
+        <Select
+          data={["Yes", "No"]}
+          key={form.key("isResident")}
+          placeholder="Role Selection"
+          {...form.getInputProps("isResident")}
+          allowDeselect={false}
+          label="Is Resident"
+        />
+      </section>
+
+      <Divider
+        label="Extra Information"
+        labelPosition="left"
+        mt="xs"
+        size={"md"}
+      />
+      <section>
+        <TextInput
+          key={form.key("email")}
+          leftSection={<EnvelopeSimpleIcon size={20} />}
+          {...form.getInputProps("email")}
+          label="Email Address"
+          placeholder="someone@gmail.com"
+        />
+        <NumberInput
+          allowDecimal={false}
+          key={form.key("numberOfRides")}
+          leftSection={<CarProfileIcon size={20} />}
+          {...form.getInputProps("numberOfRides")}
+          label="Ride Credits"
+          max={999}
+          min={0}
+          placeholder="Integer"
+        />
+      </section>
+    </>
+  );
+};
 
 export default function EditUsersDrawer({
   drawerOpened,
@@ -28,7 +147,7 @@ export default function EditUsersDrawer({
 }: {
   drawerOpened: boolean;
   closeDrawer: () => void;
-  drawerContents: usersData | undefined;
+  drawerContents: userData | undefined;
 }) {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [alertTitle, setAlertTitle] = useState("Are you sure?");
@@ -71,21 +190,14 @@ export default function EditUsersDrawer({
   });
 
   const form = useForm<{
-    id: string;
     name: string;
-    email: string;
     phoneNumber: string;
     role: UserRoles;
+    isResident: "Yes" | "No";
+    email: string;
+    numberOfRides: number;
   }>({
     mode: "uncontrolled",
-
-    initialValues: {
-      id: "0",
-      name: "",
-      email: "",
-      phoneNumber: "",
-      role: UserRoles.MEMBER,
-    },
 
     validate: {
       name: (value) => {
@@ -121,6 +233,15 @@ export default function EditUsersDrawer({
           return result.errorMessage;
         }
       },
+      numberOfRides: (value) => {
+        const result = checkNumberOfRidesToAdd(value);
+
+        if (result.isProper) {
+          return null;
+        } else {
+          return result.errorMessage;
+        }
+      },
     },
   });
 
@@ -130,7 +251,6 @@ export default function EditUsersDrawer({
     }
 
     form.setInitialValues({
-      id: drawerContents["user"].id,
       name:
         drawerContents["user"].name === "no-name-given.pang"
           ? ""
@@ -142,9 +262,10 @@ export default function EditUsersDrawer({
         drawerContents["user"].phoneNumber ??
         "ERROR: User does not have a phone number",
       role: drawerContents["user"].role,
+      isResident: drawerContents["profile"].isResident ? "Yes" : "No",
+      numberOfRides: drawerContents["profile"].numberOfRides,
     });
     form.setValues({
-      id: drawerContents["user"].id,
       name:
         drawerContents["user"].name === "no-name-given.pang"
           ? ""
@@ -156,26 +277,35 @@ export default function EditUsersDrawer({
         drawerContents["user"].phoneNumber ??
         "ERROR: User does not have a phone number",
       role: drawerContents["user"].role,
+      isResident: drawerContents["profile"].isResident ? "Yes" : "No",
+      numberOfRides: drawerContents["profile"].numberOfRides,
     });
 
     form.resetDirty();
   }, [drawerContents, form.setValues, form.setInitialValues, form.resetDirty]);
 
   const handleFormOnSubmit = async (values: typeof form.values) => {
-    if (formSubmitting) {
+    if (formSubmitting || !drawerContents) {
       //If form is already submitting
       return;
     }
     setFormSubmitting(true);
 
     updateUserMutation.mutate({
-      id: values.id,
+      id: drawerContents.user.id,
       name: values.name,
       email: values.email,
       phoneNumber: values.phoneNumber,
       role: values.role,
+      isResident: values.isResident === "Yes" ? true : false,
+      numOfRidesToAdd:
+        values.numberOfRides - drawerContents.profile.numberOfRides,
     });
   };
+
+  if (!drawerContents) {
+    return;
+  }
 
   return (
     <>
@@ -199,57 +329,7 @@ export default function EditUsersDrawer({
       >
         <form>
           <Stack h={"calc(100dvh - 75px)"}>
-            <TextInput
-              label="User ID"
-              readOnly
-              value={form.getValues().id}
-              variant="unstyled"
-            />
-            <TextInput
-              label={"Name on Account"}
-              placeholder="Name"
-              {...form.getInputProps("name")}
-              key={form.key("name")}
-            />
-            <TextInput
-              label={"Primary Phone Number"}
-              placeholder="123-456-7890"
-              {...form.getInputProps("phoneNumber")}
-              key={form.key("phoneNumber")}
-            />
-            <TextInput
-              label={"Email"}
-              placeholder="someone@email.com"
-              {...form.getInputProps("email")}
-              key={form.key("email")}
-            />
-            <Select
-              data={Object.values(UserRoles)}
-              key={form.key("role")}
-              label="User Role"
-              placeholder="Select Role"
-              {...form.getInputProps("role")}
-            />
-            <TextInput
-              label="Created On"
-              readOnly
-              value={
-                drawerContents
-                  ? dbTimeToPrettyString(drawerContents["user"].createdAt)
-                  : "Unable to fetch data"
-              }
-              variant="unstyled"
-            />
-            <TextInput
-              label="Last Updated"
-              readOnly
-              value={
-                drawerContents
-                  ? dbTimeToPrettyString(drawerContents["user"].updatedAt)
-                  : "Unable to fetch data"
-              }
-              variant="unstyled"
-            />
+            <UserInfo form={form} userInfo={drawerContents} />
             <Stack bottom={"0%"} flex={1} justify="flex-end" pos={"sticky"}>
               <Group bg={"primaryColor"} grow py={"md"}>
                 <Button
@@ -265,7 +345,7 @@ export default function EditUsersDrawer({
                     setAlertOnConfirm(() => () => {
                       setFormSubmitting(true);
                       deleteUserMutation.mutate({
-                        ids: [form.getValues().id],
+                        ids: [drawerContents.user.id],
                       });
                     });
                     openAlert();

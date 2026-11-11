@@ -92,7 +92,11 @@ export default function ConfirmExtraInfoModal({
             }
           />
         </Table.Td>
-        <Table.Td>{booking.name}</Table.Td>
+        <Table.Td>
+          {booking.name.length > 15
+            ? `${booking.name.slice(0, 12)}...`
+            : booking.name}
+        </Table.Td>
         <Table.Td>{booking.pickupAddr}</Table.Td>
       </Table.Tr>
     );

@@ -1,11 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { APIError, generateId } from "better-auth";
 import dayjs from "dayjs";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   checkEmail,
   checkName,
+  checkNumberOfRidesToAdd,
   checkOTP,
   checkPhoneNumber,
 } from "~/lib/input-checkers";
@@ -50,6 +51,8 @@ export const usersRouter = createTRPCRouter({
         email: z.string(),
         phoneNumber: z.string(),
         role: z.nativeEnum(UserRoles),
+        numOfRidesToAdd: z.number(),
+        isResident: z.boolean(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -95,10 +98,37 @@ export const usersRouter = createTRPCRouter({
           });
         }
       }
+      const numberOfRidesCheck = checkNumberOfRidesToAdd(input.numOfRidesToAdd);
+      let numberOfRides = 0 as number;
+      if (numberOfRidesCheck.isProper) {
+        numberOfRides = numberOfRidesCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: numberOfRidesCheck.errorMessage,
+        });
+      }
       //------------------
 
       try {
         await db.transaction(async (tx) => {
+          const [preUpdateProfile] = await tx
+            .select({ numberOfRides: profile.numberOfRides })
+            .from(profile)
+            .where(eq(profile.belongsTo, input.id));
+          if (!preUpdateProfile) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Could not find profile record for user ID: ${input.id}`,
+            });
+          } else if (preUpdateProfile.numberOfRides + numberOfRides > 999) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "User owns too many ride credits to perform this action (max is 999)",
+            });
+          }
+
           const [updatedUserId] = await tx
             .update(user)
             .set({
@@ -114,7 +144,23 @@ export const usersRouter = createTRPCRouter({
           if (!updatedUserId) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Could not update user ${input.id}`,
+              message: `Could not update user record ${input.id}`,
+            });
+          }
+
+          const [updatedProfileId] = await tx
+            .update(profile)
+            .set({
+              isResident: input.isResident,
+              numberOfRides: sql`GREATEST(${profile.numberOfRides} + ${numberOfRides}, 0)`,
+            })
+            .where(eq(profile.belongsTo, input.id))
+            .returning({ id: profile.id });
+
+          if (!updatedProfileId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Could not update profile record for user ${input.id}`,
             });
           }
         });

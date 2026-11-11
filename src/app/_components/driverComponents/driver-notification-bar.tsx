@@ -4,16 +4,12 @@ import {
   ActionIcon,
   Button,
   CloseButton,
-  Divider,
   Group,
-  Input,
   Loader,
   Modal,
   ScrollArea,
   Stack,
   Text,
-  Textarea,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
@@ -34,7 +30,7 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
 import AlertPopup from "../common/alert/alert";
-import BookingContentsDriver from "./booking-contents";
+import BookingContents from "../common/bookingContents/booking-contents";
 import RequestAdjustmentModal from "./request-adjustment-modal";
 
 type bookingData = RouterOutputs["bookings"]["getOne"];
@@ -113,7 +109,7 @@ const BookingDetails = ({
             <CloseButton onClick={closeModal} />
           </Group>
           <ScrollArea.Autosize mah={"50dvh"}>
-            <BookingContentsDriver bookingData={bookingData} />
+            <BookingContents bookingData={bookingData} readOnly />
           </ScrollArea.Autosize>
           <Group grow>
             <Button
