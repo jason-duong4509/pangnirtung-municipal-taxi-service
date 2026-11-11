@@ -183,31 +183,33 @@ export default function LoginModal({
       data.user.role === UserRoles.MEMBER &&
       "serviceWorker" in navigator
     ) {
-      //is member and browser supports service workers
-      const registration = await Promise.race([
-        //Promise.race => return the first promise in the array (whichever is faster)
-        navigator.serviceWorker.ready,
-        new Promise<null>((promiseResolver) => {
-          //create a new promise that returns null after 5 secs
-          setTimeout(() => promiseResolver(null), 5000); //after 5 secs, resolve the promise with null as its value
-        }),
-      ]);
+      try {
+        //is member and browser supports service workers
+        const registration = await Promise.race([
+          //Promise.race => return the first promise in the array (whichever is faster)
+          navigator.serviceWorker.ready,
+          new Promise<null>((promiseResolver) => {
+            //create a new promise that returns null after 5 secs
+            setTimeout(() => promiseResolver(null), 5000); //after 5 secs, resolve the promise with null as its value
+          }),
+        ]);
 
-      if (registration) {
-        const existingSubscription =
-          await registration.pushManager.getSubscription(); //get current notification subscription)
-        if (existingSubscription) {
-          //browser has already created a subscription
-          subscribeMutation.mutate({
-            endpoint: existingSubscription.endpoint,
-            keys: {
-              p256dh: existingSubscription.toJSON().keys?.p256dh ?? "",
-              auth: existingSubscription.toJSON().keys?.auth ?? "",
-            },
-          });
-          return;
+        if (registration) {
+          const existingSubscription =
+            await registration.pushManager.getSubscription(); //get current notification subscription)
+          if (existingSubscription) {
+            //browser has already created a subscription
+            subscribeMutation.mutate({
+              endpoint: existingSubscription.endpoint,
+              keys: {
+                p256dh: existingSubscription.toJSON().keys?.p256dh ?? "",
+                auth: existingSubscription.toJSON().keys?.auth ?? "",
+              },
+            });
+            return;
+          }
         }
-      }
+      } catch {} //no need to report the error, code in try catch is just attempt and move on if fail
     }
     closeVerifyModal();
     otpForm.reset();

@@ -120,7 +120,7 @@ export default function AdminPage() {
       }
       expandAside={expandAside}
       headerText={
-        isMobile ? `${pageView}` : `Municipal Taxi Service ${pageView}`
+        isMobile ? `${pageView.slice(1)}` : `Municipal Taxi Service ${pageView}`
       }
       mainComponent={
         <>

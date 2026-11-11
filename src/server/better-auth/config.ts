@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Stripe } from "stripe";
 import { env } from "~/env";
+import { checkPhoneNumber } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import { profile, user as userTable } from "../db/schema";
 
@@ -29,6 +30,10 @@ export const auth = betterAuth({
         getTempEmail: (phoneNumber) => `${phoneNumber}@no-email-given.pang`,
 
         getTempName: () => "no-name-given.pang",
+      },
+      phoneNumberValidator: (phoneNumber) => {
+        const result = checkPhoneNumber(phoneNumber);
+        return result.isProper;
       },
     }),
   ],
@@ -64,6 +69,30 @@ export const auth = betterAuth({
               status: 500,
             });
           }
+        },
+        before: async (user) => {
+          const result = checkPhoneNumber(user.phoneNumber as string);
+          return {
+            data: {
+              ...user,
+              ...(result.isProper
+                ? { phoneNumber: result.formattedInput }
+                : {}),
+            },
+          };
+        },
+      },
+      update: {
+        before: async (user) => {
+          const result = checkPhoneNumber(user.phoneNumber as string);
+          return {
+            data: {
+              ...user,
+              ...(result.isProper
+                ? { phoneNumber: result.formattedInput }
+                : {}),
+            },
+          };
         },
       },
     },

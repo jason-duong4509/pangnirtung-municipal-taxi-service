@@ -164,7 +164,7 @@ export default function BookingFormFull({
   const createBookingMutation = api.bookings.createForAnother.useMutation({
     onSuccess: (data) => {
       if (data.warning) {
-        showNotifications.error(data.warning);
+        showNotifications.warning(data.warning);
       } else {
         showNotifications.success("Successfully added trip");
       }

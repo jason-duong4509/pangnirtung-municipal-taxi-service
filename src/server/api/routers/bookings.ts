@@ -478,21 +478,21 @@ export const bookingsRouter = createTRPCRouter({
 
         //--Check and send a receipt--
         if (input.contactEmail !== "") {
-          let totalCost = BOOKING_COSTS[result.bookingType];
-          if (result.rideCode) {
-            const [discount] = await db
-              .select({ amount: rideCodes.discount })
-              .from(rideCodes)
-              .where(eq(rideCodes.code, result.rideCode));
-            if (discount) {
-              totalCost =
-                totalCost -
-                (discount.amount / 100) * BOOKING_COSTS[result.bookingType];
-            }
-          }
-
           try {
-            sendEmail({
+            let totalCost = BOOKING_COSTS[result.bookingType];
+            if (result.rideCode) {
+              const [discount] = await db
+                .select({ amount: rideCodes.discount })
+                .from(rideCodes)
+                .where(eq(rideCodes.code, result.rideCode));
+              if (discount) {
+                totalCost =
+                  totalCost -
+                  (discount.amount / 100) * BOOKING_COSTS[result.bookingType];
+              }
+            }
+
+            await sendEmail({
               emailAddress: email,
               emailSubject:
                 "Booking Receipt - Pangnirtung Municipal Taxi Service",
@@ -587,13 +587,9 @@ export const bookingsRouter = createTRPCRouter({
           } catch (error) {
             if (error instanceof Error) {
               warningMessage = `Booking successfully created but email system failed with error: ${error.message}`;
+            } else {
+              warningMessage = `Unknown error encountered while sending an email. Booking successfully created: ${error}`;
             }
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message:
-                "Unknown error encountered while sending an email. Booking successfully created",
-              cause: error,
-            });
           }
         }
         //----------------------------
@@ -776,7 +772,7 @@ export const bookingsRouter = createTRPCRouter({
           const totalCost = BOOKING_COSTS[result.bookingType];
 
           try {
-            sendEmail({
+            await sendEmail({
               emailAddress: email,
               emailSubject:
                 "You're Booked! - Pangnirtung Municipal Taxi Service",
@@ -871,13 +867,9 @@ export const bookingsRouter = createTRPCRouter({
           } catch (error) {
             if (error instanceof Error) {
               warningMessage = `Booking successfully created but email system failed with error: ${error.message}`;
+            } else {
+              warningMessage = `Unknown error encountered while sending an email. Booking successfully created: ${error}`;
             }
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message:
-                "Unknown error encountered while sending an email. Booking successfully created",
-              cause: error,
-            });
           }
         }
         //----------------------------
@@ -1721,7 +1713,13 @@ export const bookingsRouter = createTRPCRouter({
             requiresAdjustment: true,
             updatedAt: new Date(),
           })
-          .where(eq(bookings.id, input.bookingId))
+          .where(
+            and(
+              eq(bookings.id, input.bookingId),
+              eq(bookings.requiresAdjustment, false),
+              eq(bookings.status, BookingStatus.PENDING),
+            ),
+          )
           .returning();
 
         if (!result) {
@@ -1731,35 +1729,48 @@ export const bookingsRouter = createTRPCRouter({
           });
         }
 
-        const userSubscriptionInfo = await db
-          .select({
-            auth: enabledPushNotifications.auth,
-            p256dh: enabledPushNotifications.p256dh,
-            endpoint: enabledPushNotifications.deviceEndpoint,
-          })
-          .from(enabledPushNotifications)
-          .where(
-            and(
-              eq(enabledPushNotifications.belongsTo, result.created_by),
-              exists(
-                //checks if the session id on the enabled push notif record is still valid
-                db
-                  .select()
-                  .from(session)
-                  .where(
-                    and(
-                      eq(session.id, enabledPushNotifications.sessionId),
-                      gt(session.expiresAt, new Date()),
-                    ),
-                  ),
-              ),
-            ),
-          );
-
+        let userSubscriptionInfo = [] as {
+          auth: string;
+          p256dh: string;
+          endpoint: string;
+        }[];
         let pushNotificationsAllSuccessful = true as boolean;
         let pushNotificationsErrors = [] as string[];
-        let emailSuccessful = true as boolean;
-        let emailErrors = [] as string[];
+        try {
+          userSubscriptionInfo = await db
+            .select({
+              auth: enabledPushNotifications.auth,
+              p256dh: enabledPushNotifications.p256dh,
+              endpoint: enabledPushNotifications.deviceEndpoint,
+            })
+            .from(enabledPushNotifications)
+            .where(
+              and(
+                eq(enabledPushNotifications.belongsTo, result.created_by),
+                exists(
+                  //checks if the session id on the enabled push notif record is still valid
+                  db
+                    .select()
+                    .from(session)
+                    .where(
+                      and(
+                        eq(session.id, enabledPushNotifications.sessionId),
+                        gt(session.expiresAt, new Date()),
+                      ),
+                    ),
+                ),
+              ),
+            );
+        } catch (error) {
+          pushNotificationsAllSuccessful = false;
+          pushNotificationsErrors = [
+            ...pushNotificationsErrors,
+            error instanceof Error
+              ? error.message
+              : `An unknown error occurred while grabbing a user's subscription information: ${error}`,
+          ];
+        }
+
         for (const subscription of userSubscriptionInfo) {
           try {
             //send a notification to each registered device
@@ -1774,25 +1785,26 @@ export const bookingsRouter = createTRPCRouter({
               },
             });
           } catch (error) {
+            pushNotificationsAllSuccessful = false;
             if (error instanceof Error) {
-              pushNotificationsAllSuccessful = false;
               pushNotificationsErrors = [
                 ...pushNotificationsErrors,
                 error.message,
               ];
+            } else {
+              pushNotificationsErrors = [
+                ...pushNotificationsErrors,
+                `Unknown error encountered while sending push-notifications: ${error}`,
+              ];
             }
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message:
-                "Unknown error encountered while sending push-notifications. Booking successfully changed",
-              cause: error,
-            });
           }
         }
 
+        let emailSuccessful = true as boolean;
+        let emailErrors = [] as string[];
         if (result.contactEmail) {
           try {
-            sendEmail({
+            await sendEmail({
               emailAddress: result.contactEmail,
               emailSubject:
                 "Booking Changed - Pangnirtung Municipal Taxi Service",
@@ -1810,16 +1822,15 @@ export const bookingsRouter = createTRPCRouter({
               `,
             });
           } catch (error) {
+            emailSuccessful = false;
             if (error instanceof Error) {
-              emailSuccessful = false;
               emailErrors = [...emailErrors, error.message];
+            } else {
+              emailErrors = [
+                ...emailErrors,
+                `Unknown error encountered while sending an email: ${error}`,
+              ];
             }
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message:
-                "Unknown error encountered while sending an email. Booking successfully changed",
-              cause: error,
-            });
           }
         }
 

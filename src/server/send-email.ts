@@ -1,9 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
 
-const RESEND_SECRET = process.env.RESEND_KEY!;
-const resend = new Resend(RESEND_SECRET);
-
 export async function sendEmail({
   emailAddress,
   messageBody,
@@ -14,6 +11,7 @@ export async function sendEmail({
   emailSubject: string;
 }) {
   try {
+    const resend = new Resend(process.env.RESEND_KEY!);
     const { error } = await resend.emails.send({
       from: "onboarding@resend.dev",
       to: emailAddress,
@@ -25,8 +23,6 @@ export async function sendEmail({
       throw new Error(error.message);
     }
   } catch (e) {
-    if (e instanceof Error) {
-      throw e;
-    }
+    throw e instanceof Error ? e : new Error(`${e}`);
   }
 }
