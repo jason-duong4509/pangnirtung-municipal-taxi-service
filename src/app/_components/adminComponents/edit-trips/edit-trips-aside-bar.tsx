@@ -11,6 +11,7 @@ import {
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api, type RouterOutputs } from "~/trpc/react";
+import type { BookingStatus } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 import AsideButton from "../../common/appShell/aside-button";
 import ConfirmExtraInfoModal from "../../driverComponents/confirm-extra-info-modal";
@@ -32,7 +33,7 @@ export default function EditTripsAsideBar({
   setIsSelecting: Dispatch<SetStateAction<boolean>>;
   selectedRows: number[];
   setSelectedRows: Dispatch<SetStateAction<number[]>>;
-  table: string;
+  table: BookingStatus;
 }) {
   const [alertBodyComponent, setAlertBodyComponent] = useState(
     <Text>Are you sure?</Text>,
@@ -55,10 +56,13 @@ export default function EditTripsAsideBar({
   const [confirmCashPaymentData, setConfirmCashPaymentData] =
     useState<usersPaidWithCash>([]);
 
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
+  const getBookingsQuery = api.bookings.get.useQuery(
+    { pageNumber: 1, bookingStatus: table },
+    {
+      //Forces manual fetching
+      enabled: false,
+    },
+  );
 
   const completeBookingMutation = api.bookings.complete.useMutation({
     onSuccess: (data) => {

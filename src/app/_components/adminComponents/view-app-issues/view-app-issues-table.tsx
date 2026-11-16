@@ -4,6 +4,8 @@ import {
   Badge,
   Box,
   Checkbox,
+  Group,
+  Pagination,
   Paper,
   Rating,
   Stack,
@@ -45,10 +47,34 @@ export default function ViewAppIssuesTable({
   const isSuperSmall = useMediaQuery("(max-width: 450px)");
   const isMobile = useMediaQuery("(max-width: 500px)");
   const isTablet = useMediaQuery("(max-width: 650px)");
+  const [page, setPage] = useState(1);
+  const [numberOfRows, setNumberOfRows] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
 
   let issuesList = [] as JSX.Element[];
 
-  const getIssuesQuery = api.reportApp.get.useQuery();
+  const getIssuesQuery = api.reportApp.get.useQuery(
+    { pageNumber: page, filters: issueFilters },
+    { enabled: false },
+  );
+  if (
+    getIssuesQuery.data?.total &&
+    getIssuesQuery.data.total !== numberOfRows
+  ) {
+    setNumberOfRows(getIssuesQuery.data.total);
+  }
+  if (
+    getIssuesQuery.data?.pageSize &&
+    getIssuesQuery.data.pageSize !== pageSize
+  ) {
+    setPageSize(getIssuesQuery.data.pageSize);
+  }
+
+  useEffect(() => {
+    page;
+    issueFilters;
+    getIssuesQuery.refetch();
+  }, [getIssuesQuery.refetch, page, issueFilters]);
 
   useEffect(() => {
     if (!getIssuesQuery.isLoading && getIssuesQuery.error) {
@@ -60,26 +86,11 @@ export default function ViewAppIssuesTable({
   }, [getIssuesQuery.error, getIssuesQuery.isLoading]);
 
   if (!getIssuesQuery.isLoading && getIssuesQuery.data) {
-    //Split filter array into priority ratings and tags
-    let priorityFilters = [] as string[];
-    let tagFilters = [] as string[];
-    for (const filter of issueFilters) {
-      if (PriorityRatingTypesString.includes(filter)) {
-        //Priority rating
-        priorityFilters = [...priorityFilters, filter];
-      } else {
-        tagFilters = [...tagFilters, filter];
-      }
-    }
     //For each issue, make a jsx element for it
-    for (const issue of getIssuesQuery.data) {
-      let matchedNoTag = true;
+    for (const issue of getIssuesQuery.data.data) {
       const tagsList = issue.appIssuesHasTags;
       let badges = [] as JSX.Element[];
       for (const tag of tagsList) {
-        if (tagFilters.includes(tag.appIssuesTags.name)) {
-          matchedNoTag = false;
-        }
         const tagInfo = ReportAppIssueChipTypes.filter(
           (tagType) => tagType.label === tag.appIssuesTags.name,
         );
@@ -171,21 +182,7 @@ export default function ViewAppIssuesTable({
         </Table.Tr>
       );
 
-      const noFiltersSelected = issueFilters.length === 0;
-      const matchesPriorityFilters = priorityFilters.includes(
-        `${issue.priority}`,
-      );
-      const priorityFiltersEmpty = priorityFilters.length === 0;
-      const matchesTagFilters = !matchedNoTag;
-      const tagFiltersEmpty = tagFilters.length === 0;
-      if (
-        noFiltersSelected ||
-        (tagFiltersEmpty && matchesPriorityFilters) ||
-        (priorityFiltersEmpty && matchesTagFilters) ||
-        (matchesPriorityFilters && matchesTagFilters)
-      ) {
-        issuesList = [...issuesList, row];
-      }
+      issuesList = [...issuesList, row];
     }
   }
 
@@ -196,7 +193,7 @@ export default function ViewAppIssuesTable({
         drawerContents={drawerContents}
         drawerOpened={drawerOpened}
       />
-      <Stack h={"100%"}>
+      <Stack gap={0} h={"100%"}>
         <Table.ScrollContainer minWidth={0} style={{ flex: 1, minHeight: 0 }}>
           <Table highlightOnHover stickyHeader>
             <Table.Thead>
@@ -212,6 +209,15 @@ export default function ViewAppIssuesTable({
           </Table>
           {getIssuesQuery.isLoading && <TripLoading />}
         </Table.ScrollContainer>
+        <Group justify="flex-end">
+          <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+          <Pagination
+            onChange={setPage}
+            total={Math.ceil(numberOfRows / pageSize)}
+            value={page}
+            withPages={false}
+          />
+        </Group>
       </Stack>
     </Paper>
   );

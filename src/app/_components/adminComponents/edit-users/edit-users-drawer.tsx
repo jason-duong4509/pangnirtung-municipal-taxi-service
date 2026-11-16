@@ -33,7 +33,7 @@ import { api, type RouterOutputs } from "~/trpc/react";
 import { UserRoles } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 
-type userData = RouterOutputs["users"]["getAll"][0];
+type userData = RouterOutputs["users"]["getAll"]["data"][0];
 type formType = {
   name: string;
   phoneNumber: string;
@@ -156,10 +156,13 @@ export default function EditUsersDrawer({
   const [alertOpened, { open: openAlert, close: closeAlert }] =
     useDisclosure(false);
 
-  const getUsersQuery = api.users.getAll.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
+  const getUsersQuery = api.users.getAll.useQuery(
+    { pageNumber: 1 },
+    {
+      //Forces manual fetching
+      enabled: false,
+    },
+  );
 
   const updateUserMutation = api.users.update.useMutation({
     onSuccess: () => {

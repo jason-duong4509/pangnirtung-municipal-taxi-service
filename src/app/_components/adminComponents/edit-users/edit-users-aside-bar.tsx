@@ -30,10 +30,13 @@ export default function EditUsersAsideBar({
     useDisclosure(false);
   const [isMutating, setIsMutating] = useState(false);
 
-  const getUsersQuery = api.users.getAll.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
+  const getUsersQuery = api.users.getAll.useQuery(
+    { pageNumber: 1 },
+    {
+      //Forces manual fetching
+      enabled: false,
+    },
+  );
 
   const deleteUsersMutation = api.users.delete.useMutation({
     onSuccess: () => {

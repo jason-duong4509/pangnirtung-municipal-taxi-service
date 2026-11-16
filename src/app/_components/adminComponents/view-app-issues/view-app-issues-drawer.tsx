@@ -26,7 +26,7 @@ import { api, type RouterOutputs } from "~/trpc/react";
 import { ReportAppIssueChipTypes } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 
-type issuesData = RouterOutputs["reportApp"]["get"][0];
+type issuesData = RouterOutputs["reportApp"]["get"]["data"][0];
 
 export default function ViewAppIssuesDrawer({
   drawerOpened,
@@ -41,10 +41,13 @@ export default function ViewAppIssuesDrawer({
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
 
-  const getIssuesQuery = api.reportApp.get.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
+  const getIssuesQuery = api.reportApp.get.useQuery(
+    { pageNumber: 1 },
+    {
+      //Forces manual fetching
+      enabled: false,
+    },
+  );
 
   const updateIssueMutation = api.reportApp.update.useMutation({
     onSuccess: () => {

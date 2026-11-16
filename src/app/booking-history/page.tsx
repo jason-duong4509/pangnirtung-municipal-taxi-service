@@ -7,6 +7,7 @@ import {
   Drawer,
   Flex,
   Group,
+  Pagination,
   Paper,
   SegmentedControl,
   Skeleton,
@@ -48,14 +49,14 @@ import AlertPopup from "../_components/common/alert/alert";
 import BookingContents from "../_components/common/bookingContents/booking-contents";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 
-type bookingsData = RouterOutputs["bookings"]["get"][0];
+type bookingsData = RouterOutputs["bookings"]["get"]["data"][0];
 
 export default function BookingHistoryPage() {
   const router = useRouter();
   const isSuperSmall = useMediaQuery("(max-width: 520px)");
   const isMobile = useMediaQuery("(max-width: 635px)");
   const isTablet = useMediaQuery("(max-width: 925px)");
-  const [table, setTable] = useState("pending");
+  const [table, setTable] = useState<BookingStatus>(BookingStatus.PENDING);
   const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
     useDisclosure(false);
   const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
@@ -73,6 +74,9 @@ export default function BookingHistoryPage() {
   const [drawerContents, setDrawerContents] = useState<
     bookingsData | undefined
   >(undefined);
+  const [page, setPage] = useState(1);
+  const [numberOfRows, setNumberOfRows] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
 
   //--Holds all bookings, separated into 4 tables--
   let pendingBookings = [] as JSX.Element[];
@@ -163,7 +167,28 @@ export default function BookingHistoryPage() {
     },
   });
 
-  const getBookingsQuery = api.bookings.get.useQuery();
+  const getBookingsQuery = api.bookings.get.useQuery(
+    { pageNumber: page, bookingStatus: table },
+    { enabled: false },
+  );
+  if (
+    getBookingsQuery.data?.total &&
+    getBookingsQuery.data.total !== numberOfRows
+  ) {
+    setNumberOfRows(getBookingsQuery.data.total);
+  }
+  if (
+    getBookingsQuery.data?.pageSize &&
+    getBookingsQuery.data.pageSize !== pageSize
+  ) {
+    setPageSize(getBookingsQuery.data.pageSize);
+  }
+
+  useEffect(() => {
+    page;
+    table;
+    getBookingsQuery.refetch();
+  }, [getBookingsQuery.refetch, page, table]);
 
   //Update booking mutation
   const updateBookingMutation = api.bookings.update.useMutation({
@@ -212,7 +237,7 @@ export default function BookingHistoryPage() {
 
   if (!getBookingsQuery.isLoading && getBookingsQuery.data) {
     //For each booking, make a jsx element for it
-    for (const booking of getBookingsQuery.data) {
+    for (const booking of getBookingsQuery.data.data) {
       //Put the booking in its own jsx element
       const row = (
         <Table.Tr
@@ -462,7 +487,7 @@ export default function BookingHistoryPage() {
       </aside>
       <main>
         <Paper bg={"primaryColor"} h={"80vh"} p={"sm"} radius="lg" w={"80vw"}>
-          <Stack h={"100%"}>
+          <Stack gap={0} h={"100%"}>
             <Group w={"100%"}>
               <ActionIcon
                 aria-label="Go Home"
@@ -489,7 +514,7 @@ export default function BookingHistoryPage() {
                 <SegmentedControl
                   data={[
                     {
-                      value: "pending",
+                      value: BookingStatus.PENDING,
                       label: (
                         <Center style={{ gap: 10 }}>
                           <ClockIcon size={19} />
@@ -498,7 +523,7 @@ export default function BookingHistoryPage() {
                       ),
                     },
                     {
-                      value: "in_progress",
+                      value: BookingStatus.IN_PROGRESS,
                       label: (
                         <Center style={{ gap: 10 }}>
                           <CarProfileIcon size={19} />
@@ -508,7 +533,7 @@ export default function BookingHistoryPage() {
                       disabled: isDeleting,
                     },
                     {
-                      value: "cancelled",
+                      value: BookingStatus.CANCELLED,
                       label: (
                         <Center style={{ gap: 10 }}>
                           <XCircleIcon size={19} />
@@ -518,7 +543,7 @@ export default function BookingHistoryPage() {
                       disabled: isDeleting,
                     },
                     {
-                      value: "complete",
+                      value: BookingStatus.COMPLETED,
                       label: (
                         <Center style={{ gap: 10 }}>
                           <CheckCircleIcon size={19} />
@@ -528,7 +553,7 @@ export default function BookingHistoryPage() {
                       disabled: isDeleting,
                     },
                   ]}
-                  onChange={setTable}
+                  onChange={(value) => setTable(value as BookingStatus)}
                   value={table}
                 />
                 <ActionIcon
@@ -537,7 +562,7 @@ export default function BookingHistoryPage() {
                   onClick={() => {
                     if (!isDeleting || selectedRows.length === 0) {
                       //default state or in delete mode with nothing selected
-                      setTable("pending");
+                      setTable(BookingStatus.PENDING);
                       setIsDeleting(!isDeleting);
                     } else {
                       //already in delete mode
@@ -590,10 +615,10 @@ export default function BookingHistoryPage() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {table === "pending" && pendingBookings}
-                  {table === "in_progress" && inProgressBookings}
-                  {table === "cancelled" && cancelledBookings}
-                  {table === "complete" && completedBookings}
+                  {table === BookingStatus.PENDING && pendingBookings}
+                  {table === BookingStatus.IN_PROGRESS && inProgressBookings}
+                  {table === BookingStatus.CANCELLED && cancelledBookings}
+                  {table === BookingStatus.COMPLETED && completedBookings}
                 </Table.Tbody>
               </Table>
               {getBookingsQuery.isLoading && (
@@ -605,6 +630,15 @@ export default function BookingHistoryPage() {
                 </Stack>
               )}
             </Table.ScrollContainer>
+            <Group justify="flex-end">
+              <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+              <Pagination
+                onChange={setPage}
+                total={Math.ceil(numberOfRows / pageSize)}
+                value={page}
+                withPages={false}
+              />
+            </Group>
           </Stack>
         </Paper>
       </main>

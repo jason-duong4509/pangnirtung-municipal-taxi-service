@@ -20,7 +20,7 @@ import AlertPopup from "../../common/alert/alert";
 import BookingContents from "../../common/bookingContents/booking-contents";
 import RequestAdjustmentModal from "../../driverComponents/request-adjustment-modal";
 
-type bookingsData = RouterOutputs["bookings"]["get"][0];
+type bookingsData = RouterOutputs["bookings"]["get"]["data"][0];
 
 export default function EditTripsDrawer({
   closeDrawer,
@@ -41,10 +41,13 @@ export default function EditTripsDrawer({
     { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
   ] = useDisclosure(false);
 
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
+  const getBookingsQuery = api.bookings.get.useQuery(
+    { pageNumber: 1, bookingStatus: BookingStatus.IN_PROGRESS },
+    {
+      //Forces manual fetching
+      enabled: false,
+    },
+  );
 
   const updateBookingMutation = api.bookings.update.useMutation({
     onSuccess: () => {

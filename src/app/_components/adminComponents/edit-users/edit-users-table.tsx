@@ -5,9 +5,11 @@ import {
   Flex,
   Group,
   Input,
+  Pagination,
   Paper,
   Select,
   Table,
+  Text,
   TextInput,
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
@@ -32,7 +34,7 @@ enum TableColumnNames {
   USER_ROLE = "User Role",
 }
 
-type usersData = RouterOutputs["users"]["getAll"][0];
+type usersData = RouterOutputs["users"]["getAll"]["data"][0];
 
 export default function EditUsersTable({
   isSelecting,
@@ -53,8 +55,33 @@ export default function EditUsersTable({
   const isTablet = useMediaQuery("(max-width: 690px)");
   const isPhone = useMediaQuery("(max-width: 480px)");
   const isSuperSmall = useMediaQuery("(max-width: 400px)");
+  const [page, setPage] = useState(1);
+  const [numberOfRows, setNumberOfRows] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
 
-  const getUsersQuery = api.users.getAll.useQuery();
+  const getUsersQuery = api.users.getAll.useQuery(
+    {
+      pageNumber: page,
+      filter: { filter: columnFilter, filterKeyword: filterKeyword },
+    },
+    { enabled: false },
+  );
+  if (getUsersQuery.data?.total && getUsersQuery.data.total !== numberOfRows) {
+    setNumberOfRows(getUsersQuery.data.total);
+  }
+  if (
+    getUsersQuery.data?.pageSize &&
+    getUsersQuery.data.pageSize !== pageSize
+  ) {
+    setPageSize(getUsersQuery.data.pageSize);
+  }
+
+  useEffect(() => {
+    page;
+    columnFilter;
+    filterKeyword;
+    getUsersQuery.refetch();
+  }, [getUsersQuery.refetch, page, columnFilter, filterKeyword]);
 
   let usersList = [] as JSX.Element[];
 
@@ -68,7 +95,7 @@ export default function EditUsersTable({
   }, [getUsersQuery.error, getUsersQuery.isLoading]);
 
   if (!getUsersQuery.isLoading && getUsersQuery.data) {
-    for (const entry of getUsersQuery.data) {
+    for (const entry of getUsersQuery.data.data) {
       const user = entry["user"];
       const profile = entry["profile"];
 
@@ -130,30 +157,7 @@ export default function EditUsersTable({
         </Table.Tr>
       );
 
-      const noFilterSet = columnFilter === null;
-      const nameMatch =
-        columnFilter === TableColumnNames.ACCOUNT_NAME &&
-        user.name.toLowerCase().includes(filterKeyword.toLowerCase());
-      const phoneNumMatch =
-        columnFilter === TableColumnNames.PHONE_NUM &&
-        user.phoneNumber?.toLowerCase().includes(filterKeyword.toLowerCase());
-      const residentMatch =
-        columnFilter === TableColumnNames.RESIDENT &&
-        (filterKeyword === "" ||
-          (filterKeyword === "Yes" && profile.isResident) ||
-          (filterKeyword === "No" && !profile.isResident));
-      const userRoleMatch =
-        columnFilter === TableColumnNames.USER_ROLE &&
-        user.role.toLowerCase().includes(filterKeyword.toLowerCase());
-      if (
-        noFilterSet ||
-        nameMatch ||
-        phoneNumMatch ||
-        residentMatch ||
-        userRoleMatch
-      ) {
-        usersList = [...usersList, row];
-      }
+      usersList = [...usersList, row];
     }
   }
 
@@ -246,6 +250,15 @@ export default function EditUsersTable({
           </Table>
           {getUsersQuery.isLoading && <TripLoading />}
         </Table.ScrollContainer>
+        <Group justify="flex-end">
+          <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+          <Pagination
+            onChange={setPage}
+            total={Math.ceil(numberOfRows / pageSize)}
+            value={page}
+            withPages={false}
+          />
+        </Group>
       </Flex>
     </Paper>
   );

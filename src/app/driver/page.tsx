@@ -7,6 +7,7 @@ import {
   Drawer,
   Group,
   Modal,
+  Pagination,
   Paper,
   ScrollArea,
   Skeleton,
@@ -56,7 +57,7 @@ import LogOutModal from "../_components/logout/logout";
 type usersRequestingResidency =
   RouterOutputs["bookings"]["complete"]["requestedVerification"];
 type usersPaidWithCash = RouterOutputs["bookings"]["complete"]["paidWithCash"];
-type bookingsData = RouterOutputs["bookings"]["get"][0];
+type bookingsData = RouterOutputs["bookings"]["get"]["data"][0];
 
 export default function DriverPage() {
   const [viewPendingTrips, setViewPendingTrips] = useState(false);
@@ -117,6 +118,9 @@ export default function DriverPage() {
   const [drawerContents, setDrawerContents] = useState<
     bookingsData | undefined
   >(undefined);
+  const [page, setPage] = useState(1);
+  const [numberOfRows, setNumberOfRows] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.DRIVER && showLoadingUI) {
@@ -152,7 +156,33 @@ export default function DriverPage() {
     mode: "uncontrolled",
   });
 
-  const getBookingsQuery = api.bookings.get.useQuery();
+  const getBookingsQuery = api.bookings.get.useQuery(
+    {
+      pageNumber: page,
+      bookingStatus: viewAcceptedTrips
+        ? BookingStatus.IN_PROGRESS
+        : BookingStatus.PENDING,
+    },
+    { enabled: false },
+  );
+  if (
+    getBookingsQuery.data?.total &&
+    getBookingsQuery.data.total !== numberOfRows
+  ) {
+    setNumberOfRows(getBookingsQuery.data.total);
+  }
+  if (
+    getBookingsQuery.data?.pageSize &&
+    getBookingsQuery.data.pageSize !== pageSize
+  ) {
+    setPageSize(getBookingsQuery.data.pageSize);
+  }
+
+  useEffect(() => {
+    page;
+    viewAcceptedTrips;
+    getBookingsQuery.refetch();
+  }, [getBookingsQuery.refetch, page, viewAcceptedTrips]);
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {
@@ -229,7 +259,7 @@ export default function DriverPage() {
 
   if (!getBookingsQuery.isLoading && getBookingsQuery.data) {
     //For each booking, make a jsx element for it
-    for (const booking of getBookingsQuery.data) {
+    for (const booking of getBookingsQuery.data.data) {
       //Put the booking in its own jsx element
       const row = (
         <Table.Tr
@@ -629,7 +659,7 @@ export default function DriverPage() {
           }
           mainComponent={
             <Paper bg={"primaryColor"} h={"80%"} p={"sm"} radius="lg" w={"90%"}>
-              <Stack h={"100%"}>
+              <Stack gap={0} h={"100%"}>
                 <Table.ScrollContainer
                   minWidth={0}
                   style={{ flex: 1, minHeight: 0 }}
@@ -662,6 +692,15 @@ export default function DriverPage() {
                     </Stack>
                   )}
                 </Table.ScrollContainer>
+                <Group justify="flex-end">
+                  <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+                  <Pagination
+                    onChange={setPage}
+                    total={Math.ceil(numberOfRows / pageSize)}
+                    value={page}
+                    withPages={false}
+                  />
+                </Group>
               </Stack>
             </Paper>
           }

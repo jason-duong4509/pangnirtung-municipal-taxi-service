@@ -4,7 +4,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "~/server/better-auth/client";
-import { UserRoles } from "~/types/types";
+import { BookingStatus, UserRoles } from "~/types/types";
 import AddUsersModal from "../_components/adminComponents/add-users/add-users-modal";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
 import EditTripsTable from "../_components/adminComponents/edit-trips/edit-trips-table";
@@ -56,12 +56,15 @@ export default function AdminPage() {
   const [showLoadingUI, setShowLoadingUI] = useState(true);
   const router = useRouter();
   const isMobile = useMediaQuery("(max-width: 500px)");
-  const [tripTable, setTripTable] = useState("pending");
+  const [tripTable, setTripTable] = useState<BookingStatus>(
+    BookingStatus.PENDING,
+  );
 
   if (
     pageView === PageView.Trips &&
     isSelecting &&
-    (tripTable === "cancelled" || tripTable === "complete")
+    (tripTable === BookingStatus.CANCELLED ||
+      tripTable === BookingStatus.COMPLETED)
   ) {
     setIsSelecting(false);
   }
@@ -86,7 +89,8 @@ export default function AdminPage() {
       asideComponent={
         <>
           {pageView === PageView.Trips &&
-            (tripTable === "pending" || tripTable === "in_progress") && (
+            (tripTable === BookingStatus.PENDING ||
+              tripTable === BookingStatus.IN_PROGRESS) && (
               <EditTripsAsideBar
                 expandAside={expandAside}
                 isSelecting={isSelecting}

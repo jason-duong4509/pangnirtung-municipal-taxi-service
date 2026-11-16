@@ -29,6 +29,7 @@ import { dbTimeToPrettyString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
+import { BookingStatus } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
 import BookingContents from "../common/bookingContents/booking-contents";
 import RequestAdjustmentModal from "./request-adjustment-modal";
@@ -58,9 +59,12 @@ const BookingDetails = ({
     { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
   ] = useDisclosure(false);
 
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    enabled: false,
-  });
+  const getBookingsQuery = api.bookings.get.useQuery(
+    { pageNumber: 1, bookingStatus: BookingStatus.IN_PROGRESS },
+    {
+      enabled: false,
+    },
+  );
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {
@@ -176,9 +180,12 @@ export default function DriverNotificationBar() {
     { bookingId: events[0]?.bookingId ?? 0 },
     { enabled: false },
   );
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    enabled: false,
-  });
+  const getBookingsQuery = api.bookings.get.useQuery(
+    { pageNumber: 1, bookingStatus: BookingStatus.IN_PROGRESS },
+    {
+      enabled: false,
+    },
+  );
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {

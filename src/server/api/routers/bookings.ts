@@ -1,5 +1,22 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, exists, gt, inArray, ne, or, sql } from "drizzle-orm";
+import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
 import { dbTimeToPrettyString, formatString } from "~/lib/helpers";
@@ -9,11 +26,13 @@ import {
   checkBookingTypeAndPaymentMethod,
   checkEmail,
   checkName,
+  checkPaginationPageNumber,
   checkPaymentMethodType,
   checkPhoneNumber,
   checkPickUpTime,
   checkRedeemCode,
   checkTripReason,
+  checkTripTableFilters,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import {
@@ -28,6 +47,7 @@ import {
 import { notifyDriver } from "~/server/push-driver-notifications";
 import { sendEmail } from "~/server/send-email";
 import { sendPushNotification } from "~/server/send-notifications";
+import { IANA_TIME_ZONE } from "~/types/constants";
 import {
   BOOKING_COSTS,
   BookingStatus,
@@ -36,6 +56,11 @@ import {
   UserRoles,
 } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+//--Add UTC and timezone conversion features for dayjs--
+dayjs.extend(utc);
+dayjs.extend(timezone);
+//------------------------------------------------------
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-08-26.dahlia",
@@ -132,50 +157,290 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
-  get: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      if (ctx.session.user.role === UserRoles.ADMIN) {
-        const result = await db
-          .select()
-          .from(bookings)
-          .where(eq(bookings.requiresAdjustment, false));
-
-        return result;
-      } else if (ctx.session.user.role === UserRoles.DRIVER) {
-        const result = await db
-          .select()
-          .from(bookings)
-          .where(
-            and(
-              or(
-                eq(bookings.status, BookingStatus.PENDING),
-                eq(bookings.status, BookingStatus.IN_PROGRESS),
-              ),
-              eq(bookings.requiresAdjustment, false),
-            ),
-          );
-
-        return result;
+  get: protectedProcedure
+    .input(
+      z.object({
+        pageNumber: z.number(),
+        filter: z.record(z.string(), z.unknown()).optional(),
+        bookingStatus: z.nativeEnum(BookingStatus),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const pageNumCheck = checkPaginationPageNumber(input.pageNumber);
+      let pageNum = 1 as number;
+      if (pageNumCheck.isProper) {
+        pageNum = pageNumCheck.formattedInput;
       } else {
-        const result = await db
-          .select()
-          .from(bookings)
-          .where(
-            and(
-              eq(bookings.created_by, ctx.session.user.id),
-              eq(bookings.requiresAdjustment, false),
-            ),
-          );
-
-        return result;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pageNumCheck.errorMessage,
+        });
       }
-    } catch {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get bookings",
-      });
-    }
-  }),
+      let filters = undefined as
+        | undefined
+        | Extract<
+            ReturnType<typeof checkTripTableFilters>,
+            { isProper: true }
+          >["formattedInput"];
+      if (input.filter) {
+        const filterCheck = checkTripTableFilters(input.filter);
+        if (filterCheck.isProper) {
+          filters = filterCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: filterCheck.errorMessage,
+          });
+        }
+      }
+
+      try {
+        const pageSize = 30; //hardcoded limit for this query
+        if (ctx.session.user.role === UserRoles.ADMIN) {
+          const result = await db
+            .select()
+            .from(bookings)
+            .orderBy(
+              asc(bookings.pickupTime),
+              asc(bookings.pickupAddr),
+              asc(bookings.destAddr),
+              asc(bookings.requestVerification),
+              asc(bookings.name),
+              asc(bookings.updatedAt),
+              desc(bookings.id),
+            )
+            .limit(pageSize)
+            .offset((pageNum - 1) * pageSize)
+            .where(
+              and(
+                eq(bookings.requiresAdjustment, false),
+                eq(bookings.status, input.bookingStatus),
+                filters === undefined || filters["filter"] === null
+                  ? undefined
+                  : filters["filter"] === "Destination Address" &&
+                      filters["filterKeyword"]
+                    ? ilike(bookings.destAddr, `%${filters["filterKeyword"]}%`)
+                    : filters["filter"] === "Payment Method" &&
+                        filters["filterKeyword"]
+                      ? eq(
+                          bookings.paymentMethod,
+                          filters["filterKeyword"] === PaymentMethods.CASH
+                            ? PaymentMethods.CASH
+                            : filters["filterKeyword"] ===
+                                PaymentMethods.CREDIT_CARD
+                              ? PaymentMethods.CREDIT_CARD
+                              : PaymentMethods.RIDES,
+                        )
+                      : filters["filter"] === "Pick-up Address" &&
+                          filters["filterKeyword"]
+                        ? ilike(
+                            bookings.pickupAddr,
+                            `%${filters["filterKeyword"]}%`,
+                          )
+                        : filters["filter"] === "Pick-up Time" &&
+                            filters["filterKeyword"]
+                          ? and(
+                              gte(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .toDate(),
+                              ),
+                              lte(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .add(1, "day")
+                                  .toDate(),
+                              ),
+                            )
+                          : filters["filter"] === "Reason For Trip" &&
+                              filters["filterKeyword"]
+                            ? ilike(
+                                bookings.tripReason,
+                                `%${filters["filterKeyword"]}%`,
+                              )
+                            : filters["filter"] === "Requested Verification?" &&
+                                filters["filterKeyword"]
+                              ? eq(
+                                  bookings.requestVerification,
+                                  filters["filterKeyword"] === "Yes",
+                                )
+                              : undefined,
+              ),
+            );
+
+          const numberOfRows = await db
+            .select({
+              count: count(),
+            })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.requiresAdjustment, false),
+                eq(bookings.status, input.bookingStatus),
+                filters === undefined || filters["filter"] === null
+                  ? undefined
+                  : filters["filter"] === "Destination Address" &&
+                      filters["filterKeyword"]
+                    ? ilike(bookings.destAddr, `%${filters["filterKeyword"]}%`)
+                    : filters["filter"] === "Payment Method" &&
+                        filters["filterKeyword"]
+                      ? eq(
+                          bookings.paymentMethod,
+                          filters["filterKeyword"] === PaymentMethods.CASH
+                            ? PaymentMethods.CASH
+                            : filters["filterKeyword"] ===
+                                PaymentMethods.CREDIT_CARD
+                              ? PaymentMethods.CREDIT_CARD
+                              : PaymentMethods.RIDES,
+                        )
+                      : filters["filter"] === "Pick-up Address" &&
+                          filters["filterKeyword"]
+                        ? ilike(
+                            bookings.pickupAddr,
+                            `%${filters["filterKeyword"]}%`,
+                          )
+                        : filters["filter"] === "Pick-up Time" &&
+                            filters["filterKeyword"]
+                          ? and(
+                              gte(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .toDate(),
+                              ),
+                              lte(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .add(1, "day")
+                                  .toDate(),
+                              ),
+                            )
+                          : filters["filter"] === "Reason For Trip" &&
+                              filters["filterKeyword"]
+                            ? ilike(
+                                bookings.tripReason,
+                                `%${filters["filterKeyword"]}%`,
+                              )
+                            : filters["filter"] === "Requested Verification?" &&
+                                filters["filterKeyword"]
+                              ? eq(
+                                  bookings.requestVerification,
+                                  filters["filterKeyword"] === "Yes",
+                                )
+                              : undefined,
+              ),
+            );
+
+          return {
+            data: result,
+            total: numberOfRows[0]?.count ?? 0,
+            pageSize: pageSize,
+          };
+        } else if (ctx.session.user.role === UserRoles.DRIVER) {
+          if (
+            input.bookingStatus === BookingStatus.CANCELLED ||
+            input.bookingStatus === BookingStatus.COMPLETED
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Not authorized to view bookings of this type",
+            });
+          }
+
+          const result = await db
+            .select()
+            .from(bookings)
+            .orderBy(
+              asc(bookings.pickupTime),
+              asc(bookings.pickupAddr),
+              asc(bookings.destAddr),
+              asc(bookings.requestVerification),
+              asc(bookings.name),
+              asc(bookings.updatedAt),
+              desc(bookings.id),
+            )
+            .limit(pageSize)
+            .offset((pageNum - 1) * pageSize)
+            .where(
+              and(
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          const numberOfRows = await db
+            .select({
+              count: count(),
+            })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          return {
+            data: result,
+            total: numberOfRows[0]?.count ?? 0,
+            pageSize: pageSize,
+          };
+        } else {
+          const result = await db
+            .select()
+            .from(bookings)
+            .orderBy(
+              asc(bookings.pickupTime),
+              asc(bookings.pickupAddr),
+              asc(bookings.destAddr),
+              asc(bookings.requestVerification),
+              asc(bookings.name),
+              asc(bookings.updatedAt),
+              desc(bookings.id),
+            )
+            .limit(pageSize)
+            .offset((pageNum - 1) * pageSize)
+            .where(
+              and(
+                eq(bookings.created_by, ctx.session.user.id),
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          const numberOfRows = await db
+            .select({
+              count: count(),
+            })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.created_by, ctx.session.user.id),
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          return {
+            data: result,
+            total: numberOfRows[0]?.count ?? 0,
+            pageSize: pageSize,
+          };
+        }
+      } catch {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get bookings",
+        });
+      }
+    }),
   create: protectedProcedure
     .input(
       z.object({

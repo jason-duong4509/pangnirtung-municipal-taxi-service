@@ -5,6 +5,7 @@ import {
   Checkbox,
   Flex,
   Group,
+  Pagination,
   Paper,
   SegmentedControl,
   Select,
@@ -37,7 +38,7 @@ import { BookingStatus, PaymentMethods } from "~/types/types";
 import TripLoading from "../../common/trips/trip-loading";
 import EditTripsDrawer from "./edit-trips-drawer";
 
-type bookingsData = RouterOutputs["bookings"]["get"][0];
+type bookingsData = RouterOutputs["bookings"]["get"]["data"][0];
 enum TableColumnNames {
   PICK_UP_TIME = "Pick-up Time",
   PICK_UP_ADDRESS = "Pick-up Address",
@@ -57,8 +58,8 @@ export default function EditTripsTable({
   isSelecting: boolean;
   selectedRows: number[];
   setSelectedRows: Dispatch<SetStateAction<number[]>>;
-  setTable: Dispatch<SetStateAction<string>>;
-  table: string;
+  setTable: Dispatch<SetStateAction<BookingStatus>>;
+  table: BookingStatus;
 }) {
   const isSuperSmall = useMediaQuery("(max-width: 520px)");
   const isMobile = useMediaQuery("(max-width: 635px)");
@@ -70,15 +71,40 @@ export default function EditTripsTable({
   >(undefined);
   const [columnFilter, setColumnFilter] = useState<string | null>(null);
   const [filterKeyword, setFilterKeyword] = useState<string>("");
+  const [page, setPage] = useState(1);
+  const [numberOfRows, setNumberOfRows] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
 
-  const getBookingsQuery = api.bookings.get.useQuery();
+  const getBookingsQuery = api.bookings.get.useQuery(
+    {
+      pageNumber: page,
+      filter: { filter: columnFilter, filterKeyword: filterKeyword },
+      bookingStatus: table as BookingStatus,
+    },
+    { enabled: false },
+  );
+  if (
+    getBookingsQuery.data?.total &&
+    getBookingsQuery.data.total !== numberOfRows
+  ) {
+    setNumberOfRows(getBookingsQuery.data.total);
+  }
+  if (
+    getBookingsQuery.data?.pageSize &&
+    getBookingsQuery.data.pageSize !== pageSize
+  ) {
+    setPageSize(getBookingsQuery.data.pageSize);
+  }
 
-  //--Holds all bookings, separated into 4 tables--
-  let pendingBookings = [] as JSX.Element[];
-  let inProgressBookings = [] as JSX.Element[];
-  let cancelledBookings = [] as JSX.Element[];
-  let completedBookings = [] as JSX.Element[];
-  //-----------------------------------------------
+  useEffect(() => {
+    page;
+    columnFilter;
+    filterKeyword;
+    table;
+    getBookingsQuery.refetch();
+  }, [getBookingsQuery.refetch, page, columnFilter, filterKeyword, table]);
+
+  let bookings = [] as JSX.Element[];
 
   useEffect(() => {
     if (!getBookingsQuery.isLoading && getBookingsQuery.error) {
@@ -91,7 +117,7 @@ export default function EditTripsTable({
 
   if (!getBookingsQuery.isLoading && getBookingsQuery.data) {
     //For each booking, make a jsx element for it
-    for (const booking of getBookingsQuery.data) {
+    for (const booking of getBookingsQuery.data.data) {
       //Put the booking in its own jsx element
       const row = (
         <Table.Tr
@@ -167,50 +193,7 @@ export default function EditTripsTable({
         </Table.Tr>
       );
 
-      //--Filters--
-      const noFilterSet = columnFilter === null;
-      const pickUpAddrMatch =
-        columnFilter === TableColumnNames.PICK_UP_ADDRESS &&
-        booking.pickupAddr.toLowerCase().includes(filterKeyword.toLowerCase());
-      const destAddrMatch =
-        columnFilter === TableColumnNames.DESTINATION_ADDRESS &&
-        booking.destAddr.toLowerCase().includes(filterKeyword.toLowerCase());
-      const tripReasonMatch =
-        columnFilter === TableColumnNames.REASON_FOR_TRIP &&
-        booking.tripReason.toLowerCase().includes(filterKeyword.toLowerCase());
-      const requestedVerificationMatch =
-        columnFilter === TableColumnNames.REQUESTED_VERIFICATION &&
-        (filterKeyword === "" ||
-          (filterKeyword === "Yes" && booking.requestVerification) ||
-          (filterKeyword === "No" && !booking.requestVerification));
-      const paymentMethodMatch =
-        columnFilter === TableColumnNames.PAYMENT_METHOD &&
-        (filterKeyword === "" || filterKeyword === booking.paymentMethod);
-      const pickUpTimeMatch =
-        columnFilter === TableColumnNames.PICK_UP_TIME &&
-        (filterKeyword === "" ||
-          dayjs(filterKeyword).isSame(dayjs(booking.pickupTime), "day"));
-
-      const includeRow =
-        noFilterSet ||
-        pickUpAddrMatch ||
-        destAddrMatch ||
-        tripReasonMatch ||
-        requestedVerificationMatch ||
-        paymentMethodMatch ||
-        pickUpTimeMatch;
-      //--Filters--
-
-      //Put the row in one of four tables
-      if (booking.status === BookingStatus.PENDING && includeRow) {
-        pendingBookings = [...pendingBookings, row];
-      } else if (booking.status === BookingStatus.IN_PROGRESS && includeRow) {
-        inProgressBookings = [...inProgressBookings, row];
-      } else if (booking.status === BookingStatus.COMPLETED && includeRow) {
-        completedBookings = [...completedBookings, row];
-      } else if (booking.status === BookingStatus.CANCELLED && includeRow) {
-        cancelledBookings = [...cancelledBookings, row];
-      }
+      bookings = [...bookings, row];
     }
   }
 
@@ -222,7 +205,7 @@ export default function EditTripsTable({
         drawerOpened={drawerOpened}
         openDrawer={openDrawer}
       />
-      <Stack h={"100%"}>
+      <Stack gap={0} h={"100%"}>
         <section>
           <Flex direction={isMobile ? "column" : "row"} gap={"md"}>
             <Group flex={1} grow>
@@ -299,7 +282,7 @@ export default function EditTripsTable({
                       setFilterKeyword(value);
                     }
                   }}
-                  placeholder="Select Date and Time"
+                  placeholder="Select Date"
                   valueFormat="DD/MM/YYYY"
                 />
               )}
@@ -307,7 +290,7 @@ export default function EditTripsTable({
             <SegmentedControl
               data={[
                 {
-                  value: "pending",
+                  value: BookingStatus.PENDING,
                   label: (
                     <Center style={{ gap: 10 }}>
                       <ClockIcon size={19} />
@@ -316,7 +299,7 @@ export default function EditTripsTable({
                   ),
                 },
                 {
-                  value: "in_progress",
+                  value: BookingStatus.IN_PROGRESS,
                   label: (
                     <Center style={{ gap: 10 }}>
                       <CarProfileIcon size={19} />
@@ -325,7 +308,7 @@ export default function EditTripsTable({
                   ),
                 },
                 {
-                  value: "cancelled",
+                  value: BookingStatus.CANCELLED,
                   label: (
                     <Center style={{ gap: 10 }}>
                       <XCircleIcon size={19} />
@@ -334,7 +317,7 @@ export default function EditTripsTable({
                   ),
                 },
                 {
-                  value: "complete",
+                  value: BookingStatus.COMPLETED,
                   label: (
                     <Center style={{ gap: 10 }}>
                       <CheckCircleIcon size={19} />
@@ -345,7 +328,7 @@ export default function EditTripsTable({
               ]}
               fullWidth
               onChange={(value) => {
-                setTable(value);
+                setTable(value as BookingStatus);
                 setSelectedRows([]);
               }}
               value={table}
@@ -369,15 +352,19 @@ export default function EditTripsTable({
                 )}
               </Table.Tr>
             </Table.Thead>
-            <Table.Tbody>
-              {table === "pending" && pendingBookings}
-              {table === "in_progress" && inProgressBookings}
-              {table === "cancelled" && cancelledBookings}
-              {table === "complete" && completedBookings}
-            </Table.Tbody>
+            <Table.Tbody>{bookings}</Table.Tbody>
           </Table>
           {getBookingsQuery.isLoading && <TripLoading />}
         </Table.ScrollContainer>
+        <Group justify="flex-end">
+          <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+          <Pagination
+            onChange={setPage}
+            total={Math.ceil(numberOfRows / pageSize)}
+            value={page}
+            withPages={false}
+          />
+        </Group>
       </Stack>
     </Paper>
   );
