@@ -155,20 +155,13 @@ export default function EditUsersDrawer({
   const [alertOnConfirm, setAlertOnConfirm] = useState<() => void>(() => {});
   const [alertOpened, { open: openAlert, close: closeAlert }] =
     useDisclosure(false);
-
-  const getUsersQuery = api.users.getAll.useQuery(
-    { pageNumber: 1 },
-    {
-      //Forces manual fetching
-      enabled: false,
-    },
-  );
+  const utils = api.useUtils();
 
   const updateUserMutation = api.users.update.useMutation({
     onSuccess: () => {
       showNotifications.success("User updated");
       setFormSubmitting(false);
-      getUsersQuery.refetch();
+      void utils.users.getAll.invalidate();
       closeDrawer();
       closeAlert();
     },
@@ -182,7 +175,7 @@ export default function EditUsersDrawer({
     onSuccess: () => {
       showNotifications.success("Deleted successfully");
       setFormSubmitting(false);
-      getUsersQuery.refetch();
+      void utils.users.getAll.invalidate();
       closeDrawer();
       closeAlert();
     },

@@ -167,18 +167,18 @@ export default function BookingHistoryPage() {
     },
   });
 
-  const getBookingsQuery = api.bookings.get.useQuery(
-    { pageNumber: page, bookingStatus: table },
-    { enabled: false },
-  );
+  const getBookingsQuery = api.bookings.get.useQuery({
+    pageNumber: page,
+    bookingStatus: table,
+  });
   if (
-    getBookingsQuery.data?.total &&
+    getBookingsQuery.data?.total !== undefined &&
     getBookingsQuery.data.total !== numberOfRows
   ) {
     setNumberOfRows(getBookingsQuery.data.total);
   }
   if (
-    getBookingsQuery.data?.pageSize &&
+    getBookingsQuery.data?.pageSize !== undefined &&
     getBookingsQuery.data.pageSize !== pageSize
   ) {
     setPageSize(getBookingsQuery.data.pageSize);
@@ -631,7 +631,7 @@ export default function BookingHistoryPage() {
               )}
             </Table.ScrollContainer>
             <Group justify="flex-end">
-              <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+              <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
               <Pagination
                 onChange={setPage}
                 total={Math.ceil(numberOfRows / pageSize)}

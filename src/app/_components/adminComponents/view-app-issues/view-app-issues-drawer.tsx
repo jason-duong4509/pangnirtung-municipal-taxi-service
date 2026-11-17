@@ -40,20 +40,13 @@ export default function ViewAppIssuesDrawer({
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
-
-  const getIssuesQuery = api.reportApp.get.useQuery(
-    { pageNumber: 1 },
-    {
-      //Forces manual fetching
-      enabled: false,
-    },
-  );
+  const utils = api.useUtils();
 
   const updateIssueMutation = api.reportApp.update.useMutation({
     onSuccess: () => {
       showNotifications.success("Issue updated");
       setFormSubmitting(false);
-      getIssuesQuery.refetch();
+      void utils.reportApp.get.invalidate();
       closeDrawer();
       closeModal();
     },

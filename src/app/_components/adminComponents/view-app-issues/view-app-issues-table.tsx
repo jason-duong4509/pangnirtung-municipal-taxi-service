@@ -23,10 +23,7 @@ import {
 import { dbTimeToPrettyString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
-import {
-  PriorityRatingTypesString,
-  ReportAppIssueChipTypes,
-} from "~/types/types";
+import { ReportAppIssueChipTypes } from "~/types/types";
 import TripLoading from "../../common/trips/trip-loading";
 import ViewAppIssuesDrawer from "./view-app-issues-drawer";
 
@@ -53,18 +50,18 @@ export default function ViewAppIssuesTable({
 
   let issuesList = [] as JSX.Element[];
 
-  const getIssuesQuery = api.reportApp.get.useQuery(
-    { pageNumber: page, filters: issueFilters },
-    { enabled: false },
-  );
+  const getIssuesQuery = api.reportApp.get.useQuery({
+    pageNumber: page < 1 ? 1 : page,
+    filters: issueFilters,
+  });
   if (
-    getIssuesQuery.data?.total &&
+    getIssuesQuery.data?.total !== undefined &&
     getIssuesQuery.data.total !== numberOfRows
   ) {
     setNumberOfRows(getIssuesQuery.data.total);
   }
   if (
-    getIssuesQuery.data?.pageSize &&
+    getIssuesQuery.data?.pageSize !== undefined &&
     getIssuesQuery.data.pageSize !== pageSize
   ) {
     setPageSize(getIssuesQuery.data.pageSize);
@@ -72,9 +69,17 @@ export default function ViewAppIssuesTable({
 
   useEffect(() => {
     page;
+    if (page > 0) {
+      getIssuesQuery.refetch();
+    } else {
+      setPage(1);
+    }
+  }, [getIssuesQuery.refetch, page]);
+
+  useEffect(() => {
     issueFilters;
-    getIssuesQuery.refetch();
-  }, [getIssuesQuery.refetch, page, issueFilters]);
+    setPage(0);
+  }, [issueFilters]);
 
   useEffect(() => {
     if (!getIssuesQuery.isLoading && getIssuesQuery.error) {
@@ -210,7 +215,7 @@ export default function ViewAppIssuesTable({
           {getIssuesQuery.isLoading && <TripLoading />}
         </Table.ScrollContainer>
         <Group justify="flex-end">
-          <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+          <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
           <Pagination
             onChange={setPage}
             total={Math.ceil(numberOfRows / pageSize)}

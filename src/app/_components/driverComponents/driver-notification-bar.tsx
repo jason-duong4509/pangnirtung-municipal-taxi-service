@@ -58,13 +58,7 @@ const BookingDetails = ({
     requestAdjustmentModalOpened,
     { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
   ] = useDisclosure(false);
-
-  const getBookingsQuery = api.bookings.get.useQuery(
-    { pageNumber: 1, bookingStatus: BookingStatus.IN_PROGRESS },
-    {
-      enabled: false,
-    },
-  );
+  const utils = api.useUtils();
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {
@@ -72,7 +66,7 @@ const BookingDetails = ({
       showNotifications.success("Accepted successfully");
       setIsLoading(false);
       isLoadingRef.current = false;
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeModal();
     },
     onError: (error) => {
@@ -175,16 +169,11 @@ export default function DriverNotificationBar() {
   const [alertOnClose, setAlertOnClose] = useState<() => void>(() =>
     closeAlertModal(),
   );
+  const utils = api.useUtils();
 
   const getBookingQuery = api.bookings.getOne.useQuery(
     { bookingId: events[0]?.bookingId ?? 0 },
     { enabled: false },
-  );
-  const getBookingsQuery = api.bookings.get.useQuery(
-    { pageNumber: 1, bookingStatus: BookingStatus.IN_PROGRESS },
-    {
-      enabled: false,
-    },
   );
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
@@ -192,7 +181,7 @@ export default function DriverNotificationBar() {
       showNotifications.success("Accepted successfully");
       setIsLoading(false);
       isLoadingRef.current = false;
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeBookingDetailsModal();
       closeAlertModal();
     },

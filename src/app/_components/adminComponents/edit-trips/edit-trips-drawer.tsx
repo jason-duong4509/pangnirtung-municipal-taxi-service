@@ -40,20 +40,13 @@ export default function EditTripsDrawer({
     requestAdjustmentModalOpened,
     { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
   ] = useDisclosure(false);
-
-  const getBookingsQuery = api.bookings.get.useQuery(
-    { pageNumber: 1, bookingStatus: BookingStatus.IN_PROGRESS },
-    {
-      //Forces manual fetching
-      enabled: false,
-    },
-  );
+  const utils = api.useUtils();
 
   const updateBookingMutation = api.bookings.update.useMutation({
     onSuccess: () => {
       showNotifications.success("Booking updated");
       setFormSubmitting(false);
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeDrawer();
       closeModal();
     },

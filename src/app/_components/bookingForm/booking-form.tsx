@@ -88,7 +88,7 @@ const BookingUIStates = {
 } as const;
 type BookingUIStates = (typeof BookingUIStates)[keyof typeof BookingUIStates];
 
-type bookingsData = RouterOutputs["bookings"]["get"][0];
+type bookingsData = RouterOutputs["bookings"]["get"]["data"][0];
 
 //Drawer component taken straight off the drawer from /bookings-history
 //can be refactored to reuse the same component

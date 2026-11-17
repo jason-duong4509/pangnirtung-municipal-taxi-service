@@ -47,20 +47,13 @@ export default function ViewAppIssuesAsideBar({
   const [isMutating, setIsMutating] = useState(false);
   const [pickedFilters, setPickedFilters] = useState<string[]>([]);
   const [popoverOpened, setPopoverOpened] = useState(false);
-
-  const getIssuesQuery = api.reportApp.get.useQuery(
-    { pageNumber: 1 },
-    {
-      //Forces manual fetching
-      enabled: false,
-    },
-  );
+  const utils = api.useUtils();
 
   const deleteIssuesMutation = api.reportApp.delete.useMutation({
     onSuccess: () => {
       showNotifications.success("Deleted successfully");
       setIsMutating(false);
-      getIssuesQuery.refetch();
+      void utils.reportApp.get.invalidate();
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);

@@ -13,8 +13,7 @@ import {
   gte,
   ilike,
   inArray,
-  lte,
-  or,
+  lt,
   sql,
 } from "drizzle-orm";
 import Stripe from "stripe";
@@ -197,6 +196,21 @@ export const bookingsRouter = createTRPCRouter({
       try {
         const pageSize = 30; //hardcoded limit for this query
         if (ctx.session.user.role === UserRoles.ADMIN) {
+          //--Calculate the next calendar date if a filter date is given--
+          let nextDay = "";
+          if (
+            filters !== undefined &&
+            filters["filter"] !== null &&
+            filters["filter"] === "Pick-up Time" &&
+            filters["filterKeyword"]
+          ) {
+            nextDay = dayjs
+              .utc(filters["filterKeyword"])
+              .add(1, "day")
+              .format("YYYY-MM-DD");
+          }
+          //--------------------------------------------------------------
+
           const result = await db
             .select()
             .from(bookings)
@@ -247,12 +261,11 @@ export const bookingsRouter = createTRPCRouter({
                                   .startOf("day")
                                   .toDate(),
                               ),
-                              lte(
+                              lt(
                                 bookings.pickupTime,
                                 dayjs
-                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .tz(nextDay, IANA_TIME_ZONE)
                                   .startOf("day")
-                                  .add(1, "day")
                                   .toDate(),
                               ),
                             )
@@ -313,12 +326,11 @@ export const bookingsRouter = createTRPCRouter({
                                   .startOf("day")
                                   .toDate(),
                               ),
-                              lte(
+                              lt(
                                 bookings.pickupTime,
                                 dayjs
-                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .tz(nextDay, IANA_TIME_ZONE)
                                   .startOf("day")
-                                  .add(1, "day")
                                   .toDate(),
                               ),
                             )

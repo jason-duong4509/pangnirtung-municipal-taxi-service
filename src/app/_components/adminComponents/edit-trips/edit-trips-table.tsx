@@ -75,22 +75,19 @@ export default function EditTripsTable({
   const [numberOfRows, setNumberOfRows] = useState(0);
   const [pageSize, setPageSize] = useState(0);
 
-  const getBookingsQuery = api.bookings.get.useQuery(
-    {
-      pageNumber: page,
-      filter: { filter: columnFilter, filterKeyword: filterKeyword },
-      bookingStatus: table as BookingStatus,
-    },
-    { enabled: false },
-  );
+  const getBookingsQuery = api.bookings.get.useQuery({
+    pageNumber: page < 1 ? 1 : page,
+    filter: { filter: columnFilter, filterKeyword: filterKeyword },
+    bookingStatus: table as BookingStatus,
+  });
   if (
-    getBookingsQuery.data?.total &&
+    getBookingsQuery.data?.total !== undefined &&
     getBookingsQuery.data.total !== numberOfRows
   ) {
     setNumberOfRows(getBookingsQuery.data.total);
   }
   if (
-    getBookingsQuery.data?.pageSize &&
+    getBookingsQuery.data?.pageSize !== undefined &&
     getBookingsQuery.data.pageSize !== pageSize
   ) {
     setPageSize(getBookingsQuery.data.pageSize);
@@ -98,11 +95,19 @@ export default function EditTripsTable({
 
   useEffect(() => {
     page;
+    if (page > 0) {
+      getBookingsQuery.refetch();
+    } else {
+      setPage(1);
+    }
+  }, [getBookingsQuery.refetch, page]);
+
+  useEffect(() => {
     columnFilter;
     filterKeyword;
     table;
-    getBookingsQuery.refetch();
-  }, [getBookingsQuery.refetch, page, columnFilter, filterKeyword, table]);
+    setPage(0);
+  }, [columnFilter, filterKeyword, table]);
 
   let bookings = [] as JSX.Element[];
 
@@ -357,7 +362,7 @@ export default function EditTripsTable({
           {getBookingsQuery.isLoading && <TripLoading />}
         </Table.ScrollContainer>
         <Group justify="flex-end">
-          <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+          <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
           <Pagination
             onChange={setPage}
             total={Math.ceil(numberOfRows / pageSize)}

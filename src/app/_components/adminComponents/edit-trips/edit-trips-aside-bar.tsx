@@ -55,20 +55,13 @@ export default function EditTripsAsideBar({
     useState<usersRequestingResidency>([]);
   const [confirmCashPaymentData, setConfirmCashPaymentData] =
     useState<usersPaidWithCash>([]);
-
-  const getBookingsQuery = api.bookings.get.useQuery(
-    { pageNumber: 1, bookingStatus: table },
-    {
-      //Forces manual fetching
-      enabled: false,
-    },
-  );
+  const utils = api.useUtils();
 
   const completeBookingMutation = api.bookings.complete.useMutation({
     onSuccess: (data) => {
       showNotifications.success("Completed successfully");
       setIsMutating(false);
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       setIsSelecting(false);
       setSelectedRows([]);
       closeAlertModal();
@@ -93,7 +86,7 @@ export default function EditTripsAsideBar({
     onSuccess: () => {
       showNotifications.success("Accepted successfully");
       setIsMutating(false);
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);
@@ -108,7 +101,7 @@ export default function EditTripsAsideBar({
     onSuccess: () => {
       showNotifications.success("Cancelled successfully");
       setIsMutating(false);
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);

@@ -260,7 +260,10 @@ export const usersRouter = createTRPCRouter({
               code: "BAD_REQUEST",
               message: `Could not find profile record for user ID: ${input.id}`,
             });
-          } else if (preUpdateProfile.numberOfRides + numberOfRides > 999) {
+          } else if (
+            numberOfRides > 0 &&
+            preUpdateProfile.numberOfRides + numberOfRides > 999
+          ) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:

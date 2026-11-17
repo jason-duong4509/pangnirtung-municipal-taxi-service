@@ -59,18 +59,18 @@ export default function EditUsersTable({
   const [numberOfRows, setNumberOfRows] = useState(0);
   const [pageSize, setPageSize] = useState(0);
 
-  const getUsersQuery = api.users.getAll.useQuery(
-    {
-      pageNumber: page,
-      filter: { filter: columnFilter, filterKeyword: filterKeyword },
-    },
-    { enabled: false },
-  );
-  if (getUsersQuery.data?.total && getUsersQuery.data.total !== numberOfRows) {
+  const getUsersQuery = api.users.getAll.useQuery({
+    pageNumber: page < 1 ? 1 : page,
+    filter: { filter: columnFilter, filterKeyword: filterKeyword },
+  });
+  if (
+    getUsersQuery.data?.total !== undefined &&
+    getUsersQuery.data.total !== numberOfRows
+  ) {
     setNumberOfRows(getUsersQuery.data.total);
   }
   if (
-    getUsersQuery.data?.pageSize &&
+    getUsersQuery.data?.pageSize !== undefined &&
     getUsersQuery.data.pageSize !== pageSize
   ) {
     setPageSize(getUsersQuery.data.pageSize);
@@ -78,10 +78,18 @@ export default function EditUsersTable({
 
   useEffect(() => {
     page;
+    if (page > 0) {
+      getUsersQuery.refetch();
+    } else {
+      setPage(1);
+    }
+  }, [getUsersQuery.refetch, page]);
+
+  useEffect(() => {
     columnFilter;
     filterKeyword;
-    getUsersQuery.refetch();
-  }, [getUsersQuery.refetch, page, columnFilter, filterKeyword]);
+    setPage(0);
+  }, [columnFilter, filterKeyword]);
 
   let usersList = [] as JSX.Element[];
 
@@ -251,7 +259,7 @@ export default function EditUsersTable({
           {getUsersQuery.isLoading && <TripLoading />}
         </Table.ScrollContainer>
         <Group justify="flex-end">
-          <Text size="sm">{`Showing ${pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+          <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
           <Pagination
             onChange={setPage}
             total={Math.ceil(numberOfRows / pageSize)}
