@@ -1,10 +1,14 @@
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, gte, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "~/server/db";
-import { bookings, enabledPushNotifications } from "~/server/db/schema";
+import {
+  bookings,
+  enabledPushNotifications,
+  session,
+} from "~/server/db/schema";
 import { sendPushNotification } from "~/server/send-notifications";
 import { IANA_TIME_ZONE } from "~/types/constants";
 import { BookingStatus } from "~/types/types";
@@ -15,6 +19,12 @@ dayjs.extend(timezone);
 //------------------------------------------------------
 
 export async function GET(request: Request) {
+  if (!process.env.CRON_SECRET) {
+    return new NextResponse("No CRON key set", {
+      status: 500,
+    });
+  }
+
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new NextResponse("Unauthorized", {
@@ -23,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   const upcomingBookings = await db.query.bookings.findMany({
-    where: (bookings, { lte, and, eq, gte }) =>
+    where: (bookings) =>
       and(
         lte(
           bookings.pickupTime,
@@ -49,7 +59,25 @@ export async function GET(request: Request) {
       if (booking.user?.enabledPushNotifications) {
         for (const notificationSubscription of booking.user
           .enabledPushNotifications) {
+          if (!notificationSubscription.sessionId) {
+            //no valid session ID associated with the subscription
+            continue;
+          }
           try {
+            const [sessionStillValid] = await db
+              .select({ id: session.id })
+              .from(session)
+              .where(
+                and(
+                  eq(session.id, notificationSubscription.sessionId),
+                  gt(session.expiresAt, new Date()),
+                ),
+              );
+            if (!sessionStillValid) {
+              //current subscription has no valid session ID
+              continue;
+            }
+
             const timeDifference = dayjs(booking.pickupTime)
               .tz(IANA_TIME_ZONE)
               .diff(dayjs().tz(IANA_TIME_ZONE), "minute");
@@ -83,6 +111,7 @@ export async function GET(request: Request) {
                   eq(enabledPushNotifications.id, notificationSubscription.id),
                 );
             }
+            continue;
           }
 
           await db

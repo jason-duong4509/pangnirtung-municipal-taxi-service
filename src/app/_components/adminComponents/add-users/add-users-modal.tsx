@@ -4,14 +4,16 @@ import {
   Button,
   CloseButton,
   Group,
+  Input,
   Loader,
   Modal,
   Stack,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
+import { DeviceMobileIcon } from "@phosphor-icons/react";
 import { useState } from "react";
+import { IMaskInput } from "react-imask";
 import { checkPhoneNumber } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
@@ -48,16 +50,10 @@ export default function AddUsersModal({
     },
   });
 
-  const getUsersQuery = api.users.getAll.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
-
   const createUserMutation = api.users.add.useMutation({
     onSuccess: () => {
       showNotifications.success("User created successfully");
       setIsMutating(false);
-      getUsersQuery.refetch();
       form.reset();
       void utils.users.getAll.invalidate(); //Forces the get users table to refetch its data if opened
     },
@@ -95,13 +91,18 @@ export default function AddUsersModal({
           <CloseButton onClick={closeModal} />
         </Group>
         <Stack>
-          <TextInput
-            aria-label="Phone number input"
-            description="Enter the user's phone number"
-            placeholder="(123)-456-7890"
-            {...form.getInputProps("phoneNumber")}
-            key={form.key("phoneNumber")}
-          />
+          <Input.Wrapper error={form.errors.phoneNumber}>
+            <Input.Description>Enter the user's phone number</Input.Description>
+            <Input
+              aria-label="Phone number input"
+              component={IMaskInput}
+              key={form.key("phoneNumber")}
+              mask="(000) 000-0000"
+              placeholder="(123)-456-7890"
+              {...form.getInputProps("phoneNumber")}
+              leftSection={<DeviceMobileIcon size={20} />}
+            />
+          </Input.Wrapper>
         </Stack>
         <Group grow>
           <Button

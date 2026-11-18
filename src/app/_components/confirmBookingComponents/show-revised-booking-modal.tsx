@@ -18,15 +18,17 @@ import { useForm } from "@mantine/form";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useRouter } from "next/navigation";
 import { type JSX, useEffect, useState } from "react";
-import { dbTimeToPrettyString, formatString } from "~/lib/helpers";
+import { formatString } from "~/lib/helpers";
 import { checkBookingTypeAndPaymentMethod } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
 import { PaymentMethods } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
+import BookingContents from "../common/bookingContents/booking-contents";
 import PaymentModal from "../common/payment/payment";
 import TripLoading from "../common/trips/trip-loading";
+import LogOutModal from "../logout/logout";
 
 type bookingsData = RouterOutputs["bookings"]["getOne"];
 
@@ -198,7 +200,12 @@ const ComponentContents = ({
     { open: openGetPaymentDetailsModal, close: closeGetPaymentDetailsModal },
   ] = useDisclosure(false);
   const utils = api.useUtils();
-  //TODO: finish populating with booking fields
+  const moveLogoutButton = useMediaQuery("(max-width: 750px)");
+  const shrinkText = useMediaQuery("(max-width: 500px)");
+  const [
+    logoutModalOpened,
+    { open: openLogoutModal, close: closeLogoutModal },
+  ] = useDisclosure(false);
 
   const cancelBookingMutation = api.bookings.cancel.useMutation({
     onSuccess: async () => {
@@ -237,6 +244,7 @@ const ComponentContents = ({
         onConfirm={onAlertSubmit}
         titleText={alertTitleText}
       />
+      <LogOutModal onClose={closeLogoutModal} opened={logoutModalOpened} />
       {bookingDetails && (
         <GetPaymentDetailsModal
           bookingDetails={bookingDetails}
@@ -246,7 +254,36 @@ const ComponentContents = ({
       )}
       <Stack gap={"lg"} h={"100%"}>
         <header>
-          <Title order={4}>Confirm Booking</Title>
+          <Group justify="space-between">
+            <Title order={4}>Confirm Booking</Title>
+            {moveLogoutButton && (
+              <Button
+                c={"black"}
+                color={"buttonColor"}
+                onClick={openLogoutModal}
+                radius={"lg"}
+                size="xs"
+                type="button"
+              >
+                Log out
+              </Button>
+            )}
+            {!moveLogoutButton && (
+              <Button
+                c={"black"}
+                color={"customWhite"}
+                onClick={openLogoutModal}
+                pos={"absolute"}
+                radius={"lg"}
+                right={"5%"}
+                size="xs"
+                top={"5%"}
+                type="button"
+              >
+                Log out
+              </Button>
+            )}
+          </Group>
         </header>
         {!bookingDetails && <TripLoading />}
         {bookingDetails && (
@@ -266,29 +303,14 @@ const ComponentContents = ({
                   value={formatString(bookingDetails.bookingType)}
                 />
               </Group>
-              <Divider label="Booking Details" labelPosition="center" my="xs" />
+              <Divider
+                label="Full Booking Details"
+                labelPosition="center"
+                my="xs"
+              />
               <ScrollArea>
                 <Stack>
-                  <Group>
-                    <Text flex={1}>Booking ID:</Text>
-                    <TextInput flex={1} readOnly value={bookingDetails.id} />
-                  </Group>
-                  <Group>
-                    <Text flex={1}>Pick-up Time:</Text>
-                    <TextInput
-                      flex={1}
-                      readOnly
-                      value={dbTimeToPrettyString(bookingDetails.pickupTime)}
-                    />
-                  </Group>
-                  <Group>
-                    <Text flex={1}>Pick-up Location:</Text>
-                    <TextInput
-                      flex={1}
-                      readOnly
-                      value={bookingDetails.pickupAddr}
-                    />
-                  </Group>
+                  <BookingContents bookingData={bookingDetails} readOnly />
                 </Stack>
               </ScrollArea>
             </Stack>
@@ -315,7 +337,8 @@ const ComponentContents = ({
                   type="button"
                   variant="outline"
                 >
-                  Decline and Cancel Trip
+                  {shrinkText && "Decline"}
+                  {!shrinkText && "Decline and Cancel Trip"}
                 </Button>
                 <Button
                   c={"black"}
@@ -334,7 +357,8 @@ const ComponentContents = ({
                   type="button"
                   variant="filled"
                 >
-                  Accept and Finalize Trip
+                  {shrinkText && "Accept"}
+                  {!shrinkText && "Accept and Finalize Trip"}
                 </Button>
               </Group>
             </footer>
@@ -355,7 +379,7 @@ export default function ShowRevisedBookingModal({
     bookingsData | undefined
   >(undefined);
   const deviceIsShort = useMediaQuery("(max-height: 550px)");
-  const deviceIsTall = useMediaQuery("(max-height: 1000px)"); //TODO: change the value to a height just large enough to cover the entire form without scrolling
+  const deviceIsTall = useMediaQuery("(max-height: 1400px)"); //height dependent on the minimum screen height needed to show the entire UI without vertical scrolling
 
   const bookingId = Number(bookingIdString);
   const notANumber = Number.isNaN(bookingId);

@@ -4,7 +4,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authClient } from "~/server/better-auth/client";
-import { UserRoles } from "~/types/types";
+import { BookingStatus, UserRoles } from "~/types/types";
 import AddUsersModal from "../_components/adminComponents/add-users/add-users-modal";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
 import EditTripsTable from "../_components/adminComponents/edit-trips/edit-trips-table";
@@ -20,7 +20,6 @@ import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import ManageAccountModal from "../_components/common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../_components/common/reportAppIssue/report-app-issue";
 import LogOutModal from "../_components/logout/logout";
-import NotificationSubscription from "../_components/notificationSubscription/notification-subscription";
 
 enum PageView { //Enum string values double as app shell header text
   Trips = "- Trips",
@@ -52,15 +51,23 @@ export default function AdminPage() {
   ] = useDisclosure(false);
   const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
     useDisclosure(false);
-  const [
-    notificationModalOpened,
-    { open: openNotificationModal, close: closeNotificationModal },
-  ] = useDisclosure(false);
   const [issuesTableFilters, setIssuesTableFilters] = useState<string[]>([]);
   const { data: session, isPending } = authClient.useSession();
   const [showLoadingUI, setShowLoadingUI] = useState(true);
   const router = useRouter();
   const isMobile = useMediaQuery("(max-width: 500px)");
+  const [tripTable, setTripTable] = useState<BookingStatus>(
+    BookingStatus.PENDING,
+  );
+
+  if (
+    pageView === PageView.Trips &&
+    isSelecting &&
+    (tripTable === BookingStatus.CANCELLED ||
+      tripTable === BookingStatus.COMPLETED)
+  ) {
+    setIsSelecting(false);
+  }
 
   useEffect(() => {
     if (session && session.user.role === UserRoles.ADMIN && showLoadingUI) {
@@ -81,15 +88,18 @@ export default function AdminPage() {
     <CustomAppShell
       asideComponent={
         <>
-          {pageView === PageView.Trips && (
-            <EditTripsAsideBar
-              expandAside={expandAside}
-              isSelecting={isSelecting}
-              selectedRows={selectedRows}
-              setIsSelecting={setIsSelecting}
-              setSelectedRows={setSelectedRows}
-            />
-          )}
+          {pageView === PageView.Trips &&
+            (tripTable === BookingStatus.PENDING ||
+              tripTable === BookingStatus.IN_PROGRESS) && (
+              <EditTripsAsideBar
+                expandAside={expandAside}
+                isSelecting={isSelecting}
+                selectedRows={selectedRows}
+                setIsSelecting={setIsSelecting}
+                setSelectedRows={setSelectedRows}
+                table={tripTable}
+              />
+            )}
           {pageView === PageView.ViewAppIssues && (
             <ViewAppIssuesAsideBar
               expandAside={expandAside}
@@ -114,7 +124,7 @@ export default function AdminPage() {
       }
       expandAside={expandAside}
       headerText={
-        isMobile ? `${pageView}` : `Municipal Taxi Service ${pageView}`
+        isMobile ? `${pageView.slice(1)}` : `Municipal Taxi Service ${pageView}`
       }
       mainComponent={
         <>
@@ -136,6 +146,8 @@ export default function AdminPage() {
               isSelecting={isSelecting}
               selectedRows={selectedRows}
               setSelectedRows={setSelectedRows}
+              setTable={setTripTable}
+              table={tripTable}
             />
           )}
           {pageView === PageView.ViewAppIssues && (
@@ -156,10 +168,6 @@ export default function AdminPage() {
           <InstallPwaPrompt
             closeModal={closePwaModal}
             modalOpened={installPwaModalOpened}
-          />
-          <NotificationSubscription
-            closeModal={closeNotificationModal}
-            modalOpened={notificationModalOpened}
           />
         </>
       }
@@ -222,10 +230,6 @@ export default function AdminPage() {
             <NavbarOption
               onClick={() => openPwaModal()}
               text={"Download PWA App"}
-            />
-            <NavbarOption
-              onClick={() => openNotificationModal()}
-              text={"Enable PWA Notifications"}
             />
           </AppShell.Section>
         </Stack>

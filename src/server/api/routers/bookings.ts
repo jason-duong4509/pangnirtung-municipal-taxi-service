@@ -1,28 +1,52 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  lt,
+  sql,
+} from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
+import { dbTimeToPrettyString, formatString } from "~/lib/helpers";
 import {
   checkAddress,
   checkBookingType,
   checkBookingTypeAndPaymentMethod,
   checkEmail,
   checkName,
+  checkPaginationPageNumber,
   checkPaymentMethodType,
   checkPhoneNumber,
   checkPickUpTime,
   checkRedeemCode,
   checkTripReason,
+  checkTripTableFilters,
 } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import {
   bookings,
+  enabledPushNotifications,
   profile,
   rideCodes,
+  session,
   user,
   userUsedRideCode,
 } from "~/server/db/schema";
 import { notifyDriver } from "~/server/push-driver-notifications";
+import { sendEmail } from "~/server/send-email";
+import { sendPushNotification } from "~/server/send-notifications";
+import { IANA_TIME_ZONE } from "~/types/constants";
 import {
   BOOKING_COSTS,
   BookingStatus,
@@ -31,6 +55,11 @@ import {
   UserRoles,
 } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+//--Add UTC and timezone conversion features for dayjs--
+dayjs.extend(utc);
+dayjs.extend(timezone);
+//------------------------------------------------------
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-08-26.dahlia",
@@ -127,39 +156,303 @@ export const bookingsRouter = createTRPCRouter({
         });
       }
     }),
-  get: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      if (ctx.session.user.role === UserRoles.ADMIN) {
-        const result = await db.select().from(bookings);
-
-        return result;
-      } else if (ctx.session.user.role === UserRoles.DRIVER) {
-        const result = await db
-          .select()
-          .from(bookings)
-          .where(
-            or(
-              eq(bookings.status, BookingStatus.PENDING),
-              eq(bookings.status, BookingStatus.IN_PROGRESS),
-            ),
-          );
-
-        return result;
+  get: protectedProcedure
+    .input(
+      z.object({
+        pageNumber: z.number(),
+        filter: z.record(z.string(), z.unknown()).optional(),
+        bookingStatus: z.nativeEnum(BookingStatus),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const pageNumCheck = checkPaginationPageNumber(input.pageNumber);
+      let pageNum = 1 as number;
+      if (pageNumCheck.isProper) {
+        pageNum = pageNumCheck.formattedInput;
       } else {
-        const result = await db
-          .select()
-          .from(bookings)
-          .where(eq(bookings.created_by, ctx.session.user.id));
-
-        return result;
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pageNumCheck.errorMessage,
+        });
       }
-    } catch {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get bookings",
-      });
-    }
-  }),
+      let filters = undefined as
+        | undefined
+        | Extract<
+            ReturnType<typeof checkTripTableFilters>,
+            { isProper: true }
+          >["formattedInput"];
+      if (input.filter) {
+        const filterCheck = checkTripTableFilters(input.filter);
+        if (filterCheck.isProper) {
+          filters = filterCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: filterCheck.errorMessage,
+          });
+        }
+      }
+
+      try {
+        const pageSize = 30; //hardcoded limit for this query
+        if (ctx.session.user.role === UserRoles.ADMIN) {
+          //--Calculate the next calendar date if a filter date is given--
+          let nextDay = "";
+          if (
+            filters !== undefined &&
+            filters["filter"] !== null &&
+            filters["filter"] === "Pick-up Time" &&
+            filters["filterKeyword"]
+          ) {
+            nextDay = dayjs
+              .utc(filters["filterKeyword"])
+              .add(1, "day")
+              .format("YYYY-MM-DD");
+          }
+          //--------------------------------------------------------------
+
+          const result = await db
+            .select()
+            .from(bookings)
+            .orderBy(
+              asc(bookings.pickupTime),
+              asc(bookings.pickupAddr),
+              asc(bookings.destAddr),
+              asc(bookings.requestVerification),
+              asc(bookings.name),
+              asc(bookings.updatedAt),
+              desc(bookings.id),
+            )
+            .limit(pageSize)
+            .offset((pageNum - 1) * pageSize)
+            .where(
+              and(
+                eq(bookings.requiresAdjustment, false),
+                eq(bookings.status, input.bookingStatus),
+                filters === undefined || filters["filter"] === null
+                  ? undefined
+                  : filters["filter"] === "Destination Address" &&
+                      filters["filterKeyword"]
+                    ? ilike(bookings.destAddr, `%${filters["filterKeyword"]}%`)
+                    : filters["filter"] === "Payment Method" &&
+                        filters["filterKeyword"]
+                      ? eq(
+                          bookings.paymentMethod,
+                          filters["filterKeyword"] === PaymentMethods.CASH
+                            ? PaymentMethods.CASH
+                            : filters["filterKeyword"] ===
+                                PaymentMethods.CREDIT_CARD
+                              ? PaymentMethods.CREDIT_CARD
+                              : PaymentMethods.RIDES,
+                        )
+                      : filters["filter"] === "Pick-up Address" &&
+                          filters["filterKeyword"]
+                        ? ilike(
+                            bookings.pickupAddr,
+                            `%${filters["filterKeyword"]}%`,
+                          )
+                        : filters["filter"] === "Pick-up Time" &&
+                            filters["filterKeyword"]
+                          ? and(
+                              gte(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .toDate(),
+                              ),
+                              lt(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(nextDay, IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .toDate(),
+                              ),
+                            )
+                          : filters["filter"] === "Reason For Trip" &&
+                              filters["filterKeyword"]
+                            ? ilike(
+                                bookings.tripReason,
+                                `%${filters["filterKeyword"]}%`,
+                              )
+                            : filters["filter"] === "Requested Verification?" &&
+                                filters["filterKeyword"]
+                              ? eq(
+                                  bookings.requestVerification,
+                                  filters["filterKeyword"] === "Yes",
+                                )
+                              : undefined,
+              ),
+            );
+
+          const numberOfRows = await db
+            .select({
+              count: count(),
+            })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.requiresAdjustment, false),
+                eq(bookings.status, input.bookingStatus),
+                filters === undefined || filters["filter"] === null
+                  ? undefined
+                  : filters["filter"] === "Destination Address" &&
+                      filters["filterKeyword"]
+                    ? ilike(bookings.destAddr, `%${filters["filterKeyword"]}%`)
+                    : filters["filter"] === "Payment Method" &&
+                        filters["filterKeyword"]
+                      ? eq(
+                          bookings.paymentMethod,
+                          filters["filterKeyword"] === PaymentMethods.CASH
+                            ? PaymentMethods.CASH
+                            : filters["filterKeyword"] ===
+                                PaymentMethods.CREDIT_CARD
+                              ? PaymentMethods.CREDIT_CARD
+                              : PaymentMethods.RIDES,
+                        )
+                      : filters["filter"] === "Pick-up Address" &&
+                          filters["filterKeyword"]
+                        ? ilike(
+                            bookings.pickupAddr,
+                            `%${filters["filterKeyword"]}%`,
+                          )
+                        : filters["filter"] === "Pick-up Time" &&
+                            filters["filterKeyword"]
+                          ? and(
+                              gte(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(filters["filterKeyword"], IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .toDate(),
+                              ),
+                              lt(
+                                bookings.pickupTime,
+                                dayjs
+                                  .tz(nextDay, IANA_TIME_ZONE)
+                                  .startOf("day")
+                                  .toDate(),
+                              ),
+                            )
+                          : filters["filter"] === "Reason For Trip" &&
+                              filters["filterKeyword"]
+                            ? ilike(
+                                bookings.tripReason,
+                                `%${filters["filterKeyword"]}%`,
+                              )
+                            : filters["filter"] === "Requested Verification?" &&
+                                filters["filterKeyword"]
+                              ? eq(
+                                  bookings.requestVerification,
+                                  filters["filterKeyword"] === "Yes",
+                                )
+                              : undefined,
+              ),
+            );
+
+          return {
+            data: result,
+            total: numberOfRows[0]?.count ?? 0,
+            pageSize: pageSize,
+          };
+        } else if (ctx.session.user.role === UserRoles.DRIVER) {
+          if (
+            input.bookingStatus === BookingStatus.CANCELLED ||
+            input.bookingStatus === BookingStatus.COMPLETED
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Not authorized to view bookings of this type",
+            });
+          }
+
+          const result = await db
+            .select()
+            .from(bookings)
+            .orderBy(
+              asc(bookings.pickupTime),
+              asc(bookings.pickupAddr),
+              asc(bookings.destAddr),
+              asc(bookings.requestVerification),
+              asc(bookings.name),
+              asc(bookings.updatedAt),
+              desc(bookings.id),
+            )
+            .limit(pageSize)
+            .offset((pageNum - 1) * pageSize)
+            .where(
+              and(
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          const numberOfRows = await db
+            .select({
+              count: count(),
+            })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          return {
+            data: result,
+            total: numberOfRows[0]?.count ?? 0,
+            pageSize: pageSize,
+          };
+        } else {
+          const result = await db
+            .select()
+            .from(bookings)
+            .orderBy(
+              asc(bookings.pickupTime),
+              asc(bookings.pickupAddr),
+              asc(bookings.destAddr),
+              asc(bookings.requestVerification),
+              asc(bookings.name),
+              asc(bookings.updatedAt),
+              desc(bookings.id),
+            )
+            .limit(pageSize)
+            .offset((pageNum - 1) * pageSize)
+            .where(
+              and(
+                eq(bookings.created_by, ctx.session.user.id),
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          const numberOfRows = await db
+            .select({
+              count: count(),
+            })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.created_by, ctx.session.user.id),
+                eq(bookings.status, input.bookingStatus),
+                eq(bookings.requiresAdjustment, false),
+              ),
+            );
+
+          return {
+            data: result,
+            total: numberOfRows[0]?.count ?? 0,
+            pageSize: pageSize,
+          };
+        }
+      } catch {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get bookings",
+        });
+      }
+    }),
   create: protectedProcedure
     .input(
       z.object({
@@ -320,6 +613,7 @@ export const bookingsRouter = createTRPCRouter({
       }
 
       try {
+        let warningMessage = "" as string;
         const result = await db.transaction(async (tx) => {
           const [userProfile] = await tx
             .select({
@@ -458,7 +752,409 @@ export const bookingsRouter = createTRPCRouter({
 
           return insertedBooking;
         });
-        return result;
+
+        //--Check and send a receipt--
+        if (input.contactEmail !== "") {
+          try {
+            let totalCost = BOOKING_COSTS[result.bookingType];
+            if (result.rideCode) {
+              const [discount] = await db
+                .select({ amount: rideCodes.discount })
+                .from(rideCodes)
+                .where(eq(rideCodes.code, result.rideCode));
+              if (discount) {
+                totalCost =
+                  totalCost -
+                  (discount.amount / 100) * BOOKING_COSTS[result.bookingType];
+              }
+            }
+
+            await sendEmail({
+              emailAddress: email,
+              emailSubject:
+                "Booking Receipt - Pangnirtung Municipal Taxi Service",
+              messageBody: `
+              
+              <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
+                <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
+                  Thanks for booking!
+                </h1>
+                
+                <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
+                  Here are your booking details:
+                </p>
+                
+                <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Name
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.name}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Contact Phone Number
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.contactPhone}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Booking Type
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.bookingType)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold;">
+                      Pick-up Time
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${dbTimeToPrettyString(result.pickupTime)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Pick-up Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.pickupAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Destination Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.destAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Payment Method
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.paymentMethod)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Cost
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      $${totalCost}
+                    </td>
+                  </tr>
+                </table>
+                
+                <p style="font-size: 14px; margin: 24px 0 0; color: #777777;">
+                  We look forward to seeing you!
+                </p>
+
+                <p style="font-size: 12px; margin: 24px 0 0; color: #777777;">
+                  Please note that booking details are not final until it has been accepted by a driver. Costs shown are not final and are subject to change based on the driver's discretion. If any changes are made, you will be notified and given the opportunity to accept or decline the changes.
+                </p>
+              </div>
+              `,
+            });
+          } catch (error) {
+            if (error instanceof Error) {
+              warningMessage = `Booking successfully created but email system failed with error: ${error.message}`;
+            } else {
+              warningMessage = `Unknown error encountered while sending an email. Booking successfully created: ${error}`;
+            }
+          }
+        }
+        //----------------------------
+
+        return {
+          ...result,
+          ...(warningMessage !== "" && { warning: warningMessage }),
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create booking",
+          cause: error,
+        });
+      }
+    }),
+  createForAnother: protectedProcedure
+    .input(
+      z.object({
+        pickupTime: z.string().nullable(),
+        pickupAddr: z.string(),
+        destAddr: z.string(),
+        name: z.string(),
+        tripReason: z.string(),
+        reminders: z.boolean(),
+        contactPhone: z.string(),
+        bookingType: z.string(),
+        email: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.session.user.role !== UserRoles.DRIVER) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not allowed to perform this action",
+        });
+      }
+
+      //--Input checking--
+      const pickupTimeCheck = checkPickUpTime(input.pickupTime);
+      let pickupTime = undefined as undefined | Date;
+      if (pickupTimeCheck.isProper) {
+        pickupTime = pickupTimeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupTimeCheck.errorMessage,
+        });
+      }
+      const pickupAddrCheck = checkAddress(input.pickupAddr);
+      let pickupAddr = "" as string;
+      if (pickupAddrCheck.isProper) {
+        pickupAddr = pickupAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pickupAddrCheck.errorMessage,
+        });
+      }
+      const destAddrCheck = checkAddress(input.destAddr);
+      let destAddr = "" as string;
+      if (destAddrCheck.isProper) {
+        destAddr = destAddrCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: destAddrCheck.errorMessage,
+        });
+      }
+      const nameCheck = checkName(input.name);
+      let name = "" as string;
+      if (nameCheck.isProper) {
+        name = nameCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: nameCheck.errorMessage,
+        });
+      }
+      const tripReasonCheck = checkTripReason(input.tripReason);
+      let tripReason = "" as string;
+      if (tripReasonCheck.isProper) {
+        tripReason = tripReasonCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: tripReasonCheck.errorMessage,
+        });
+      }
+      const phoneNumberCheck = checkPhoneNumber(input.contactPhone);
+      let phoneNumber = "" as string;
+      if (phoneNumberCheck.isProper) {
+        phoneNumber = phoneNumberCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: phoneNumberCheck.errorMessage,
+        });
+      }
+      const bookingTypeCheck = checkBookingType(input.bookingType);
+      let bookingType = undefined as BookingValueTypes | undefined;
+      if (bookingTypeCheck.isProper) {
+        bookingType = bookingTypeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: bookingTypeCheck.errorMessage,
+        });
+      }
+      let email = "" as string;
+      if (input.email !== "") {
+        const emailCheck = checkEmail(input.email);
+        if (emailCheck.isProper) {
+          email = emailCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: emailCheck.errorMessage,
+          });
+        }
+      }
+      //------------------
+
+      try {
+        let warningMessage = "" as string;
+        const result = await db.transaction(async (tx) => {
+          const [userRecord] = await tx
+            .select({
+              id: user.id,
+              role: user.role,
+            })
+            .from(user)
+            .where(eq(user.phoneNumber, phoneNumber));
+          if (!userRecord) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `No user has primary number ${phoneNumber}`,
+            });
+          } else if (userRecord.role !== UserRoles.MEMBER) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "A trip cannot be made for this user as they are not a member",
+            });
+          }
+
+          const [insertedBooking] = await tx
+            .insert(bookings)
+            .values({
+              pickupAddr: pickupAddr,
+              destAddr: destAddr,
+              name: name,
+              pickupTime: pickupTime,
+              tripReason: tripReason,
+              paymentMethod: PaymentMethods.CASH,
+              reminders: input.reminders,
+              created_by: userRecord.id,
+              requestVerification: false,
+              contactEmail: email === "" ? null : email,
+              contactPhone: phoneNumber,
+              bookingType: bookingType,
+            })
+            .returning();
+
+          if (!insertedBooking) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Unable to create booking",
+            });
+          }
+
+          return insertedBooking;
+        });
+
+        //--Check and send a receipt--
+        if (email !== "") {
+          const totalCost = BOOKING_COSTS[result.bookingType];
+
+          try {
+            await sendEmail({
+              emailAddress: email,
+              emailSubject:
+                "You're Booked! - Pangnirtung Municipal Taxi Service",
+              messageBody: `
+              
+              <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
+                <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
+                  Hey! A driver has made a booking for you.
+                </h1>
+                
+                <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
+                  Here are your booking details:
+                </p>
+                
+                <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Name
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.name}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Contact Phone Number
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.contactPhone}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Booking Type
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.bookingType)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold;">
+                      Pick-up Time
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${dbTimeToPrettyString(result.pickupTime)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Pick-up Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.pickupAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Destination Address
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${result.destAddr}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Payment Method
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      ${formatString(result.paymentMethod)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
+                      Cost
+                    </td>
+                    <td style="padding: 12px; border: 1px solid #dddddd;">
+                      $${totalCost}
+                    </td>
+                  </tr>
+                </table>
+                
+                <p style="font-size: 14px; margin: 24px 0 0; color: #777777;">
+                  We look forward to seeing you!
+                </p>
+
+                <p style="font-size: 12px; margin: 24px 0 0; color: #777777;">
+                  Please note that booking details are not final until it has been accepted by a driver. Costs shown are not final and are subject to change based on the driver's discretion. If any changes are made, you will be notified and given the opportunity to accept or decline the changes.
+                </p>
+              </div>
+              `,
+            });
+          } catch (error) {
+            if (error instanceof Error) {
+              warningMessage = `Booking successfully created but email system failed with error: ${error.message}`;
+            } else {
+              warningMessage = `Unknown error encountered while sending an email. Booking successfully created: ${error}`;
+            }
+          }
+        }
+        //----------------------------
+
+        return {
+          ...result,
+          ...(warningMessage !== "" && { warning: warningMessage }),
+        };
       } catch (error) {
         if (error instanceof TRPCError) {
           throw error;
@@ -637,15 +1333,10 @@ export const bookingsRouter = createTRPCRouter({
                     eq(bookings.id, bookingId),
                     eq(bookings.status, BookingStatus.PENDING),
                   )
-                : ctx.session.user.role === UserRoles.DRIVER
-                  ? and(
-                      eq(bookings.id, bookingId),
-                      eq(bookings.status, BookingStatus.IN_PROGRESS),
-                    )
-                  : and(
-                      eq(bookings.id, bookingId),
-                      ne(bookings.status, BookingStatus.CANCELLED),
-                    );
+                : and(
+                    eq(bookings.id, bookingId),
+                    eq(bookings.status, BookingStatus.IN_PROGRESS),
+                  );
 
             const [originalBooking] = await tx
               .select({
@@ -661,7 +1352,7 @@ export const bookingsRouter = createTRPCRouter({
             if (!originalBooking) {
               throw new TRPCError({
                 code: "BAD_REQUEST",
-                message: `Booking ID not found${ctx.session.user.role !== UserRoles.ADMIN ? " or cannot be cancelled" : ""}: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
+                message: `Booking ID not found or cannot be cancelled: ${bookingId}. Skipped bookings: ${unfinishedBookings}`,
               });
             }
 
@@ -670,6 +1361,7 @@ export const bookingsRouter = createTRPCRouter({
               .set({
                 status: BookingStatus.CANCELLED,
                 updatedAt: new Date(),
+                requiresAdjustment: false,
               })
               .where(whereClause)
               .returning({
@@ -976,23 +1668,18 @@ export const bookingsRouter = createTRPCRouter({
             //--members: Update payment information in booking form before accepting--
 
             const whereClause =
-              ctx.session.user.role === UserRoles.DRIVER
+              ctx.session.user.role === UserRoles.MEMBER
                 ? and(
                     eq(bookings.id, bookingId),
                     eq(bookings.status, BookingStatus.PENDING),
-                    eq(bookings.requiresAdjustment, false),
+                    eq(bookings.created_by, ctx.session.user.id),
+                    eq(bookings.requiresAdjustment, true),
                   )
-                : ctx.session.user.role === UserRoles.MEMBER
-                  ? and(
-                      eq(bookings.id, bookingId),
-                      eq(bookings.status, BookingStatus.PENDING),
-                      eq(bookings.created_by, ctx.session.user.id),
-                    )
-                  : and(
-                      eq(bookings.id, bookingId),
-                      eq(bookings.requiresAdjustment, false),
-                      eq(bookings.status, BookingStatus.PENDING),
-                    );
+                : and(
+                    eq(bookings.id, bookingId),
+                    eq(bookings.requiresAdjustment, false),
+                    eq(bookings.status, BookingStatus.PENDING),
+                  );
 
             const [result] = await tx
               .select()
@@ -1130,7 +1817,7 @@ export const bookingsRouter = createTRPCRouter({
               const [updatedUser] = await tx
                 .update(profile)
                 .set({
-                  numberOfRides: result.profile.numberOfRides - 1,
+                  numberOfRides: sql`${profile.numberOfRides} - 1`,
                 })
                 .where(
                   and(
@@ -1188,13 +1875,10 @@ export const bookingsRouter = createTRPCRouter({
 
       try {
         const updatedUsers = await db.transaction(async (tx) => {
-          const whereClause =
-            ctx.session.user.role === UserRoles.DRIVER
-              ? and(
-                  inArray(bookings.id, input.bookingIds),
-                  eq(bookings.status, BookingStatus.IN_PROGRESS),
-                )
-              : inArray(bookings.id, input.bookingIds);
+          const whereClause = and(
+            inArray(bookings.id, input.bookingIds),
+            eq(bookings.status, BookingStatus.IN_PROGRESS),
+          );
 
           const updatedBookingIds = await tx
             .update(bookings)
@@ -1213,7 +1897,7 @@ export const bookingsRouter = createTRPCRouter({
 
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Booking IDs not found${ctx.session.user.role === UserRoles.DRIVER ? " or not in progress" : ""}: ${missingBookingIds}`,
+              message: `Booking IDs not found or not in progress: ${missingBookingIds}`,
             });
           }
           return updatedBookingIds;
@@ -1278,6 +1962,11 @@ export const bookingsRouter = createTRPCRouter({
           code: "BAD_REQUEST",
           message: "Booking already of this type",
         });
+      } else if (bookingToUpdate.requiresAdjustment) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Already requested adjustment on this booking",
+        });
       }
 
       //--Input checking--
@@ -1301,7 +1990,13 @@ export const bookingsRouter = createTRPCRouter({
             requiresAdjustment: true,
             updatedAt: new Date(),
           })
-          .where(eq(bookings.id, input.bookingId))
+          .where(
+            and(
+              eq(bookings.id, input.bookingId),
+              eq(bookings.requiresAdjustment, false),
+              eq(bookings.status, BookingStatus.PENDING),
+            ),
+          )
           .returning();
 
         if (!result) {
@@ -1309,6 +2004,134 @@ export const bookingsRouter = createTRPCRouter({
             code: "BAD_REQUEST",
             message: "No bookings found to update",
           });
+        }
+
+        let userSubscriptionInfo = [] as {
+          auth: string;
+          p256dh: string;
+          endpoint: string;
+        }[];
+        let pushNotificationsAllSuccessful = true as boolean;
+        let pushNotificationsErrors = [] as string[];
+        try {
+          userSubscriptionInfo = await db
+            .select({
+              auth: enabledPushNotifications.auth,
+              p256dh: enabledPushNotifications.p256dh,
+              endpoint: enabledPushNotifications.deviceEndpoint,
+            })
+            .from(enabledPushNotifications)
+            .where(
+              and(
+                eq(enabledPushNotifications.belongsTo, result.created_by),
+                exists(
+                  //checks if the session id on the enabled push notif record is still valid
+                  db
+                    .select()
+                    .from(session)
+                    .where(
+                      and(
+                        eq(session.id, enabledPushNotifications.sessionId),
+                        gt(session.expiresAt, new Date()),
+                      ),
+                    ),
+                ),
+              ),
+            );
+        } catch (error) {
+          pushNotificationsAllSuccessful = false;
+          pushNotificationsErrors = [
+            ...pushNotificationsErrors,
+            error instanceof Error
+              ? error.message
+              : `An unknown error occurred while grabbing a user's subscription information: ${error}`,
+          ];
+        }
+
+        for (const subscription of userSubscriptionInfo) {
+          try {
+            //send a notification to each registered device
+            await sendPushNotification({
+              endpoint: subscription.endpoint,
+              p256dh: subscription.p256dh,
+              auth: subscription.auth,
+              payload: {
+                title: "Requested changes",
+                body: "A driver has requested changes to a recently made booking. Open the app to review the changes.",
+                url: "/",
+              },
+            });
+          } catch (error) {
+            pushNotificationsAllSuccessful = false;
+            if (error instanceof Error) {
+              pushNotificationsErrors = [
+                ...pushNotificationsErrors,
+                error.message,
+              ];
+            } else {
+              pushNotificationsErrors = [
+                ...pushNotificationsErrors,
+                `Unknown error encountered while sending push-notifications: ${error}`,
+              ];
+            }
+          }
+        }
+
+        let emailSuccessful = true as boolean;
+        let emailErrors = [] as string[];
+        if (result.contactEmail) {
+          try {
+            await sendEmail({
+              emailAddress: result.contactEmail,
+              emailSubject:
+                "Booking Changed - Pangnirtung Municipal Taxi Service",
+              messageBody: `
+              
+              <div style="max-width: 600px; margin: 30px auto; padding: 24px; background-color: #ffffff; border-radius: 8px;">
+                <h1 style="font-size: 24px; margin: 0 0 12px; color: #222222;">
+                  A Driver has Requested Changes to Your Booking
+                </h1>
+                
+                <p style="font-size: 16px; margin: 0 0 24px; color: #555555;">
+                  Please review the requested changes online or in the app. Accept or decline them as needed. 
+                </p>
+              </div>
+              `,
+            });
+          } catch (error) {
+            emailSuccessful = false;
+            if (error instanceof Error) {
+              emailErrors = [...emailErrors, error.message];
+            } else {
+              emailErrors = [
+                ...emailErrors,
+                `Unknown error encountered while sending an email: ${error}`,
+              ];
+            }
+          }
+        }
+
+        if (
+          emailSuccessful === false &&
+          pushNotificationsAllSuccessful === false
+        ) {
+          return {
+            warning: `Booking successfully changed but email and push notification systems failed with errors: ${emailErrors}, ${pushNotificationsErrors}`,
+          };
+        } else if (
+          emailSuccessful === false &&
+          pushNotificationsAllSuccessful === true
+        ) {
+          return {
+            warning: `Booking successfully changed but email system failed with error: ${emailErrors}`,
+          };
+        } else if (
+          emailSuccessful === true &&
+          pushNotificationsAllSuccessful === false
+        ) {
+          return {
+            warning: `Booking successfully changed but push notification system failed with error(s): ${pushNotificationsErrors}`,
+          };
         }
       } catch (error) {
         if (error instanceof TRPCError) {

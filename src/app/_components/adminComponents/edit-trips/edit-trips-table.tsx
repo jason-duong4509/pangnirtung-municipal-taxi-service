@@ -3,12 +3,18 @@
 import {
   Center,
   Checkbox,
+  Flex,
+  Group,
+  Pagination,
   Paper,
   SegmentedControl,
+  Select,
   Stack,
   Table,
   Text,
+  TextInput,
 } from "@mantine/core";
+import { DateInput } from "@mantine/dates";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   CarProfileIcon,
@@ -16,6 +22,7 @@ import {
   ClockIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
+import dayjs from "dayjs";
 import {
   type Dispatch,
   type JSX,
@@ -27,39 +34,82 @@ import { dbTimeToPrettyString, formatString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
-import { BookingStatus } from "~/types/types";
+import { BookingStatus, PaymentMethods } from "~/types/types";
 import TripLoading from "../../common/trips/trip-loading";
 import EditTripsDrawer from "./edit-trips-drawer";
 
-type bookingsData = RouterOutputs["bookings"]["get"][0];
+type bookingsData = RouterOutputs["bookings"]["get"]["data"][0];
+enum TableColumnNames {
+  PICK_UP_TIME = "Pick-up Time",
+  PICK_UP_ADDRESS = "Pick-up Address",
+  REQUESTED_VERIFICATION = "Requested Verification?",
+  DESTINATION_ADDRESS = "Destination Address",
+  PAYMENT_METHOD = "Payment Method",
+  REASON_FOR_TRIP = "Reason For Trip",
+}
 
 export default function EditTripsTable({
   isSelecting,
   selectedRows,
   setSelectedRows,
+  setTable,
+  table,
 }: {
   isSelecting: boolean;
   selectedRows: number[];
   setSelectedRows: Dispatch<SetStateAction<number[]>>;
+  setTable: Dispatch<SetStateAction<BookingStatus>>;
+  table: BookingStatus;
 }) {
   const isSuperSmall = useMediaQuery("(max-width: 520px)");
   const isMobile = useMediaQuery("(max-width: 635px)");
-  const isTablet = useMediaQuery("(max-width: 925px)");
+  const isTablet = useMediaQuery("(max-width: 1400px)");
   const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
     useDisclosure(false);
   const [drawerContents, setDrawerContents] = useState<
     bookingsData | undefined
   >(undefined);
-  const [table, setTable] = useState("pending");
+  const [columnFilter, setColumnFilter] = useState<string | null>(null);
+  const [filterKeyword, setFilterKeyword] = useState<string>("");
+  const [page, setPage] = useState(1);
+  const [numberOfRows, setNumberOfRows] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
 
-  const getBookingsQuery = api.bookings.get.useQuery();
+  const getBookingsQuery = api.bookings.get.useQuery({
+    pageNumber: page < 1 ? 1 : page,
+    filter: { filter: columnFilter, filterKeyword: filterKeyword },
+    bookingStatus: table as BookingStatus,
+  });
+  if (
+    getBookingsQuery.data?.total !== undefined &&
+    getBookingsQuery.data.total !== numberOfRows
+  ) {
+    setNumberOfRows(getBookingsQuery.data.total);
+  }
+  if (
+    getBookingsQuery.data?.pageSize !== undefined &&
+    getBookingsQuery.data.pageSize !== pageSize
+  ) {
+    setPageSize(getBookingsQuery.data.pageSize);
+  }
 
-  //--Holds all bookings, separated into 4 tables--
-  let pendingBookings = [] as JSX.Element[];
-  let inProgressBookings = [] as JSX.Element[];
-  let cancelledBookings = [] as JSX.Element[];
-  let completedBookings = [] as JSX.Element[];
-  //-----------------------------------------------
+  useEffect(() => {
+    page;
+    if (page > 0) {
+      getBookingsQuery.refetch();
+    } else {
+      setPage(1);
+    }
+  }, [getBookingsQuery.refetch, page]);
+
+  useEffect(() => {
+    columnFilter;
+    filterKeyword;
+    table;
+    setPage(0);
+  }, [columnFilter, filterKeyword, table]);
+
+  let bookings = [] as JSX.Element[];
 
   useEffect(() => {
     if (!getBookingsQuery.isLoading && getBookingsQuery.error) {
@@ -72,7 +122,7 @@ export default function EditTripsTable({
 
   if (!getBookingsQuery.isLoading && getBookingsQuery.data) {
     //For each booking, make a jsx element for it
-    for (const booking of getBookingsQuery.data) {
+    for (const booking of getBookingsQuery.data.data) {
       //Put the booking in its own jsx element
       const row = (
         <Table.Tr
@@ -148,16 +198,7 @@ export default function EditTripsTable({
         </Table.Tr>
       );
 
-      //Put the row in one of four tables
-      if (booking.status === BookingStatus.PENDING) {
-        pendingBookings = [...pendingBookings, row];
-      } else if (booking.status === BookingStatus.IN_PROGRESS) {
-        inProgressBookings = [...inProgressBookings, row];
-      } else if (booking.status === BookingStatus.COMPLETED) {
-        completedBookings = [...completedBookings, row];
-      } else if (booking.status === BookingStatus.CANCELLED) {
-        cancelledBookings = [...cancelledBookings, row];
-      }
+      bookings = [...bookings, row];
     }
   }
 
@@ -167,51 +208,138 @@ export default function EditTripsTable({
         closeDrawer={closeDrawer}
         drawerContents={drawerContents}
         drawerOpened={drawerOpened}
+        openDrawer={openDrawer}
       />
-      <Stack h={"100%"}>
-        <SegmentedControl
-          data={[
-            {
-              value: "pending",
-              label: (
-                <Center style={{ gap: 10 }}>
-                  <ClockIcon size={19} />
-                  {!isTablet && <Text>Pending</Text>}
-                </Center>
-              ),
-            },
-            {
-              value: "in_progress",
-              label: (
-                <Center style={{ gap: 10 }}>
-                  <CarProfileIcon size={19} />
-                  {!isTablet && <Text>In Progress</Text>}
-                </Center>
-              ),
-            },
-            {
-              value: "cancelled",
-              label: (
-                <Center style={{ gap: 10 }}>
-                  <XCircleIcon size={19} />
-                  {!isTablet && <Text>Cancelled</Text>}
-                </Center>
-              ),
-            },
-            {
-              value: "complete",
-              label: (
-                <Center style={{ gap: 10 }}>
-                  <CheckCircleIcon size={19} />
-                  {!isTablet && <Text>Completed</Text>}
-                </Center>
-              ),
-            },
-          ]}
-          fullWidth
-          onChange={setTable}
-          value={table}
-        />
+      <Stack gap={0} h={"100%"}>
+        <section>
+          <Flex direction={isMobile ? "column" : "row"} gap={"md"}>
+            <Group flex={1} grow>
+              <Select
+                aria-label="Column Filter"
+                data={[
+                  TableColumnNames.DESTINATION_ADDRESS,
+                  TableColumnNames.PAYMENT_METHOD,
+                  TableColumnNames.PICK_UP_ADDRESS,
+                  TableColumnNames.PICK_UP_TIME,
+                  TableColumnNames.REASON_FOR_TRIP,
+                  TableColumnNames.REQUESTED_VERIFICATION,
+                ]}
+                onChange={(value) => {
+                  setColumnFilter(value);
+                  setFilterKeyword("");
+                }}
+                placeholder="Select Column Filters"
+                value={columnFilter}
+              />
+              {(columnFilter === TableColumnNames.DESTINATION_ADDRESS ||
+                columnFilter === TableColumnNames.PICK_UP_ADDRESS ||
+                columnFilter === TableColumnNames.REASON_FOR_TRIP) && (
+                <TextInput
+                  aria-label="Keyword filter"
+                  onChange={(event) =>
+                    setFilterKeyword(event.currentTarget.value)
+                  }
+                  placeholder="Filter Keyword"
+                  value={filterKeyword}
+                />
+              )}
+              {columnFilter === TableColumnNames.REQUESTED_VERIFICATION && (
+                <Select
+                  aria-label="Keyword filter"
+                  data={["Yes", "No"]}
+                  onChange={(value) => {
+                    if (value) {
+                      setFilterKeyword(value);
+                    }
+                  }}
+                  placeholder="Yes/No"
+                  value={filterKeyword}
+                />
+              )}
+              {columnFilter === TableColumnNames.PAYMENT_METHOD && (
+                <Select
+                  aria-label="Keyword Filter"
+                  data={[
+                    PaymentMethods.CASH,
+                    PaymentMethods.CREDIT_CARD,
+                    PaymentMethods.RIDES,
+                  ]}
+                  onChange={(value) => {
+                    if (value) {
+                      setFilterKeyword(value);
+                    }
+                  }}
+                  placeholder="Payment Method"
+                  value={filterKeyword}
+                />
+              )}
+              {columnFilter === TableColumnNames.PICK_UP_TIME && (
+                <DateInput
+                  aria-label="Keyword filter"
+                  clearable
+                  dateParser={(input) => {
+                    return dayjs(input, "DD/MM/YYYY").format("YYYY-MM-DD");
+                  }}
+                  onChange={(value) => {
+                    if (!value) {
+                      setFilterKeyword("");
+                    } else {
+                      setFilterKeyword(value);
+                    }
+                  }}
+                  placeholder="Select Date"
+                  valueFormat="DD/MM/YYYY"
+                />
+              )}
+            </Group>
+            <SegmentedControl
+              data={[
+                {
+                  value: BookingStatus.PENDING,
+                  label: (
+                    <Center style={{ gap: 10 }}>
+                      <ClockIcon size={19} />
+                      {!isTablet && <Text>Pending</Text>}
+                    </Center>
+                  ),
+                },
+                {
+                  value: BookingStatus.IN_PROGRESS,
+                  label: (
+                    <Center style={{ gap: 10 }}>
+                      <CarProfileIcon size={19} />
+                      {!isTablet && <Text>In Progress</Text>}
+                    </Center>
+                  ),
+                },
+                {
+                  value: BookingStatus.CANCELLED,
+                  label: (
+                    <Center style={{ gap: 10 }}>
+                      <XCircleIcon size={19} />
+                      {!isTablet && <Text>Cancelled</Text>}
+                    </Center>
+                  ),
+                },
+                {
+                  value: BookingStatus.COMPLETED,
+                  label: (
+                    <Center style={{ gap: 10 }}>
+                      <CheckCircleIcon size={19} />
+                      {!isTablet && <Text>Completed</Text>}
+                    </Center>
+                  ),
+                },
+              ]}
+              fullWidth
+              onChange={(value) => {
+                setTable(value as BookingStatus);
+                setSelectedRows([]);
+              }}
+              value={table}
+            />
+          </Flex>
+        </section>
         <Table.ScrollContainer minWidth={0} style={{ flex: 1, minHeight: 0 }}>
           <Table highlightOnHover stickyHeader>
             <Table.Thead>
@@ -229,15 +357,19 @@ export default function EditTripsTable({
                 )}
               </Table.Tr>
             </Table.Thead>
-            <Table.Tbody>
-              {table === "pending" && pendingBookings}
-              {table === "in_progress" && inProgressBookings}
-              {table === "cancelled" && cancelledBookings}
-              {table === "complete" && completedBookings}
-            </Table.Tbody>
+            <Table.Tbody>{bookings}</Table.Tbody>
           </Table>
           {getBookingsQuery.isLoading && <TripLoading />}
         </Table.ScrollContainer>
+        <Group justify="flex-end">
+          <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
+          <Pagination
+            onChange={setPage}
+            total={pageSize > 0 ? Math.ceil(numberOfRows / pageSize) : 1}
+            value={page}
+            withPages={false}
+          />
+        </Group>
       </Stack>
     </Paper>
   );

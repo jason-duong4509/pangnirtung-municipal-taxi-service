@@ -1,8 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { eq, inArray } from "drizzle-orm";
+import { and, count, eq, exists, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
+  checkPaginationPageNumber,
   checkReportAppComments,
+  checkReportAppFilters,
   checkReportAppPriority,
   checkReportAppTags,
   checkReportAppTitle,
@@ -10,36 +12,204 @@ import {
 import { db } from "~/server/db";
 import { appIssues, appIssuesHasTags, appIssuesTags } from "~/server/db/schema";
 import { UserRoles } from "~/types/types";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const reportAppRouter = createTRPCRouter({
-  get: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.session.user.role !== UserRoles.ADMIN) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Only admins can get app issues",
-      });
-    }
+  get: protectedProcedure
+    .input(
+      z.object({
+        pageNumber: z.number(),
+        filters: z.array(z.string()).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (ctx.session.user.role !== UserRoles.ADMIN) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only admins can get app issues",
+        });
+      }
+      const pageNumCheck = checkPaginationPageNumber(input.pageNumber);
+      let pageNum = 1 as number;
+      if (pageNumCheck.isProper) {
+        pageNum = pageNumCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pageNumCheck.errorMessage,
+        });
+      }
+      let filters = {} as { priorityFilters: number[]; tagFilters: string[] };
+      if (input.filters && input.filters.length > 0) {
+        const filterCheck = checkReportAppFilters(input.filters);
+        if (filterCheck.isProper) {
+          filters = filterCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: filterCheck.errorMessage,
+          });
+        }
+      }
 
-    try {
-      const result = await db.query.appIssues.findMany({
-        with: {
-          appIssuesHasTags: {
-            with: {
-              appIssuesTags: true,
+      try {
+        const pageSize = 30; //hardcoded limit for this query
+        const result = await db.query.appIssues.findMany({
+          with: {
+            appIssuesHasTags: {
+              with: {
+                appIssuesTags: true,
+              },
             },
           },
-        },
-      });
+          orderBy: (appIssues, { desc }) => [
+            desc(appIssues.updatedAt),
+            desc(appIssues.priority),
+            desc(appIssues.id),
+          ],
+          limit: pageSize,
+          offset: (pageNum - 1) * pageSize,
+          where: (appIssues) =>
+            Object.keys(filters).length !== 0
+              ? filters.priorityFilters.length === 0
+                ? exists(
+                    db
+                      .select()
+                      .from(appIssuesHasTags)
+                      .where(
+                        and(
+                          eq(appIssuesHasTags.issueId, appIssues.id),
+                          exists(
+                            db
+                              .select()
+                              .from(appIssuesTags)
+                              .where(
+                                and(
+                                  eq(appIssuesTags.id, appIssuesHasTags.tagId),
+                                  inArray(
+                                    appIssuesTags.name,
+                                    filters.tagFilters,
+                                  ),
+                                ),
+                              ),
+                          ),
+                        ),
+                      ),
+                  )
+                : filters.tagFilters.length === 0
+                  ? inArray(appIssues.priority, filters.priorityFilters)
+                  : and(
+                      inArray(appIssues.priority, filters.priorityFilters),
+                      exists(
+                        db
+                          .select()
+                          .from(appIssuesHasTags)
+                          .where(
+                            and(
+                              eq(appIssuesHasTags.issueId, appIssues.id),
+                              exists(
+                                db
+                                  .select()
+                                  .from(appIssuesTags)
+                                  .where(
+                                    and(
+                                      eq(
+                                        appIssuesTags.id,
+                                        appIssuesHasTags.tagId,
+                                      ),
+                                      inArray(
+                                        appIssuesTags.name,
+                                        filters.tagFilters,
+                                      ),
+                                    ),
+                                  ),
+                              ),
+                            ),
+                          ),
+                      ),
+                    )
+              : undefined,
+        });
 
-      return result;
-    } catch {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get app issues",
-      });
-    }
-  }),
+        const numberOfRows = await db
+          .select({
+            count: count(),
+          })
+          .from(appIssues)
+          .where(
+            Object.keys(filters).length !== 0
+              ? filters.priorityFilters.length === 0
+                ? exists(
+                    db
+                      .select()
+                      .from(appIssuesHasTags)
+                      .where(
+                        and(
+                          eq(appIssuesHasTags.issueId, appIssues.id),
+                          exists(
+                            db
+                              .select()
+                              .from(appIssuesTags)
+                              .where(
+                                and(
+                                  eq(appIssuesTags.id, appIssuesHasTags.tagId),
+                                  inArray(
+                                    appIssuesTags.name,
+                                    filters.tagFilters,
+                                  ),
+                                ),
+                              ),
+                          ),
+                        ),
+                      ),
+                  )
+                : filters.tagFilters.length === 0
+                  ? inArray(appIssues.priority, filters.priorityFilters)
+                  : and(
+                      inArray(appIssues.priority, filters.priorityFilters),
+                      exists(
+                        db
+                          .select()
+                          .from(appIssuesHasTags)
+                          .where(
+                            and(
+                              eq(appIssuesHasTags.issueId, appIssues.id),
+                              exists(
+                                db
+                                  .select()
+                                  .from(appIssuesTags)
+                                  .where(
+                                    and(
+                                      eq(
+                                        appIssuesTags.id,
+                                        appIssuesHasTags.tagId,
+                                      ),
+                                      inArray(
+                                        appIssuesTags.name,
+                                        filters.tagFilters,
+                                      ),
+                                    ),
+                                  ),
+                              ),
+                            ),
+                          ),
+                      ),
+                    )
+              : undefined,
+          );
+
+        return {
+          data: result,
+          total: numberOfRows[0]?.count ?? 0,
+          pageSize: pageSize,
+        };
+      } catch {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get app issues",
+        });
+      }
+    }),
   update: protectedProcedure
     .input(
       z.object({
@@ -199,15 +369,13 @@ export const reportAppRouter = createTRPCRouter({
         });
       }
     }),
-  createIssue: publicProcedure
+  createIssue: protectedProcedure
     .input(
       z.object({
         comments: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      //todo: maybe make this a protected procedure?
-
       //--Input checking--
       const reportAppCommentsCheck = checkReportAppComments(input.comments);
       let comments = undefined as undefined | string;

@@ -9,13 +9,14 @@ import {
   nameRegex,
   otpRegex,
   pickupTimeRegex,
+  pickupTimeRegexDateOnly,
   usernameRegex,
 } from "~/types/constants";
 import {
-  BookingTypes,
   BookingValueTypes,
   PaymentMethods,
   PriorityRatingTypesNumber,
+  PriorityRatingTypesString,
   ReportAppIssueChipTypes,
 } from "~/types/types";
 
@@ -520,4 +521,347 @@ export const checkRedeemCode = (
     isProper: true,
     formattedInput: input.toLowerCase(),
   };
+};
+
+export const checkNumberOfRidesToAdd = (
+  balanceChange: number,
+  currentTotal: number,
+):
+  | { isProper: false; errorMessage: string }
+  | {
+      isProper: true;
+      formattedInput: { balanceChange: number; currentTotal: number };
+    } => {
+  if (!Number.isInteger(currentTotal) || !Number.isInteger(balanceChange)) {
+    return {
+      isProper: false,
+      errorMessage: "Only integer values are accepted",
+    };
+  }
+
+  if (balanceChange > 0 && currentTotal + balanceChange > 999) {
+    return {
+      isProper: false,
+      errorMessage: `User has too many rides to add ${balanceChange} more rides (max is 999)`,
+    };
+  }
+
+  if (balanceChange < 0 && currentTotal + balanceChange < 0) {
+    return {
+      isProper: false,
+      errorMessage: `User has too few rides to remove ${balanceChange} rides (min is 0)`,
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: {
+      balanceChange: balanceChange,
+      currentTotal: currentTotal,
+    },
+  };
+};
+
+export const checkPaginationPageNumber = (
+  input: number,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: number } => {
+  if (!Number.isInteger(input)) {
+    return {
+      isProper: false,
+      errorMessage: "Only integer values are accepted",
+    };
+  }
+
+  if (input < 1) {
+    return {
+      isProper: false,
+      errorMessage: "Invalid page number",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: input,
+  };
+};
+
+export const checkReportAppFilters = (
+  input: string[],
+):
+  | { isProper: false; errorMessage: string }
+  | {
+      isProper: true;
+      formattedInput: { priorityFilters: number[]; tagFilters: string[] };
+    } => {
+  let priorityFilters = [] as number[];
+  let tagFilters = [] as string[];
+
+  for (const filter of input) {
+    let isValid = false;
+    //Check chip types
+    for (const chipType of ReportAppIssueChipTypes) {
+      if (chipType.label === filter) {
+        isValid = true;
+        tagFilters = [...tagFilters, filter];
+      }
+    }
+    //Check priorities
+    if (PriorityRatingTypesString.includes(filter) && !isValid) {
+      isValid = true;
+      priorityFilters = [...priorityFilters, Number(filter)];
+    }
+    //Check if valid
+    if (!isValid) {
+      return {
+        isProper: false,
+        errorMessage: `Invalid filter type: ${filter}`,
+      };
+    }
+  }
+
+  return {
+    isProper: true,
+    formattedInput: {
+      priorityFilters: priorityFilters,
+      tagFilters: tagFilters,
+    },
+  };
+};
+
+export const checkEditUsersTableFilters = (
+  input: Record<string, unknown>,
+):
+  | { isProper: false; errorMessage: string }
+  | {
+      isProper: true;
+      formattedInput:
+        | { filter: null }
+        | { filter: "Name On Account"; filterKeyword: string }
+        | { filter: "Primary Phone Number"; filterKeyword: string }
+        | { filter: "Resident?"; filterKeyword: "No" | "Yes" }
+        | { filter: "User Role"; filterKeyword: "admin" | "driver" | "member" };
+    } => {
+  if (
+    input.filter === undefined ||
+    input.filter === null ||
+    input.filterKeyword === ""
+  ) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: null,
+      },
+    };
+  } else if (input.filter === "Name On Account" && input.filterKeyword) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: "Name On Account",
+        filterKeyword: `${input.filterKeyword}`,
+      },
+    };
+  } else if (input.filter === "Primary Phone Number" && input.filterKeyword) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: "Primary Phone Number",
+        filterKeyword: `${input.filterKeyword}`,
+      },
+    };
+  } else if (input.filter === "Resident?" && input.filterKeyword) {
+    if (`${input.filterKeyword}` === "Yes") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Resident?",
+          filterKeyword: "Yes",
+        },
+      };
+    } else if (`${input.filterKeyword}` === "No") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Resident?",
+          filterKeyword: "No",
+        },
+      };
+    } else {
+      return {
+        isProper: false,
+        errorMessage: `Invalid filter keyword for Resident filter: ${input.filterKeyword}`,
+      };
+    }
+  } else if (input.filter === "User Role" && input.filterKeyword) {
+    if (`${input.filterKeyword}` === "admin") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "User Role",
+          filterKeyword: "admin",
+        },
+      };
+    } else if (`${input.filterKeyword}` === "driver") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "User Role",
+          filterKeyword: "driver",
+        },
+      };
+    } else if (`${input.filterKeyword}` === "member") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "User Role",
+          filterKeyword: "member",
+        },
+      };
+    } else {
+      return {
+        isProper: false,
+        errorMessage: `Invalid filter keyword for User Role filter: ${input.filterKeyword}`,
+      };
+    }
+  } else {
+    return {
+      isProper: false,
+      errorMessage: `Invalid filter type (${input.filter}) or filter keyword (${input.filterKeyword}) given`,
+    };
+  }
+};
+
+export const checkTripTableFilters = (
+  input: Record<string, unknown>,
+):
+  | { isProper: false; errorMessage: string }
+  | {
+      isProper: true;
+      formattedInput:
+        | { filter: null }
+        | { filter: "Destination Address"; filterKeyword: string }
+        | {
+            filter: "Payment Method";
+            filterKeyword: "credit_card" | "rides" | "cash";
+          }
+        | { filter: "Pick-up Address"; filterKeyword: string }
+        | { filter: "Pick-up Time"; filterKeyword: Date }
+        | { filter: "Reason For Trip"; filterKeyword: string }
+        | { filter: "Requested Verification?"; filterKeyword: "Yes" | "No" };
+    } => {
+  if (
+    input.filter === undefined ||
+    input.filter === null ||
+    input.filterKeyword === ""
+  ) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: null,
+      },
+    };
+  } else if (input.filter === "Destination Address" && input.filterKeyword) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: "Destination Address",
+        filterKeyword: `${input.filterKeyword}`,
+      },
+    };
+  } else if (input.filter === "Payment Method" && input.filterKeyword) {
+    if (`${input.filterKeyword}` === "credit_card") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Payment Method",
+          filterKeyword: "credit_card",
+        },
+      };
+    } else if (`${input.filterKeyword}` === "rides") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Payment Method",
+          filterKeyword: "rides",
+        },
+      };
+    } else if (`${input.filterKeyword}` === "cash") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Payment Method",
+          filterKeyword: "cash",
+        },
+      };
+    } else {
+      return {
+        isProper: false,
+        errorMessage: `Invalid filter keyword for Payment Method filter: ${input.filterKeyword}`,
+      };
+    }
+  } else if (input.filter === "Pick-up Address" && input.filterKeyword) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: "Pick-up Address",
+        filterKeyword: `${input.filterKeyword}`,
+      },
+    };
+  } else if (input.filter === "Pick-up Time" && input.filterKeyword) {
+    if (!pickupTimeRegexDateOnly.test(`${input.filterKeyword}`)) {
+      return {
+        isProper: false,
+        errorMessage: `Invalid date format given: ${input.filterKeyword}`,
+      };
+    }
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: "Pick-up Time",
+        filterKeyword: dayjs
+          .tz(`${input.filterKeyword}`, IANA_TIME_ZONE)
+          .toDate(),
+      },
+    };
+  } else if (input.filter === "Reason For Trip" && input.filterKeyword) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: "Reason For Trip",
+        filterKeyword: `${input.filterKeyword}`,
+      },
+    };
+  } else if (
+    input.filter === "Requested Verification?" &&
+    input.filterKeyword
+  ) {
+    if (`${input.filterKeyword}` === "Yes") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Requested Verification?",
+          filterKeyword: "Yes",
+        },
+      };
+    } else if (`${input.filterKeyword}` === "No") {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Requested Verification?",
+          filterKeyword: "No",
+        },
+      };
+    } else {
+      return {
+        isProper: false,
+        errorMessage: `Invalid filter keyword for Requested Verification filter: ${input.filterKeyword}`,
+      };
+    }
+  } else {
+    return {
+      isProper: false,
+      errorMessage: `Invalid filter type (${input.filter}) or filter keyword (${input.filterKeyword}) given`,
+    };
+  }
 };

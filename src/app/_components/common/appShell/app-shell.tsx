@@ -30,7 +30,7 @@ export default function CustomAppShell({
   setExpandAside?: (_: boolean) => void;
 }) {
   const [opened, { toggle }] = useDisclosure();
-  const alwaysShowNav = !useMediaQuery("(max-width: 1000px)");
+  const alwaysShowNav = !useMediaQuery("(max-width: 1050px)");
 
   return (
     <AppShell

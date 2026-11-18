@@ -57,7 +57,10 @@ export const paymentRouter = createTRPCRouter({
       }
 
       const [profileData] = await db
-        .select({ isResident: profile.isResident })
+        .select({
+          isResident: profile.isResident,
+          numberOfRides: profile.numberOfRides,
+        })
         .from(profile)
         .where(eq(profile.belongsTo, ctx.session.user.id));
 
@@ -73,6 +76,12 @@ export const paymentRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Not allowed to purchase ride credits",
+        });
+      } else if (profileData.numberOfRides + input.numberOfRides > 999) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Action rejected: User owns too many ride credits to proceed. Please try again later",
         });
       }
 

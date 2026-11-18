@@ -4,16 +4,12 @@ import {
   ActionIcon,
   Button,
   CloseButton,
-  Divider,
   Group,
-  Input,
   Loader,
   Modal,
   ScrollArea,
   Stack,
   Text,
-  Textarea,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
@@ -33,8 +29,9 @@ import { dbTimeToPrettyString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
+import { BookingStatus } from "~/types/types";
 import AlertPopup from "../common/alert/alert";
-import BookingContentsDriver from "./booking-contents";
+import BookingContents from "../common/bookingContents/booking-contents";
 import RequestAdjustmentModal from "./request-adjustment-modal";
 
 type bookingData = RouterOutputs["bookings"]["getOne"];
@@ -61,10 +58,7 @@ const BookingDetails = ({
     requestAdjustmentModalOpened,
     { open: openRequestAdjustmentModal, close: closeRequestAdjustmentModal },
   ] = useDisclosure(false);
-
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    enabled: false,
-  });
+  const utils = api.useUtils();
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {
@@ -72,7 +66,7 @@ const BookingDetails = ({
       showNotifications.success("Accepted successfully");
       setIsLoading(false);
       isLoadingRef.current = false;
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeModal();
     },
     onError: (error) => {
@@ -113,7 +107,7 @@ const BookingDetails = ({
             <CloseButton onClick={closeModal} />
           </Group>
           <ScrollArea.Autosize mah={"50dvh"}>
-            <BookingContentsDriver bookingData={bookingData} />
+            <BookingContents bookingData={bookingData} readOnly />
           </ScrollArea.Autosize>
           <Group grow>
             <Button
@@ -175,21 +169,19 @@ export default function DriverNotificationBar() {
   const [alertOnClose, setAlertOnClose] = useState<() => void>(() =>
     closeAlertModal(),
   );
+  const utils = api.useUtils();
 
   const getBookingQuery = api.bookings.getOne.useQuery(
     { bookingId: events[0]?.bookingId ?? 0 },
     { enabled: false },
   );
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    enabled: false,
-  });
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {
       showNotifications.success("Accepted successfully");
       setIsLoading(false);
       isLoadingRef.current = false;
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeBookingDetailsModal();
       closeAlertModal();
     },

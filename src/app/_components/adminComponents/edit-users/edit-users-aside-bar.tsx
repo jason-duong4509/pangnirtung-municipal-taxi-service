@@ -29,17 +29,13 @@ export default function EditUsersAsideBar({
   const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
     useDisclosure(false);
   const [isMutating, setIsMutating] = useState(false);
-
-  const getUsersQuery = api.users.getAll.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
+  const utils = api.useUtils();
 
   const deleteUsersMutation = api.users.delete.useMutation({
     onSuccess: () => {
       showNotifications.success("Deleted successfully");
       setIsMutating(false);
-      getUsersQuery.refetch();
+      void utils.users.getAll.invalidate();
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);

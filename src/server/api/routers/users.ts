@@ -1,12 +1,26 @@
 import { TRPCError } from "@trpc/server";
 import { APIError, generateId } from "better-auth";
 import dayjs from "dayjs";
-import { desc, eq, inArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  sql,
+} from "drizzle-orm";
+import { Stripe } from "stripe";
 import { z } from "zod";
 import {
+  checkEditUsersTableFilters,
   checkEmail,
   checkName,
+  checkNumberOfRidesToAdd,
   checkOTP,
+  checkPaginationPageNumber,
   checkPhoneNumber,
 } from "~/lib/input-checkers";
 import { auth } from "~/server/better-auth";
@@ -15,33 +29,164 @@ import { profile, user, verification } from "~/server/db/schema";
 import { UserRoles } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2026-08-26.dahlia",
+});
+
 export const usersRouter = createTRPCRouter({
-  getAll: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.session.user.role !== UserRoles.ADMIN) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Only admins can get user data",
-      });
-    }
-
-    try {
-      const result = await db
-        .select()
-        .from(user)
-        .innerJoin(profile, eq(user.id, profile.belongsTo));
-
-      return result;
-    } catch (error) {
-      if (error instanceof TRPCError) {
-        throw error;
+  getAll: protectedProcedure
+    .input(
+      z.object({
+        pageNumber: z.number(),
+        filter: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (ctx.session.user.role !== UserRoles.ADMIN) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only admins can get user data",
+        });
       }
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get user data",
-        cause: error,
-      });
-    }
-  }),
+      const pageNumCheck = checkPaginationPageNumber(input.pageNumber);
+      let pageNum = 1 as number;
+      if (pageNumCheck.isProper) {
+        pageNum = pageNumCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: pageNumCheck.errorMessage,
+        });
+      }
+      let filters = undefined as
+        | undefined
+        | Extract<
+            ReturnType<typeof checkEditUsersTableFilters>,
+            { isProper: true }
+          >["formattedInput"];
+      if (input.filter) {
+        const filterCheck = checkEditUsersTableFilters(input.filter);
+        if (filterCheck.isProper) {
+          filters = filterCheck.formattedInput;
+        } else {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: filterCheck.errorMessage,
+          });
+        }
+      }
+
+      try {
+        const pageSize = 30; //hardcoded limit for this query
+        const result = await db
+          .select()
+          .from(user)
+          .innerJoin(profile, eq(user.id, profile.belongsTo))
+          .orderBy(
+            desc(user.updatedAt),
+            asc(user.name),
+            asc(user.role),
+            desc(user.id),
+          )
+          .limit(pageSize)
+          .offset((pageNum - 1) * pageSize)
+          .where(
+            filters === undefined || filters["filter"] === null
+              ? undefined
+              : filters["filter"] === "Name On Account" &&
+                  filters["filterKeyword"]
+                ? ilike(user.name, `%${filters["filterKeyword"]}%`)
+                : filters["filter"] === "Primary Phone Number" &&
+                    filters["filterKeyword"]
+                  ? ilike(user.phoneNumber, `%${filters["filterKeyword"]}%`)
+                  : filters["filter"] === "Resident?" &&
+                      filters["filterKeyword"]
+                    ? exists(
+                        db
+                          .select()
+                          .from(profile)
+                          .where(
+                            and(
+                              eq(profile.belongsTo, user.id),
+                              eq(
+                                profile.isResident,
+                                filters["filterKeyword"] === "Yes",
+                              ),
+                            ),
+                          ),
+                      )
+                    : filters["filter"] === "User Role" &&
+                        filters["filterKeyword"]
+                      ? eq(
+                          user.role,
+                          filters["filterKeyword"] === "admin"
+                            ? UserRoles.ADMIN
+                            : filters["filterKeyword"] === "driver"
+                              ? UserRoles.DRIVER
+                              : UserRoles.MEMBER,
+                        )
+                      : undefined,
+          );
+
+        const numberOfRows = await db
+          .select({
+            count: count(),
+          })
+          .from(user)
+          .where(
+            filters === undefined || filters["filter"] === null
+              ? undefined
+              : filters["filter"] === "Name On Account" &&
+                  filters["filterKeyword"]
+                ? ilike(user.name, `%${filters["filterKeyword"]}%`)
+                : filters["filter"] === "Primary Phone Number" &&
+                    filters["filterKeyword"]
+                  ? ilike(user.phoneNumber, `%${filters["filterKeyword"]}%`)
+                  : filters["filter"] === "Resident?" &&
+                      filters["filterKeyword"]
+                    ? exists(
+                        db
+                          .select()
+                          .from(profile)
+                          .where(
+                            and(
+                              eq(profile.belongsTo, user.id),
+                              eq(
+                                profile.isResident,
+                                filters["filterKeyword"] === "Yes",
+                              ),
+                            ),
+                          ),
+                      )
+                    : filters["filter"] === "User Role" &&
+                        filters["filterKeyword"]
+                      ? eq(
+                          user.role,
+                          filters["filterKeyword"] === "admin"
+                            ? UserRoles.ADMIN
+                            : filters["filterKeyword"] === "driver"
+                              ? UserRoles.DRIVER
+                              : UserRoles.MEMBER,
+                        )
+                      : undefined,
+          );
+
+        return {
+          data: result,
+          total: numberOfRows[0]?.count ?? 0,
+          pageSize: pageSize,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get user data",
+          cause: error,
+        });
+      }
+    }),
   update: protectedProcedure
     .input(
       z.object({
@@ -50,6 +195,8 @@ export const usersRouter = createTRPCRouter({
         email: z.string(),
         phoneNumber: z.string(),
         role: z.nativeEnum(UserRoles),
+        numOfRidesToAdd: z.number(),
+        isResident: z.boolean(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -99,6 +246,31 @@ export const usersRouter = createTRPCRouter({
 
       try {
         await db.transaction(async (tx) => {
+          const [preUpdateProfile] = await tx
+            .select({ numberOfRides: profile.numberOfRides })
+            .from(profile)
+            .where(eq(profile.belongsTo, input.id));
+          if (!preUpdateProfile) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Could not find profile record for user ID: ${input.id}`,
+            });
+          }
+
+          const numberOfRidesCheck = checkNumberOfRidesToAdd(
+            input.numOfRidesToAdd,
+            preUpdateProfile.numberOfRides,
+          );
+          let numberOfRides = 0 as number;
+          if (numberOfRidesCheck.isProper) {
+            numberOfRides = numberOfRidesCheck.formattedInput.balanceChange;
+          } else {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: numberOfRidesCheck.errorMessage,
+            });
+          }
+
           const [updatedUserId] = await tx
             .update(user)
             .set({
@@ -114,7 +286,23 @@ export const usersRouter = createTRPCRouter({
           if (!updatedUserId) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Could not update user ${input.id}`,
+              message: `Could not update user record ${input.id}`,
+            });
+          }
+
+          const [updatedProfileId] = await tx
+            .update(profile)
+            .set({
+              isResident: input.isResident,
+              numberOfRides: sql`GREATEST(${profile.numberOfRides} + ${numberOfRides}, 0)`,
+            })
+            .where(eq(profile.belongsTo, input.id))
+            .returning({ id: profile.id });
+
+          if (!updatedProfileId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Could not update profile record for user ${input.id}`,
             });
           }
         });
@@ -207,6 +395,8 @@ export const usersRouter = createTRPCRouter({
 
       try {
         await db.transaction(async (tx) => {
+          const stripeCustomer = await stripeClient.customers.create();
+
           const [insertedUser] = await tx
             .insert(user)
             .values({
@@ -220,6 +410,7 @@ export const usersRouter = createTRPCRouter({
               phoneNumber: phoneNumber,
               phoneNumberVerified: true,
               role: UserRoles.MEMBER,
+              stripeCustomerId: stripeCustomer.id,
             })
             .returning();
 

@@ -11,6 +11,7 @@ import {
 import { type Dispatch, type SetStateAction, useState } from "react";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api, type RouterOutputs } from "~/trpc/react";
+import type { BookingStatus } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 import AsideButton from "../../common/appShell/aside-button";
 import ConfirmExtraInfoModal from "../../driverComponents/confirm-extra-info-modal";
@@ -25,12 +26,14 @@ export default function EditTripsAsideBar({
   setIsSelecting,
   selectedRows,
   setSelectedRows,
+  table,
 }: {
   isSelecting: boolean;
   expandAside: boolean;
   setIsSelecting: Dispatch<SetStateAction<boolean>>;
   selectedRows: number[];
   setSelectedRows: Dispatch<SetStateAction<number[]>>;
+  table: BookingStatus;
 }) {
   const [alertBodyComponent, setAlertBodyComponent] = useState(
     <Text>Are you sure?</Text>,
@@ -52,17 +55,13 @@ export default function EditTripsAsideBar({
     useState<usersRequestingResidency>([]);
   const [confirmCashPaymentData, setConfirmCashPaymentData] =
     useState<usersPaidWithCash>([]);
-
-  const getBookingsQuery = api.bookings.get.useQuery(undefined, {
-    //Forces manual fetching
-    enabled: false,
-  });
+  const utils = api.useUtils();
 
   const completeBookingMutation = api.bookings.complete.useMutation({
     onSuccess: (data) => {
       showNotifications.success("Completed successfully");
       setIsMutating(false);
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       setIsSelecting(false);
       setSelectedRows([]);
       closeAlertModal();
@@ -87,7 +86,7 @@ export default function EditTripsAsideBar({
     onSuccess: () => {
       showNotifications.success("Accepted successfully");
       setIsMutating(false);
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);
@@ -102,7 +101,7 @@ export default function EditTripsAsideBar({
     onSuccess: () => {
       showNotifications.success("Cancelled successfully");
       setIsMutating(false);
-      getBookingsQuery.refetch();
+      void utils.bookings.get.invalidate();
       closeAlertModal();
       setIsSelecting(false);
       setSelectedRows([]);
@@ -156,79 +155,87 @@ export default function EditTripsAsideBar({
             onConfirm={() => onModalSubmit()}
             titleText={alertTitleText}
           />
-          <AsideButton
-            buttonIcon={<CheckSquareIcon size={20} />}
-            buttonText={"Accept Trips"}
-            expandButton={expandAside}
-            onClick={() => {
-              if (selectedRows.length === 0) {
-                showNotifications.error("No trips selected");
-                return;
-              }
-              openAlertModal();
-              setAlertTitleText("Accept trips");
-              setAlertBodyComponent(
-                <Text>
-                  All selected trips will be accepted and marked as in progress.
-                  Are you sure?
-                </Text>,
-              );
-              setOnModalSubmit(() => () => {
-                setIsMutating(true);
-                acceptBookingMutation.mutate({
-                  bookingIds: selectedRows,
+          {table === "pending" && (
+            <AsideButton
+              buttonIcon={<CheckSquareIcon size={20} />}
+              buttonText={"Accept Trips"}
+              expandButton={expandAside}
+              onClick={() => {
+                if (selectedRows.length === 0) {
+                  showNotifications.error("No trips selected");
+                  return;
+                }
+                openAlertModal();
+                setAlertTitleText("Accept trips");
+                setAlertBodyComponent(
+                  <Text>
+                    All selected trips will be accepted and marked as in
+                    progress. Are you sure?
+                  </Text>,
+                );
+                setOnModalSubmit(() => () => {
+                  setIsMutating(true);
+                  acceptBookingMutation.mutate({
+                    bookingIds: selectedRows,
+                  });
                 });
-              });
-            }}
-          />
-          <AsideButton
-            buttonIcon={<XSquareIcon size={20} />}
-            buttonText={"Cancel Trips"}
-            expandButton={expandAside}
-            onClick={() => {
-              if (selectedRows.length === 0) {
-                showNotifications.error("No trips selected");
-                return;
-              }
-              openAlertModal();
-              setAlertTitleText("Cancel trips");
-              setAlertBodyComponent(
-                <Text>
-                  All selected trips will be cancelled. Are you sure?
-                </Text>,
-              );
-              setOnModalSubmit(() => () => {
-                setIsMutating(true);
-                cancelBookingMutation.mutate({
-                  bookingIds: selectedRows,
-                });
-              });
-            }}
-          />
-          <AsideButton
-            buttonIcon={<CheckCircleIcon size={20} />}
-            buttonText={"Complete Trips"}
-            expandButton={expandAside}
-            onClick={() => {
-              if (selectedRows.length === 0) {
-                showNotifications.error("No trips selected");
-                return;
-              }
-              openAlertModal();
-              setAlertTitleText("Complete trips");
-              setAlertBodyComponent(
-                <Text>
-                  All selected trips will be marked as completed. Are you sure?
-                </Text>,
-              );
-              setOnModalSubmit(() => () => {
-                setIsMutating(true);
-                completeBookingMutation.mutate({
-                  bookingIds: selectedRows,
-                });
-              });
-            }}
-          />
+              }}
+            />
+          )}
+          {table === "in_progress" && (
+            <>
+              <AsideButton
+                buttonIcon={<XSquareIcon size={20} />}
+                buttonText={"Cancel Trips"}
+                expandButton={expandAside}
+                onClick={() => {
+                  if (selectedRows.length === 0) {
+                    showNotifications.error("No trips selected");
+                    return;
+                  }
+                  openAlertModal();
+                  setAlertTitleText("Cancel trips");
+                  setAlertBodyComponent(
+                    <Text>
+                      All selected trips will be cancelled and refunds will be
+                      issued. Are you sure?
+                    </Text>,
+                  );
+                  setOnModalSubmit(() => () => {
+                    setIsMutating(true);
+                    cancelBookingMutation.mutate({
+                      bookingIds: selectedRows,
+                    });
+                  });
+                }}
+              />
+              <AsideButton
+                buttonIcon={<CheckCircleIcon size={20} />}
+                buttonText={"Complete Trips"}
+                expandButton={expandAside}
+                onClick={() => {
+                  if (selectedRows.length === 0) {
+                    showNotifications.error("No trips selected");
+                    return;
+                  }
+                  openAlertModal();
+                  setAlertTitleText("Complete trips");
+                  setAlertBodyComponent(
+                    <Text>
+                      All selected trips will be marked as completed. Are you
+                      sure?
+                    </Text>,
+                  );
+                  setOnModalSubmit(() => () => {
+                    setIsMutating(true);
+                    completeBookingMutation.mutate({
+                      bookingIds: selectedRows,
+                    });
+                  });
+                }}
+              />
+            </>
+          )}
         </>
       )}
     </>
