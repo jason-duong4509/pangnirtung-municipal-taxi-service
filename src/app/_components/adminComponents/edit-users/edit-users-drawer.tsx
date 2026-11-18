@@ -131,7 +131,6 @@ const UserInfo = ({
           leftSection={<CarProfileIcon size={20} />}
           {...form.getInputProps("numberOfRides")}
           label="Ride Credits"
-          max={999}
           min={0}
           placeholder="Integer"
         />
@@ -230,7 +229,10 @@ export default function EditUsersDrawer({
         }
       },
       numberOfRides: (value) => {
-        const result = checkNumberOfRidesToAdd(value);
+        const result = checkNumberOfRidesToAdd(
+          value - (drawerContents?.profile.numberOfRides ?? 0),
+          value,
+        );
 
         if (result.isProper) {
           return null;

@@ -524,34 +524,41 @@ export const checkRedeemCode = (
 };
 
 export const checkNumberOfRidesToAdd = (
-  input: number,
+  balanceChange: number,
+  currentTotal: number,
 ):
   | { isProper: false; errorMessage: string }
-  | { isProper: true; formattedInput: number } => {
-  if (!Number.isInteger(input)) {
+  | {
+      isProper: true;
+      formattedInput: { balanceChange: number; currentTotal: number };
+    } => {
+  if (!Number.isInteger(currentTotal) || !Number.isInteger(balanceChange)) {
     return {
       isProper: false,
       errorMessage: "Only integer values are accepted",
     };
   }
 
-  if (input < -999) {
+  if (balanceChange > 0 && currentTotal + balanceChange > 999) {
     return {
       isProper: false,
-      errorMessage: "Cannot subtract more than 999 ride credits",
+      errorMessage: `User has too many rides to add ${balanceChange} more rides (max is 999)`,
     };
   }
 
-  if (input > 999) {
+  if (balanceChange < 0 && currentTotal + balanceChange < 0) {
     return {
       isProper: false,
-      errorMessage: "Cannot add more than 999 ride credits",
+      errorMessage: `User has too few rides to remove ${balanceChange} rides (min is 0)`,
     };
   }
 
   return {
     isProper: true,
-    formattedInput: input,
+    formattedInput: {
+      balanceChange: balanceChange,
+      currentTotal: currentTotal,
+    },
   };
 };
 

@@ -8,7 +8,6 @@ import {
   Loader,
   Modal,
   Stack,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
@@ -92,12 +91,10 @@ export default function AddUsersModal({
           <CloseButton onClick={closeModal} />
         </Group>
         <Stack>
-          <Input.Wrapper
-            aria-label="Phone number input"
-            error={form.errors.phoneNumber}
-          >
+          <Input.Wrapper error={form.errors.phoneNumber}>
             <Input.Description>Enter the user's phone number</Input.Description>
             <Input
+              aria-label="Phone number input"
               component={IMaskInput}
               key={form.key("phoneNumber")}
               mask="(000) 000-0000"

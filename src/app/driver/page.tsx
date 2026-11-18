@@ -14,7 +14,6 @@ import {
   Stack,
   Table,
   Text,
-  TextInput,
   Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
@@ -157,7 +156,7 @@ export default function DriverPage() {
   });
 
   const getBookingsQuery = api.bookings.get.useQuery({
-    pageNumber: page,
+    pageNumber: page < 1 ? 1 : page,
     bookingStatus: viewAcceptedTrips
       ? BookingStatus.IN_PROGRESS
       : BookingStatus.PENDING,
@@ -177,9 +176,17 @@ export default function DriverPage() {
 
   useEffect(() => {
     page;
+    if (page > 0) {
+      getBookingsQuery.refetch();
+    } else {
+      setPage(1);
+    }
+  }, [getBookingsQuery.refetch, page]);
+
+  useEffect(() => {
     viewAcceptedTrips;
-    getBookingsQuery.refetch();
-  }, [getBookingsQuery.refetch, page, viewAcceptedTrips]);
+    setPage(0);
+  }, [viewAcceptedTrips]);
 
   const acceptBookingMutation = api.bookings.accept.useMutation({
     onSuccess: () => {
@@ -693,7 +700,9 @@ export default function DriverPage() {
                   <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
                   <Pagination
                     onChange={setPage}
-                    total={Math.ceil(numberOfRows / pageSize)}
+                    total={
+                      pageSize > 0 ? Math.ceil(numberOfRows / pageSize) : 1
+                    }
                     value={page}
                     withPages={false}
                   />

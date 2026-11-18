@@ -48,8 +48,12 @@ export default function BookingContents({
       readOnly: false;
       form: UseFormReturnType<formType>;
     }) {
-  const [pickupAddr, setPickupAddr] = useState(bookingData.pickupAddr);
-  const [destAddr, setDestAddr] = useState(bookingData.destAddr);
+  const [pickupAddr, setPickupAddr] = useState(
+    form?.getValues().pickupAddr ?? bookingData.pickupAddr,
+  );
+  const [destAddr, setDestAddr] = useState(
+    form?.getValues().destAddr ?? bookingData.destAddr,
+  );
 
   return (
     <>

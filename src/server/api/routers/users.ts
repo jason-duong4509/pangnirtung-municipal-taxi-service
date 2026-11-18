@@ -12,6 +12,7 @@ import {
   inArray,
   sql,
 } from "drizzle-orm";
+import { Stripe } from "stripe";
 import { z } from "zod";
 import {
   checkEditUsersTableFilters,
@@ -27,6 +28,10 @@ import { db } from "~/server/db";
 import { profile, user, verification } from "~/server/db/schema";
 import { UserRoles } from "~/types/types";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2026-08-26.dahlia",
+});
 
 export const usersRouter = createTRPCRouter({
   getAll: protectedProcedure
@@ -237,16 +242,6 @@ export const usersRouter = createTRPCRouter({
           });
         }
       }
-      const numberOfRidesCheck = checkNumberOfRidesToAdd(input.numOfRidesToAdd);
-      let numberOfRides = 0 as number;
-      if (numberOfRidesCheck.isProper) {
-        numberOfRides = numberOfRidesCheck.formattedInput;
-      } else {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: numberOfRidesCheck.errorMessage,
-        });
-      }
       //------------------
 
       try {
@@ -260,14 +255,19 @@ export const usersRouter = createTRPCRouter({
               code: "BAD_REQUEST",
               message: `Could not find profile record for user ID: ${input.id}`,
             });
-          } else if (
-            numberOfRides > 0 &&
-            preUpdateProfile.numberOfRides + numberOfRides > 999
-          ) {
+          }
+
+          const numberOfRidesCheck = checkNumberOfRidesToAdd(
+            input.numOfRidesToAdd,
+            preUpdateProfile.numberOfRides,
+          );
+          let numberOfRides = 0 as number;
+          if (numberOfRidesCheck.isProper) {
+            numberOfRides = numberOfRidesCheck.formattedInput.balanceChange;
+          } else {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message:
-                "User owns too many ride credits to perform this action (max is 999)",
+              message: numberOfRidesCheck.errorMessage,
             });
           }
 
@@ -395,6 +395,8 @@ export const usersRouter = createTRPCRouter({
 
       try {
         await db.transaction(async (tx) => {
+          const stripeCustomer = await stripeClient.customers.create();
+
           const [insertedUser] = await tx
             .insert(user)
             .values({
@@ -408,6 +410,7 @@ export const usersRouter = createTRPCRouter({
               phoneNumber: phoneNumber,
               phoneNumberVerified: true,
               role: UserRoles.MEMBER,
+              stripeCustomerId: stripeCustomer.id,
             })
             .returning();
 

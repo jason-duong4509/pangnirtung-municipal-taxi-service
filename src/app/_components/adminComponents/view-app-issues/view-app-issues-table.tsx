@@ -218,7 +218,7 @@ export default function ViewAppIssuesTable({
           <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
           <Pagination
             onChange={setPage}
-            total={Math.ceil(numberOfRows / pageSize)}
+            total={pageSize > 0 ? Math.ceil(numberOfRows / pageSize) : 1}
             value={page}
             withPages={false}
           />

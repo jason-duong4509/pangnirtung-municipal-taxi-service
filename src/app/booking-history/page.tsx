@@ -168,7 +168,7 @@ export default function BookingHistoryPage() {
   });
 
   const getBookingsQuery = api.bookings.get.useQuery({
-    pageNumber: page,
+    pageNumber: page < 1 ? 1 : page,
     bookingStatus: table,
   });
   if (
@@ -186,9 +186,17 @@ export default function BookingHistoryPage() {
 
   useEffect(() => {
     page;
+    if (page > 0) {
+      getBookingsQuery.refetch();
+    } else {
+      setPage(1);
+    }
+  }, [getBookingsQuery.refetch, page]);
+
+  useEffect(() => {
     table;
-    getBookingsQuery.refetch();
-  }, [getBookingsQuery.refetch, page, table]);
+    setPage(0);
+  }, [table]);
 
   //Update booking mutation
   const updateBookingMutation = api.bookings.update.useMutation({
@@ -634,7 +642,7 @@ export default function BookingHistoryPage() {
               <Text size="sm">{`Showing ${numberOfRows === 0 ? 0 : pageSize * (page - 1) + 1} – ${Math.min(numberOfRows, pageSize * page)} of ${numberOfRows}`}</Text>
               <Pagination
                 onChange={setPage}
-                total={Math.ceil(numberOfRows / pageSize)}
+                total={pageSize > 0 ? Math.ceil(numberOfRows / pageSize) : 1}
                 value={page}
                 withPages={false}
               />
