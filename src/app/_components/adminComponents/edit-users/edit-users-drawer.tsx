@@ -228,10 +228,11 @@ export default function EditUsersDrawer({
           return result.errorMessage;
         }
       },
-      numberOfRides: (value) => {
+      numberOfRides: (newRideBalance) => {
+        const originalAmount = drawerContents?.profile.numberOfRides ?? 0;
         const result = checkNumberOfRidesToAdd(
-          value - (drawerContents?.profile.numberOfRides ?? 0),
-          value,
+          newRideBalance - originalAmount,
+          originalAmount,
         );
 
         if (result.isProper) {
