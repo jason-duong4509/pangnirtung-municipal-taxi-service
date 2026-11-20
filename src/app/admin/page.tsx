@@ -2,14 +2,17 @@
 import { AppShell, Stack } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type SetStateAction, useEffect, useState } from "react";
 import { authClient } from "~/server/better-auth/client";
-import { BookingStatus, UserRoles } from "~/types/types";
+import { BookingStatus, RideCodeStatus, UserRoles } from "~/types/types";
+import AddRideCodeModal from "../_components/adminComponents/add-ride-code/add-ride-code-modal";
 import AddUsersModal from "../_components/adminComponents/add-users/add-users-modal";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
 import EditTripsTable from "../_components/adminComponents/edit-trips/edit-trips-table";
 import EditUsersAsideBar from "../_components/adminComponents/edit-users/edit-users-aside-bar";
 import EditUsersTable from "../_components/adminComponents/edit-users/edit-users-table";
+import RideCodesAsideBar from "../_components/adminComponents/ride-codes/ride-codes-aside-bar";
+import ViewRideCodesTable from "../_components/adminComponents/ride-codes/view-ride-codes-table";
 import ViewAppIssuesAsideBar from "../_components/adminComponents/view-app-issues/view-app-issues-aside-bar";
 import ViewAppIssuesTable from "../_components/adminComponents/view-app-issues/view-app-issues-table";
 import CustomAppShell from "../_components/common/appShell/app-shell";
@@ -25,6 +28,7 @@ enum PageView { //Enum string values double as app shell header text
   Trips = "- Trips",
   EditUsers = "- Edit Users",
   ViewAppIssues = "- App Issues",
+  ViewRideCodes = "- Ride Codes",
 }
 
 export default function AdminPage() {
@@ -51,6 +55,10 @@ export default function AdminPage() {
   ] = useDisclosure(false);
   const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
     useDisclosure(false);
+  const [
+    addRideCodeModalOpened,
+    { open: openAddRideCodeModal, close: closeAddRideCodeModal },
+  ] = useDisclosure(false);
   const [issuesTableFilters, setIssuesTableFilters] = useState<string[]>([]);
   const { data: session, isPending } = authClient.useSession();
   const [showLoadingUI, setShowLoadingUI] = useState(true);
@@ -58,6 +66,9 @@ export default function AdminPage() {
   const isMobile = useMediaQuery("(max-width: 500px)");
   const [tripTable, setTripTable] = useState<BookingStatus>(
     BookingStatus.PENDING,
+  );
+  const [rideCodeTable, setRideCodeTable] = useState<RideCodeStatus>(
+    RideCodeStatus.ACTIVE,
   );
 
   if (
@@ -120,6 +131,16 @@ export default function AdminPage() {
               setSelectedRows={setSelectedRowsString}
             />
           )}
+          {pageView === PageView.ViewRideCodes && (
+            <RideCodesAsideBar
+              expandAside={expandAside}
+              isSelecting={isSelecting}
+              selectedRows={selectedRowsString}
+              setIsSelecting={setIsSelecting}
+              setSelectedRows={setSelectedRowsString}
+              table={rideCodeTable}
+            />
+          )}
         </>
       }
       expandAside={expandAside}
@@ -140,6 +161,10 @@ export default function AdminPage() {
           <ManageAccountModal
             closeModal={closeManageAccountModal}
             modalOpened={manageAccountModalOpened}
+          />
+          <AddRideCodeModal
+            closeModal={closeAddRideCodeModal}
+            modalOpened={addRideCodeModalOpened}
           />
           {pageView === PageView.Trips && (
             <EditTripsTable
@@ -163,6 +188,15 @@ export default function AdminPage() {
               isSelecting={isSelecting}
               selectedRows={selectedRowsString}
               setSelectedRows={setSelectedRowsString}
+            />
+          )}
+          {pageView === PageView.ViewRideCodes && (
+            <ViewRideCodesTable
+              isSelecting={isSelecting}
+              selectedRows={selectedRowsString}
+              setSelectedRows={setSelectedRowsString}
+              setTable={setRideCodeTable}
+              table={rideCodeTable}
             />
           )}
           <InstallPwaPrompt
@@ -199,6 +233,22 @@ export default function AdminPage() {
                 setIsSelecting(false);
               }}
               text={"Edit Users"}
+            />
+          </AppShell.Section>
+          <AppShell.Section>
+            <NavbarHeader text={"Ride Codes"} />
+            <NavbarOption
+              onClick={() => openAddRideCodeModal()}
+              text={"Add Ride Code"}
+            />
+            <NavbarOption
+              onClick={() => {
+                setPageView(PageView.ViewRideCodes);
+                setSelectedRows([]);
+                setSelectedRowsString([]);
+                setIsSelecting(false);
+              }}
+              text={"Edit Codes"}
             />
           </AppShell.Section>
           <AppShell.Section>

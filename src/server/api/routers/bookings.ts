@@ -600,7 +600,7 @@ export const bookingsRouter = createTRPCRouter({
 
       if (rideCode) {
         const [code] = await db
-          .select({ rideCode: rideCodes.code })
+          .select({ rideCode: rideCodes.code, active: rideCodes.active })
           .from(rideCodes)
           .where(eq(rideCodes.code, rideCode));
 
@@ -608,6 +608,11 @@ export const bookingsRouter = createTRPCRouter({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "No code found",
+          });
+        } else if (!code.active) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Code has expired",
           });
         }
       }

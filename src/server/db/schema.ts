@@ -167,6 +167,13 @@ export const rideCodes = pgTable(
   {
     code: text("code").primaryKey().notNull(),
     discount: integer("discount").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .$defaultFn(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .$defaultFn(() => /* @__PURE__ */ new Date())
+      .notNull(),
   },
   (table) => [
     check(

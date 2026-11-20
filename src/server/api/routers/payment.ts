@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { z } from "zod";
+import { checkRedeemCode } from "~/lib/input-checkers";
 import { db } from "~/server/db";
 import {
   profile,
@@ -307,15 +308,35 @@ export const paymentRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      let rideCode = null as null | string;
+      const redeemCodeCheck = checkRedeemCode(input.code);
+      if (redeemCodeCheck.isProper) {
+        rideCode = redeemCodeCheck.formattedInput;
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: redeemCodeCheck.errorMessage,
+        });
+      }
+
       const [retrievedCode] = await db
-        .select({ code: rideCodes.code, discount: rideCodes.discount })
+        .select({
+          code: rideCodes.code,
+          discount: rideCodes.discount,
+          active: rideCodes.active,
+        })
         .from(rideCodes)
-        .where(eq(rideCodes.code, input.code));
+        .where(eq(rideCodes.code, rideCode));
 
       if (!retrievedCode) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Code does not exist",
+        });
+      } else if (!retrievedCode.active) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Code has expired",
         });
       }
 
@@ -324,7 +345,7 @@ export const paymentRouter = createTRPCRouter({
         .from(userUsedRideCode)
         .where(
           and(
-            eq(userUsedRideCode.rideCode, input.code),
+            eq(userUsedRideCode.rideCode, rideCode),
             eq(userUsedRideCode.userId, ctx.session.user.id),
           ),
         );
