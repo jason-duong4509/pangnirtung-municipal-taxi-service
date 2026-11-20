@@ -35,8 +35,12 @@ export default function RideCodesAsideBar({
   const utils = api.useUtils();
 
   const updateRideCodeMutation = api.rideCodes.update.useMutation({
-    onSuccess: () => {
-      showNotifications.success("Codes updated");
+    onSuccess: (data) => {
+      if (data && data.warning) {
+        showNotifications.warning(data.warning);
+      } else {
+        showNotifications.success("Codes updated");
+      }
       setIsMutating(false);
       void utils.rideCodes.getAll.invalidate();
       closeAlertModal();
@@ -66,10 +70,12 @@ export default function RideCodesAsideBar({
         modalOpened={alertModalOpened}
         onConfirm={() => {
           setIsMutating(true);
-          updateRideCodeMutation.mutate({
-            codes: selectedRows,
-            deactivate: table === RideCodeStatus.ACTIVE,
-          });
+          if (!isMutating) {
+            updateRideCodeMutation.mutate({
+              codes: selectedRows,
+              deactivate: table === RideCodeStatus.ACTIVE,
+            });
+          }
         }}
         titleText={`${table === RideCodeStatus.ACTIVE ? "Deactivate" : "Activate"} codes`}
       />

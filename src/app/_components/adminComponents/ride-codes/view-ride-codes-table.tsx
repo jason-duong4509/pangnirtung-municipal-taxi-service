@@ -232,6 +232,7 @@ export default function ViewRideCodesTable({
               onChange={(value) => {
                 setTable(value as RideCodeStatus);
                 setSelectedRows([]);
+                setPage(1);
               }}
               value={table}
             />
