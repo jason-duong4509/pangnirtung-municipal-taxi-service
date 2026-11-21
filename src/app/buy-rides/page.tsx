@@ -11,6 +11,7 @@ import {
   Grid,
   Group,
   ScrollArea,
+  Stack,
   Text,
   Title,
 } from "@mantine/core";
@@ -170,31 +171,33 @@ const ShopItem = ({ numberOfRidesOwned }: { numberOfRidesOwned: number }) => {
         numberOfRidesOwned={numberOfRidesOwned}
       />
       <Card h={300} padding="lg" radius="md" shadow="sm" w={250} withBorder>
-        <Card.Section bg={"grey"} h={200}>
-          <Flex align="center" h={"100%"} justify="center">
-            <RideTicket height={"50px"} width={"100px"} />
-          </Flex>
-        </Card.Section>
+        <Stack gap={0} h={"100%"}>
+          <Card.Section bg={"grey"} flex={1}>
+            <Flex align="center" h={"100%"} justify="center">
+              <RideTicket height={"50px"} width={"100px"} />
+            </Flex>
+          </Card.Section>
 
-        <Group justify="space-between" mb="xs" mt="md">
-          <Text fw={500}>Ride</Text>
-          <Badge color="pink">Residents Only</Badge>
-        </Group>
+          <Group justify="space-between" mb="xs" mt="md">
+            <Text fw={500}>Ride</Text>
+            <Badge color="pink">Residents Only</Badge>
+          </Group>
 
-        <Text c="dimmed" size="sm">
-          Ride credits cover trip in-town ride costs at a discounted price!
-        </Text>
+          <Text c="dimmed" size="sm">
+            Ride credits cover trip in-town ride costs at a discounted price!
+          </Text>
 
-        <Button
-          autoContrast
-          color="buttonColor"
-          fullWidth
-          mt="md"
-          onClick={openDrawer}
-          radius="md"
-        >
-          Purchase
-        </Button>
+          <Button
+            autoContrast
+            color="buttonColor"
+            fullWidth
+            mt="md"
+            onClick={openDrawer}
+            radius="md"
+          >
+            Purchase
+          </Button>
+        </Stack>
       </Card>
     </>
   );
