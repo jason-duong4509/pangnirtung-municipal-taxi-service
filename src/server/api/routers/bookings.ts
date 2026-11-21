@@ -215,25 +215,29 @@ export const bookingsRouter = createTRPCRouter({
           const order =
             input.bookingStatus === BookingStatus.IN_PROGRESS ||
             input.bookingStatus === BookingStatus.PENDING
-              ? (asc(bookings.pickupTime),
-                asc(bookings.pickupAddr),
-                asc(bookings.destAddr),
-                asc(bookings.requestVerification),
-                asc(bookings.name),
-                asc(bookings.updatedAt),
-                desc(bookings.id))
-              : (asc(bookings.updatedAt),
-                asc(bookings.pickupTime),
-                asc(bookings.pickupAddr),
-                asc(bookings.destAddr),
-                asc(bookings.requestVerification),
-                asc(bookings.name),
-                desc(bookings.id));
+              ? [
+                  asc(bookings.pickupTime),
+                  asc(bookings.pickupAddr),
+                  asc(bookings.destAddr),
+                  asc(bookings.requestVerification),
+                  asc(bookings.name),
+                  asc(bookings.updatedAt),
+                  desc(bookings.id),
+                ]
+              : [
+                  asc(bookings.updatedAt),
+                  asc(bookings.pickupTime),
+                  asc(bookings.pickupAddr),
+                  asc(bookings.destAddr),
+                  asc(bookings.requestVerification),
+                  asc(bookings.name),
+                  desc(bookings.id),
+                ];
 
           const result = await db
             .select()
             .from(bookings)
-            .orderBy(order)
+            .orderBy(...order)
             .limit(pageSize)
             .offset((pageNum - 1) * pageSize)
             .where(
