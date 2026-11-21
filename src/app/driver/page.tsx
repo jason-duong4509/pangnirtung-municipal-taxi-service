@@ -561,66 +561,35 @@ export default function DriverPage() {
                 }}
               />
               {viewAcceptedTrips && isSelecting && (
-                <>
-                  <AsideButton
-                    buttonIcon={<ListChecksIcon size={20} />}
-                    buttonText={"Complete Trips"}
-                    expandButton={expandAside}
-                    onClick={() => {
-                      if (selectedRows.length === 0) {
-                        showNotifications.error("No trips selected");
+                <AsideButton
+                  buttonIcon={<ListChecksIcon size={20} />}
+                  buttonText={"Complete Trips"}
+                  expandButton={expandAside}
+                  onClick={() => {
+                    if (selectedRows.length === 0) {
+                      showNotifications.error("No trips selected");
+                      return;
+                    }
+                    openAlertModal();
+                    setAlertTitleText("Complete trips");
+                    setAlertBodyComponent(
+                      <Text>
+                        All selected trips will be marked as completed. Are you
+                        sure?
+                      </Text>,
+                    );
+                    setOnModalSubmit(() => () => {
+                      if (isMutatingRef.current) {
                         return;
                       }
-                      openAlertModal();
-                      setAlertTitleText("Complete trips");
-                      setAlertBodyComponent(
-                        <Text>
-                          All selected trips will be marked as completed. Are
-                          you sure?
-                        </Text>,
-                      );
-                      setOnModalSubmit(() => () => {
-                        if (isMutatingRef.current) {
-                          return;
-                        }
-                        isMutatingRef.current = true;
-                        setIsMutating(true);
-                        completeBookingMutation.mutate({
-                          bookingIds: selectedRows,
-                        });
+                      isMutatingRef.current = true;
+                      setIsMutating(true);
+                      completeBookingMutation.mutate({
+                        bookingIds: selectedRows,
                       });
-                    }}
-                  />
-                  <AsideButton
-                    buttonIcon={<XSquareIcon size={20} />}
-                    buttonText={"Cancel Trips"}
-                    expandButton={expandAside}
-                    onClick={() => {
-                      if (selectedRows.length === 0) {
-                        showNotifications.error("No trips selected");
-                        return;
-                      }
-                      openAlertModal();
-                      setAlertTitleText("Cancel trips");
-                      setAlertBodyComponent(
-                        <Text>
-                          All selected trips will be cancelled and refunds will
-                          be issued. Are you sure?
-                        </Text>,
-                      );
-                      setOnModalSubmit(() => () => {
-                        if (isMutatingRef.current) {
-                          return;
-                        }
-                        isMutatingRef.current = true;
-                        setIsMutating(true);
-                        cancelBookingMutation.mutate({
-                          bookingIds: selectedRows,
-                        });
-                      });
-                    }}
-                  />
-                </>
+                    });
+                  }}
+                />
               )}
               {viewPendingTrips && isSelecting && (
                 <AsideButton
@@ -647,6 +616,38 @@ export default function DriverPage() {
                       isMutatingRef.current = true;
                       setIsMutating(true);
                       acceptBookingMutation.mutate({
+                        bookingIds: selectedRows,
+                      });
+                    });
+                  }}
+                />
+              )}
+              {isSelecting && (
+                <AsideButton
+                  buttonIcon={<XSquareIcon size={20} />}
+                  buttonText={"Cancel Trips"}
+                  expandButton={expandAside}
+                  onClick={() => {
+                    if (selectedRows.length === 0) {
+                      showNotifications.error("No trips selected");
+                      return;
+                    }
+                    openAlertModal();
+                    setAlertTitleText("Cancel trips");
+                    setAlertBodyComponent(
+                      <Text>
+                        All selected trips will be cancelled
+                        {viewAcceptedTrips ? " and refunds will be issued" : ""}
+                        . Are you sure?
+                      </Text>,
+                    );
+                    setOnModalSubmit(() => () => {
+                      if (isMutatingRef.current) {
+                        return;
+                      }
+                      isMutatingRef.current = true;
+                      setIsMutating(true);
+                      cancelBookingMutation.mutate({
                         bookingIds: selectedRows,
                       });
                     });

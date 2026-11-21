@@ -434,13 +434,7 @@ export default function BookingHistoryPage() {
                       onClick={() => {
                         openAlertModal();
                         setAlertBodyComponent(
-                          <>
-                            <Text>
-                              A refund will be provided to trips that are still
-                              pending
-                            </Text>
-                            <Text>This action cannot be undone!</Text>
-                          </>,
+                          <Text>This action cannot be undone!</Text>,
                         );
                         setOnModalSubmit(() => () => {
                           if (isMutatingRef.current) {
