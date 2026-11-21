@@ -865,3 +865,84 @@ export const checkTripTableFilters = (
     };
   }
 };
+
+export const checkRideCodeDiscount = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: number } => {
+  const trimmedInput = `${input}`.trim();
+  if (trimmedInput === "" || !Number.isInteger(Number(trimmedInput))) {
+    return {
+      isProper: false,
+      errorMessage: "Discount filter must be an integer",
+    };
+  }
+
+  const discount = Number(trimmedInput);
+  if (discount > 100 || discount < 1) {
+    return {
+      isProper: false,
+      errorMessage: "Discount must be within 1-100",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: discount,
+  };
+};
+
+export const checkRideCodeTableFilters = (
+  input: Record<string, unknown>,
+):
+  | { isProper: false; errorMessage: string }
+  | {
+      isProper: true;
+      formattedInput:
+        | { filter: null }
+        | { filter: "Code"; filterKeyword: string }
+        | { filter: "Discount"; filterKeyword: number };
+    } => {
+  if (
+    input.filter === undefined ||
+    input.filter === null ||
+    input.filterKeyword === ""
+  ) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: null,
+      },
+    };
+  } else if (input.filter === "Code" && input.filterKeyword) {
+    return {
+      isProper: true,
+      formattedInput: {
+        filter: "Code",
+        filterKeyword: `${input.filterKeyword}`,
+      },
+    };
+  } else if (input.filter === "Discount" && input.filterKeyword) {
+    const result = checkRideCodeDiscount(`${input.filterKeyword}`);
+    if (result.isProper) {
+      return {
+        isProper: true,
+        formattedInput: {
+          filter: "Discount",
+          filterKeyword: result.formattedInput,
+        },
+      };
+    } else {
+      return {
+        isProper: false,
+        errorMessage: result.errorMessage,
+      };
+    }
+  } else {
+    return {
+      isProper: false,
+      errorMessage: `Invalid filter type (${input.filter}) or filter keyword (${input.filterKeyword}) given`,
+    };
+  }
+};

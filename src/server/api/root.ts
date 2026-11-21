@@ -5,6 +5,7 @@ import { notificationsRouter } from "./routers/notifications";
 import { paymentRouter } from "./routers/payment";
 import { profileRouter } from "./routers/profile";
 import { reportAppRouter } from "./routers/report-app-issue";
+import { rideCodesRouter } from "./routers/ride-codes";
 import { usersRouter } from "./routers/users";
 
 /**
@@ -19,6 +20,7 @@ export const appRouter = createTRPCRouter({
   users: usersRouter,
   payment: paymentRouter,
   notifications: notificationsRouter,
+  rideCodes: rideCodesRouter,
 });
 
 // export type definition of API

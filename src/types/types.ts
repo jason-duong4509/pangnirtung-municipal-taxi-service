@@ -5,6 +5,11 @@ export enum BookingStatus {
   COMPLETED = "completed",
 }
 
+export enum RideCodeStatus {
+  ACTIVE = "active",
+  EXPIRED = "expired",
+}
+
 export const BOOKING_COSTS = {
   in_town: 15,
   out_of_town: 25,
