@@ -14,6 +14,7 @@ import {
   ilike,
   inArray,
   lt,
+  or,
   sql,
 } from "drizzle-orm";
 import Stripe from "stripe";
@@ -211,18 +212,32 @@ export const bookingsRouter = createTRPCRouter({
           }
           //--------------------------------------------------------------
 
+          const order =
+            input.bookingStatus === BookingStatus.IN_PROGRESS ||
+            input.bookingStatus === BookingStatus.PENDING
+              ? [
+                  asc(bookings.pickupTime),
+                  asc(bookings.pickupAddr),
+                  asc(bookings.destAddr),
+                  asc(bookings.requestVerification),
+                  asc(bookings.name),
+                  asc(bookings.updatedAt),
+                  desc(bookings.id),
+                ]
+              : [
+                  asc(bookings.updatedAt),
+                  asc(bookings.pickupTime),
+                  asc(bookings.pickupAddr),
+                  asc(bookings.destAddr),
+                  asc(bookings.requestVerification),
+                  asc(bookings.name),
+                  desc(bookings.id),
+                ];
+
           const result = await db
             .select()
             .from(bookings)
-            .orderBy(
-              asc(bookings.pickupTime),
-              asc(bookings.pickupAddr),
-              asc(bookings.destAddr),
-              asc(bookings.requestVerification),
-              asc(bookings.name),
-              asc(bookings.updatedAt),
-              desc(bookings.id),
-            )
+            .orderBy(...order)
             .limit(pageSize)
             .offset((pageNum - 1) * pageSize)
             .where(
@@ -1340,7 +1355,10 @@ export const bookingsRouter = createTRPCRouter({
                   )
                 : and(
                     eq(bookings.id, bookingId),
-                    eq(bookings.status, BookingStatus.IN_PROGRESS),
+                    or(
+                      eq(bookings.status, BookingStatus.IN_PROGRESS),
+                      eq(bookings.status, BookingStatus.PENDING),
+                    ),
                   );
 
             const [originalBooking] = await tx
@@ -1398,10 +1416,9 @@ export const bookingsRouter = createTRPCRouter({
 
             //--Initiate refund--
             if (
-              (ctx.session.user.role === UserRoles.ADMIN &&
-                originalBooking.status !== BookingStatus.PENDING &&
-                originalBooking.status !== BookingStatus.CANCELLED) ||
-              ctx.session.user.role === UserRoles.DRIVER
+              (ctx.session.user.role === UserRoles.ADMIN ||
+                ctx.session.user.role === UserRoles.DRIVER) &&
+              originalBooking.status === BookingStatus.IN_PROGRESS
             ) {
               if (
                 originalBooking.paymentMethod === PaymentMethods.CREDIT_CARD
