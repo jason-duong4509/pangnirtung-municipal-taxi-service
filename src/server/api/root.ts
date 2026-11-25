@@ -1,5 +1,6 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { issueTagRouter } from "./routers/app-issue-tags";
 import { bookingsRouter } from "./routers/bookings";
 import { notificationsRouter } from "./routers/notifications";
 import { paymentRouter } from "./routers/payment";
@@ -21,6 +22,7 @@ export const appRouter = createTRPCRouter({
   payment: paymentRouter,
   notifications: notificationsRouter,
   rideCodes: rideCodesRouter,
+  issueTag: issueTagRouter,
 });
 
 // export type definition of API

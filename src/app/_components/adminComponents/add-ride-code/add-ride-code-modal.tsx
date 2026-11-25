@@ -4,7 +4,6 @@ import {
   Button,
   CloseButton,
   Group,
-  Input,
   Loader,
   Modal,
   NumberInput,
@@ -13,18 +12,9 @@ import {
   Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import {
-  CarSimpleIcon,
-  CoinsIcon,
-  DeviceMobileIcon,
-} from "@phosphor-icons/react";
+import { CarSimpleIcon, CoinsIcon } from "@phosphor-icons/react";
 import { useState } from "react";
-import { IMaskInput } from "react-imask";
-import {
-  checkPhoneNumber,
-  checkRedeemCode,
-  checkRideCodeDiscount,
-} from "~/lib/input-checkers";
+import { checkRedeemCode, checkRideCodeDiscount } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
 

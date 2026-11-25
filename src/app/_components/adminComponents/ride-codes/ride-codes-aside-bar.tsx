@@ -2,9 +2,9 @@
 import { Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
-  CheckCircleIcon,
   CheckIcon,
-  XCircleIcon,
+  SelectionIcon,
+  SelectionSlashIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { type Dispatch, type SetStateAction, useState } from "react";
@@ -82,32 +82,41 @@ export default function RideCodesAsideBar({
       <AsideButton
         buttonIcon={
           isSelecting ? (
-            table === RideCodeStatus.ACTIVE ? (
-              <XCircleIcon size={20} />
-            ) : (
-              <CheckCircleIcon size={20} />
-            )
-          ) : table === RideCodeStatus.ACTIVE ? (
-            <XIcon size={20} />
+            <SelectionSlashIcon size={20} />
           ) : (
-            <CheckIcon size={20} />
+            <SelectionIcon size={20} />
           )
         }
-        buttonText={
-          isSelecting
-            ? "Confirm"
-            : `${table === RideCodeStatus.ACTIVE ? "Deactivate" : "Activate"} codes`
-        }
+        buttonText={`${isSelecting ? "Deselect" : "Select"} Codes`}
         expandButton={expandAside}
         onClick={() => {
-          if (!isSelecting || selectedRows.length === 0) {
-            setIsSelecting(!isSelecting);
-          } else {
-            //Is selecting and rows have been selected
-            openAlertModal();
+          setIsSelecting(!isSelecting);
+          if (isSelecting) {
+            setSelectedRows([]);
           }
         }}
       />
+      {isSelecting && (
+        <AsideButton
+          buttonIcon={
+            table === RideCodeStatus.ACTIVE ? (
+              <XIcon size={20} />
+            ) : (
+              <CheckIcon size={20} />
+            )
+          }
+          buttonText={`${table === RideCodeStatus.ACTIVE ? "Deactivate" : "Activate"} codes`}
+          expandButton={expandAside}
+          onClick={() => {
+            if (selectedRows.length === 0) {
+              showNotifications.error("No codes selected");
+            } else {
+              //Is selecting and rows have been selected
+              openAlertModal();
+            }
+          }}
+        />
+      )}
     </>
   );
 }

@@ -23,7 +23,6 @@ import {
 import { dbTimeToPrettyString } from "~/lib/helpers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
-import { ReportAppIssueChipTypes } from "~/types/types";
 import TripLoading from "../../common/trips/trip-loading";
 import ViewAppIssuesDrawer from "./view-app-issues-drawer";
 
@@ -49,6 +48,9 @@ export default function ViewAppIssuesTable({
   const [pageSize, setPageSize] = useState(0);
 
   let issuesList = [] as JSX.Element[];
+  let tags = [] as { name: string; color: string }[];
+
+  const getTagsQuery = api.issueTag.getList.useQuery();
 
   const getIssuesQuery = api.reportApp.get.useQuery({
     pageNumber: page < 1 ? 1 : page,
@@ -90,14 +92,35 @@ export default function ViewAppIssuesTable({
     }
   }, [getIssuesQuery.error, getIssuesQuery.isLoading]);
 
+  useEffect(() => {
+    if (!getTagsQuery.isLoading && getTagsQuery.error) {
+      showNotifications.error(
+        getTagsQuery.error.message ??
+          "An error occurred while fetching issue tags",
+      );
+    }
+  }, [getTagsQuery.error, getTagsQuery.isLoading]);
+
+  if (!getTagsQuery.isLoading && getTagsQuery.data) {
+    for (const tag of getTagsQuery.data) {
+      tags = [
+        ...tags,
+        {
+          name: tag.name,
+          color: tag.colorHex,
+        },
+      ];
+    }
+  }
+
   if (!getIssuesQuery.isLoading && getIssuesQuery.data) {
     //For each issue, make a jsx element for it
     for (const issue of getIssuesQuery.data.data) {
       const tagsList = issue.appIssuesHasTags;
       let badges = [] as JSX.Element[];
       for (const tag of tagsList) {
-        const tagInfo = ReportAppIssueChipTypes.filter(
-          (tagType) => tagType.label === tag.appIssuesTags.name,
+        const tagInfo = tags.filter(
+          (tagType) => tagType.name === tag.appIssuesTags.name,
         );
         if (tagInfo.length !== 1) {
           //Should only have one returned tag
@@ -105,8 +128,8 @@ export default function ViewAppIssuesTable({
         }
         badges = [
           ...badges,
-          <Badge color={tagInfo[0]!.chip_color} key={tagInfo[0]!.label}>
-            {tagInfo[0]!.label}
+          <Badge color={tagInfo[0]?.color} key={tagInfo[0]?.name}>
+            {tagInfo[0]?.name}
           </Badge>,
         ];
       }

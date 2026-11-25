@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type SetStateAction, useEffect, useState } from "react";
 import { authClient } from "~/server/better-auth/client";
 import { BookingStatus, RideCodeStatus, UserRoles } from "~/types/types";
+import AddAppIssueTagModal from "../_components/adminComponents/add-app-issue-tag/add-app-issue-tag-modal";
 import AddRideCodeModal from "../_components/adminComponents/add-ride-code/add-ride-code-modal";
 import AddUsersModal from "../_components/adminComponents/add-users/add-users-modal";
 import EditTripsAsideBar from "../_components/adminComponents/edit-trips/edit-trips-aside-bar";
@@ -58,6 +59,10 @@ export default function AdminPage() {
   const [
     addRideCodeModalOpened,
     { open: openAddRideCodeModal, close: closeAddRideCodeModal },
+  ] = useDisclosure(false);
+  const [
+    addAppIssueTagModalOpened,
+    { open: openAppIssueTagModal, close: closeAppIssueTagModal },
   ] = useDisclosure(false);
   const [issuesTableFilters, setIssuesTableFilters] = useState<string[]>([]);
   const { data: session, isPending } = authClient.useSession();
@@ -166,6 +171,10 @@ export default function AdminPage() {
             closeModal={closeAddRideCodeModal}
             modalOpened={addRideCodeModalOpened}
           />
+          <AddAppIssueTagModal
+            closeModal={closeAppIssueTagModal}
+            modalOpened={addAppIssueTagModalOpened}
+          />
           {pageView === PageView.Trips && (
             <EditTripsTable
               isSelecting={isSelecting}
@@ -253,6 +262,10 @@ export default function AdminPage() {
           </AppShell.Section>
           <AppShell.Section>
             <NavbarHeader text={"User Feedback"} />
+            <NavbarOption
+              onClick={() => openAppIssueTagModal()}
+              text={"Add Issue Tag"}
+            />
             <NavbarOption
               onClick={() => {
                 setPageView(PageView.ViewAppIssues);
