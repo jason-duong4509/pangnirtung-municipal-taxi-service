@@ -89,8 +89,8 @@ export default function NotificationSubscription({
         <main>
           <Stack gap={"xs"}>
             <Text>
-              The website's PWA must be installed to successfully use
-              notifications. Are you sure?
+              Enable notifications to receive reminders when your trip is about
+              to start.
             </Text>
           </Stack>
         </main>

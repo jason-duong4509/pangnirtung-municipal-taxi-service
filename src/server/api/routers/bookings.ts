@@ -477,7 +477,6 @@ export const bookingsRouter = createTRPCRouter({
         name: z.string(),
         tripReason: z.string(),
         paymentMethod: z.string(),
-        reminders: z.boolean(),
         requestVerification: z.boolean(),
         contactEmail: z.string(),
         contactPhone: z.string(),
@@ -744,7 +743,7 @@ export const bookingsRouter = createTRPCRouter({
               pickupTime: pickupTime,
               tripReason: tripReason,
               paymentMethod: paymentMethod,
-              reminders: input.reminders,
+              reminders: true,
               created_by: ctx.session.user.id,
               requestVerification: userProfile.isResident
                 ? false
@@ -863,10 +862,10 @@ export const bookingsRouter = createTRPCRouter({
                   </tr>
                   <tr>
                     <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                      Cost
+                      Price
                     </td>
                     <td style="padding: 12px; border: 1px solid #dddddd;">
-                      $${totalCost}
+                      ${result.paymentMethod === PaymentMethods.RIDES ? "1 Ride Credit" : `$${totalCost}`}
                     </td>
                   </tr>
                 </table>
@@ -914,7 +913,6 @@ export const bookingsRouter = createTRPCRouter({
         destAddr: z.string(),
         name: z.string(),
         tripReason: z.string(),
-        reminders: z.boolean(),
         contactPhone: z.string(),
         bookingType: z.string(),
         email: z.string(),
@@ -1045,7 +1043,7 @@ export const bookingsRouter = createTRPCRouter({
               pickupTime: pickupTime,
               tripReason: tripReason,
               paymentMethod: PaymentMethods.CASH,
-              reminders: input.reminders,
+              reminders: true,
               created_by: userRecord.id,
               requestVerification: false,
               contactEmail: email === "" ? null : email,
@@ -1143,10 +1141,10 @@ export const bookingsRouter = createTRPCRouter({
                   </tr>
                   <tr>
                     <td style="padding: 12px; border: 1px solid #dddddd; background-color: #f8f8f8; font-weight: bold; width: 40%;">
-                      Cost
+                      Price
                     </td>
                     <td style="padding: 12px; border: 1px solid #dddddd;">
-                      $${totalCost}
+                      ${result.paymentMethod === PaymentMethods.RIDES ? "1 Ride Credit" : `$${totalCost}`}
                     </td>
                   </tr>
                 </table>

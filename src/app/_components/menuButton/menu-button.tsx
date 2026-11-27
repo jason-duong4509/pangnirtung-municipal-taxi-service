@@ -9,7 +9,6 @@ import {
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { authClient } from "~/server/better-auth/client";
-import InstallPwaPrompt from "../common/installPwaPrompt/install-pwa-prompt";
 import ManageAccountModal from "../common/manageAccount/manage-account-modal";
 import ReportAppIssueModal from "../common/reportAppIssue/report-app-issue";
 import NotificationSubscription from "../notificationSubscription/notification-subscription";
@@ -33,8 +32,6 @@ export default function MenuButton({
     manageAccountModalOpened,
     { open: openManageAccountModal, close: closeManageAccountModal },
   ] = useDisclosure(false);
-  const [installPwaModalOpened, { open: openPwaModal, close: closePwaModal }] =
-    useDisclosure(false);
   const [
     notificationModalOpened,
     { open: openNotificationModal, close: closeNotificationModal },
@@ -51,10 +48,6 @@ export default function MenuButton({
         <ManageAccountModal
           closeModal={closeManageAccountModal}
           modalOpened={manageAccountModalOpened}
-        />
-        <InstallPwaPrompt
-          closeModal={closePwaModal}
-          modalOpened={installPwaModalOpened}
         />
         <NotificationSubscription
           closeModal={closeNotificationModal}
@@ -105,15 +98,6 @@ export default function MenuButton({
               size="xs"
             >
               Report App Issue
-            </Button>
-            <Button
-              c={"black"}
-              color="customWhite"
-              onClick={openPwaModal}
-              radius="lg"
-              size="xs"
-            >
-              Download the App
             </Button>
             <Button
               c={"black"}

@@ -446,6 +446,33 @@ export const usersRouter = createTRPCRouter({
         });
       }
     }),
+  getDriverPhone: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== UserRoles.MEMBER) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only members can do this",
+      });
+    }
+
+    try {
+      const result = await db
+        .select({ phoneNumber: user.phoneNumber })
+        .from(user)
+        .where(eq(user.role, UserRoles.DRIVER))
+        .limit(1);
+
+      return result;
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get driver's phone number",
+        cause: error,
+      });
+    }
+  }),
   getSelf: protectedProcedure.query(async ({ ctx }) => {
     try {
       const result = await db

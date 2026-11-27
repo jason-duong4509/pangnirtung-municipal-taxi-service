@@ -104,7 +104,7 @@ export default function AddNameNumberPresetModal({
       <Stack gap={"lg"} p={"md"}>
         <header>
           <Group justify="space-between">
-            <Title order={4}>Add a Preset</Title>
+            <Title order={4}>Add a Person</Title>
             <CloseButton
               onClick={() => {
                 closeModal();
@@ -148,7 +148,7 @@ export default function AddNameNumberPresetModal({
               type="submit"
               variant="filled"
             >
-              {!formSubmitting && "Add Preset"}
+              {!formSubmitting && "Add Person"}
               {formSubmitting && <Loader color="black" size={20} />}
             </Button>
           </Group>

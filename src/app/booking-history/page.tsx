@@ -21,9 +21,9 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
   CarProfileIcon,
   CheckCircleIcon,
-  CheckFatIcon,
   ClockIcon,
   HouseIcon,
+  SelectionIcon,
   TrashIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
@@ -572,8 +572,8 @@ export default function BookingHistoryPage() {
                       setAlertBodyComponent(
                         <>
                           <Text>
-                            A refund will be provided to trips that are still
-                            pending
+                            No charges will be made to trips that are cancelled
+                            while pending
                           </Text>
                           <Text>This action cannot be undone!</Text>
                         </>,
@@ -592,8 +592,8 @@ export default function BookingHistoryPage() {
                   }}
                   variant="outline"
                 >
-                  {!isDeleting && <TrashIcon size={19} />}
-                  {isDeleting && <CheckFatIcon size={19} />}
+                  {!isDeleting && <SelectionIcon size={19} />}
+                  {isDeleting && <TrashIcon size={19} />}
                 </ActionIcon>
               </Group>
             </Group>

@@ -805,7 +805,6 @@ export default function BookingForm({
       pickupTime: values.pickupTime,
       tripReason: values.reasonForTrip,
       paymentMethod: values.paymentMethod,
-      reminders: values.receiveReminders,
       requestVerification: values.requestVerification,
       contactEmail: sendReceiptToEmail ? values.contactEmail : "",
       contactPhone: values.contactPhone,
@@ -999,42 +998,27 @@ export default function BookingForm({
                 />
               </Grid.Col>
             </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Receive Reminders? (requires app)</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <MantineProvider theme={{ cursorType: "pointer" }}>
-                  <Checkbox
-                    aria-label="Consent to receive reminders check box"
-                    color="buttonColor"
-                    key={bookingForm.key("receiveReminders")}
-                    label="Yes"
-                    {...bookingForm.getInputProps("receiveReminders", {
-                      type: "checkbox",
-                    })}
-                  />
-                </MantineProvider>
-              </Grid.Col>
-            </Grid>
-            <Grid gutter={0}>
-              <Grid.Col span={6}>
-                <Text>Request Resident Verification?</Text>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <MantineProvider theme={{ cursorType: "pointer" }}>
-                  <Checkbox
-                    aria-label="Request to undergo resident verification"
-                    color="buttonColor"
-                    key={bookingForm.key("requestVerification")}
-                    label="Yes"
-                    {...bookingForm.getInputProps("requestVerification", {
-                      type: "checkbox",
-                    })}
-                  />
-                </MantineProvider>
-              </Grid.Col>
-            </Grid>
+            {getUserQuery.data &&
+              getUserQuery.data[0]?.profile.isResident === false && (
+                <Grid gutter={0}>
+                  <Grid.Col span={6}>
+                    <Text>Request Resident Verification?</Text>
+                  </Grid.Col>
+                  <Grid.Col span={6}>
+                    <MantineProvider theme={{ cursorType: "pointer" }}>
+                      <Checkbox
+                        aria-label="Request to undergo resident verification"
+                        color="buttonColor"
+                        key={bookingForm.key("requestVerification")}
+                        label=""
+                        {...bookingForm.getInputProps("requestVerification", {
+                          type: "checkbox",
+                        })}
+                      />
+                    </MantineProvider>
+                  </Grid.Col>
+                </Grid>
+              )}
             <Grid gutter={0}>
               <Grid.Col span={6}>
                 <Text>Send Receipt to Email?</Text>
@@ -1045,7 +1029,7 @@ export default function BookingForm({
                     aria-label="Send receipt to email checkbox"
                     checked={sendReceiptToEmail}
                     color="buttonColor"
-                    label="Yes"
+                    label=""
                     onChange={() => setSendReceiptToEmail(!sendReceiptToEmail)}
                   />
                 </MantineProvider>
@@ -1167,7 +1151,7 @@ export default function BookingForm({
                   type="button"
                   variant="transparent"
                 >
-                  Load Name + Number Preset
+                  Load a Person
                 </Button>
               </div>
               <Textarea

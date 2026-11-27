@@ -1,6 +1,7 @@
 "use client";
 import {
   Button,
+  CloseButton,
   Group,
   Loader,
   Modal,
@@ -55,7 +56,10 @@ export default function LogOutModal({
       withCloseButton={false}
     >
       <Stack gap={"lg"} p={"md"}>
-        <Title order={4}>Log Out</Title>
+        <Group justify="space-between">
+          <Title order={4}>Log Out</Title>
+          <CloseButton onClick={onClose} />
+        </Group>
         <Text>Are you sure?</Text>
         <Group grow>
           <Button

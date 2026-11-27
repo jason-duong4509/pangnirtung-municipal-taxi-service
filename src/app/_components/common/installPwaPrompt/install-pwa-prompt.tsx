@@ -9,7 +9,9 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { showNotifications } from "~/lib/mantine-notifications-system";
+import NotificationSubscription from "../../notificationSubscription/notification-subscription";
 import { usePWA } from "../../providers/pwa-provider/pwa-provider";
 
 export default function InstallPwaPrompt({
@@ -19,6 +21,10 @@ export default function InstallPwaPrompt({
   modalOpened: boolean;
   closeModal: () => void;
 }) {
+  const [
+    notificationModalOpened,
+    { open: openNotificationModal, close: closeNotificationModal },
+  ] = useDisclosure(false);
   const { isIOS, installApp } = usePWA();
 
   const handleInstall = async () => {
@@ -38,66 +44,73 @@ export default function InstallPwaPrompt({
       return;
     }
     closeModal();
+    openNotificationModal();
   };
 
   return (
-    <Modal
-      centered
-      onClose={closeModal}
-      opened={modalOpened}
-      radius={"lg"}
-      size={"md"}
-      withCloseButton={false}
-    >
-      <Stack gap={"lg"} p={"md"}>
-        <header>
-          <Group justify="space-between">
-            <Title order={4}>Install the App</Title>
-            <CloseButton onClick={closeModal} />
-          </Group>
-        </header>
-        <main>
-          <Stack gap={"xs"}>
-            {!isIOS && (
-              <Text>Install this app for a faster, app-like experience.</Text>
-            )}
-            {isIOS && (
-              <Text>
-                Install this app by navigating to "Share", then pressing "Add to
-                Home Screen"
-              </Text>
-            )}
-          </Stack>
-        </main>
-        {!isIOS && (
-          <footer>
-            <Group grow>
-              <Button
-                c={"black"}
-                color="buttonColor"
-                onClick={closeModal}
-                p={0}
-                size="compact-sm"
-                type="button"
-                variant="outline"
-              >
-                Not Now
-              </Button>
-              <Button
-                c={"black"}
-                color="buttonColor"
-                onClick={handleInstall}
-                p={0}
-                size="compact-sm"
-                type="button"
-                variant="filled"
-              >
-                Install
-              </Button>
+    <>
+      <NotificationSubscription
+        closeModal={closeNotificationModal}
+        modalOpened={notificationModalOpened}
+      />
+      <Modal
+        centered
+        onClose={closeModal}
+        opened={modalOpened}
+        radius={"lg"}
+        size={"md"}
+        withCloseButton={false}
+      >
+        <Stack gap={"lg"} p={"md"}>
+          <header>
+            <Group justify="space-between">
+              <Title order={4}>Install the App</Title>
+              <CloseButton onClick={closeModal} />
             </Group>
-          </footer>
-        )}
-      </Stack>
-    </Modal>
+          </header>
+          <main>
+            <Stack gap={"xs"}>
+              {!isIOS && (
+                <Text>Install this app for a faster, app-like experience.</Text>
+              )}
+              {isIOS && (
+                <Text>
+                  Install this app by navigating to "Share", then pressing "Add
+                  to Home Screen"
+                </Text>
+              )}
+            </Stack>
+          </main>
+          {!isIOS && (
+            <footer>
+              <Group grow>
+                <Button
+                  c={"black"}
+                  color="buttonColor"
+                  onClick={closeModal}
+                  p={0}
+                  size="compact-sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Not Now
+                </Button>
+                <Button
+                  c={"black"}
+                  color="buttonColor"
+                  onClick={handleInstall}
+                  p={0}
+                  size="compact-sm"
+                  type="button"
+                  variant="filled"
+                >
+                  Install
+                </Button>
+              </Group>
+            </footer>
+          )}
+        </Stack>
+      </Modal>
+    </>
   );
 }
