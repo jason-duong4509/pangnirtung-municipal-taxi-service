@@ -23,7 +23,11 @@ import { checkBookingTypeAndPaymentMethod } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { api } from "~/trpc/react";
-import { PaymentMethods } from "~/types/types";
+import {
+  BOOKING_COSTS,
+  BookingValueTypes,
+  PaymentMethods,
+} from "~/types/types";
 import AlertPopup from "../common/alert/alert";
 import BookingContents from "../common/bookingContents/booking-contents";
 import PaymentModal from "../common/payment/payment";
@@ -200,7 +204,6 @@ const ComponentContents = ({
     { open: openGetPaymentDetailsModal, close: closeGetPaymentDetailsModal },
   ] = useDisclosure(false);
   const utils = api.useUtils();
-  const moveLogoutButton = useMediaQuery("(max-width: 750px)");
   const shrinkText = useMediaQuery("(max-width: 500px)");
   const [
     logoutModalOpened,
@@ -256,33 +259,16 @@ const ComponentContents = ({
         <header>
           <Group justify="space-between">
             <Title order={4}>Confirm Booking</Title>
-            {moveLogoutButton && (
-              <Button
-                c={"black"}
-                color={"buttonColor"}
-                onClick={openLogoutModal}
-                radius={"lg"}
-                size="xs"
-                type="button"
-              >
-                Log out
-              </Button>
-            )}
-            {!moveLogoutButton && (
-              <Button
-                c={"black"}
-                color={"customWhite"}
-                onClick={openLogoutModal}
-                pos={"absolute"}
-                radius={"lg"}
-                right={"5%"}
-                size="xs"
-                top={"5%"}
-                type="button"
-              >
-                Log out
-              </Button>
-            )}
+            <Button
+              c={"black"}
+              color={"buttonColor"}
+              onClick={openLogoutModal}
+              radius={"lg"}
+              size="xs"
+              type="button"
+            >
+              Log out
+            </Button>
           </Group>
         </header>
         {!bookingDetails && <TripLoading />}
@@ -301,6 +287,18 @@ const ComponentContents = ({
                   flex={1}
                   readOnly
                   value={formatString(bookingDetails.bookingType)}
+                />
+              </Group>
+              <Group>
+                <Text flex={1}>New Trip Price:</Text>
+                <TextInput
+                  flex={1}
+                  readOnly
+                  value={
+                    bookingDetails.bookingType === BookingValueTypes.IN_TOWN
+                      ? `$${BOOKING_COSTS[BookingValueTypes.IN_TOWN]} (from $${BOOKING_COSTS[BookingValueTypes.OUT_OF_TOWN]})`
+                      : `$${BOOKING_COSTS[BookingValueTypes.OUT_OF_TOWN]} (from $${BOOKING_COSTS[BookingValueTypes.IN_TOWN]})`
+                  }
                 />
               </Group>
               <Divider
@@ -379,7 +377,7 @@ export default function ShowRevisedBookingModal({
     bookingsData | undefined
   >(undefined);
   const deviceIsShort = useMediaQuery("(max-height: 550px)");
-  const deviceIsTall = useMediaQuery("(max-height: 1400px)"); //height dependent on the minimum screen height needed to show the entire UI without vertical scrolling
+  const deviceIsTall = useMediaQuery("(max-height: 1500px)"); //height dependent on the minimum screen height needed to show the entire UI without vertical scrolling
 
   const bookingId = Number(bookingIdString);
   const notANumber = Number.isNaN(bookingId);

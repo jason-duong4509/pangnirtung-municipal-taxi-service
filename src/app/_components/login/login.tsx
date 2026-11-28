@@ -1,6 +1,7 @@
 "use client";
 import {
   Button,
+  CloseButton,
   Group,
   Input,
   Loader,
@@ -229,7 +230,10 @@ export default function LoginModal({
       >
         <form onSubmit={loginForm.onSubmit(handleLoginSubmit)}>
           <Stack gap={"lg"} p={"md"}>
-            <Title order={4}>Login</Title>
+            <Group justify="space-between">
+              <Title order={4}>Login</Title>
+              <CloseButton onClick={closeLoginModal} />
+            </Group>
             <Input.Wrapper
               aria-label="Enter your phone number"
               error={loginForm.errors.phoneNumber}
@@ -260,7 +264,10 @@ export default function LoginModal({
       >
         <form onSubmit={otpForm.onSubmit(handleCodeSubmit)}>
           <Stack gap={"lg"} p={"md"}>
-            <Title order={4}>Verify</Title>
+            <Group justify="space-between">
+              <Title order={4}>Verify</Title>
+              <CloseButton onClick={closeVerifyModal} />
+            </Group>
             <TextInput
               aria-label="Enter one-time code"
               key={otpForm.key("otp")}

@@ -16,7 +16,7 @@ export const BOOKING_COSTS = {
 };
 
 export const RIDE_CREDIT_COST = 12;
-export const MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE = 50;
+export const MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE = 10;
 
 export enum BookingValueTypes {
   IN_TOWN = "in_town",
@@ -45,33 +45,6 @@ export enum UserRoles {
   DRIVER = "driver",
   MEMBER = "member",
 }
-
-export const ReportAppIssueChipTypes = [
-  {
-    chip_color: "grape",
-    label: "Read",
-  },
-  {
-    chip_color: "red",
-    label: "Complaint",
-  },
-  {
-    chip_color: "cyan",
-    label: "Suggestion",
-  },
-  {
-    chip_color: "yellow",
-    label: "In Progress",
-  },
-  {
-    chip_color: "pink",
-    label: "To Do",
-  },
-  {
-    chip_color: "green",
-    label: "Done",
-  },
-];
 
 export const PriorityRatingTypesString = ["1", "2", "3", "4", "5"];
 export const PriorityRatingTypesNumber = [1, 2, 3, 4, 5];

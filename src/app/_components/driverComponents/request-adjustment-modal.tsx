@@ -97,7 +97,6 @@ export default function RequestAdjustmentModal({
         body={<Text>Are you sure?</Text>}
         closeModal={closeAlertModal}
         confirmButtonText={"Send to User"}
-        hideCloseButton
         isLoading={isLoading}
         modalOpened={alertModalOpened}
         onConfirm={() => form.onSubmit(handleSubmit)()}

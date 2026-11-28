@@ -6,17 +6,16 @@ import {
   Badge,
   Button,
   Card,
-  Drawer,
   Flex,
-  Grid,
   Group,
+  Modal,
   ScrollArea,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
-import { useCounter, useDisclosure } from "@mantine/hooks";
-import { HouseIcon, MinusIcon, PlusIcon } from "@phosphor-icons/react";
+import { useDisclosure } from "@mantine/hooks";
+import { HouseIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import PangSeal from "~/assets/icons/pang";
@@ -25,30 +24,23 @@ import { showNotifications } from "~/lib/mantine-notifications-system";
 import type { RouterOutputs } from "~/server/api/root";
 import { authClient } from "~/server/better-auth/client";
 import { api } from "~/trpc/react";
-import {
-  MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE,
-  RIDE_CREDIT_COST,
-  UserRoles,
-} from "~/types/types";
+import { RIDE_CREDIT_COST, UserRoles } from "~/types/types";
 import AlertPopup from "../_components/common/alert/alert";
 import LoadingScreen from "../_components/common/loadingScreen/loading-screen";
 import PaymentModalRideCredit from "../_components/common/payment/buy-rides-payment";
 
 type userData = RouterOutputs["users"]["getSelf"][0];
 
-const ItemDrawer = ({
-  drawerOpened,
-  closeDrawer,
+const ItemModal = ({
+  itemModalOpened,
+  closeItemModal,
   numberOfRidesOwned,
 }: {
-  drawerOpened: boolean;
-  closeDrawer: () => void;
+  itemModalOpened: boolean;
+  closeItemModal: () => void;
   numberOfRidesOwned: number;
 }) => {
-  const [
-    buyRideNum,
-    { increment: increaseRideNum, decrement: decreaseRideNum },
-  ] = useCounter(1, { min: 1, max: MAX_NUMBER_OF_RIDES_BOUGHT_PER_PURCHASE });
+  const [buyRideNum, setBuyRideNum] = useState<number>(0);
   const [alertModalOpened, { open: openAlertModal, close: closeAlertModal }] =
     useDisclosure(false);
   const [
@@ -66,13 +58,10 @@ const ItemDrawer = ({
       <AlertPopup
         abortButtonText={"Back"}
         body={
-          <>
-            <Text>
-              Buying {buyRideNum} Rides for ${RIDE_CREDIT_COST * buyRideNum}.
-              Are you sure?
-            </Text>
-            <Text>This cannot be refunded!</Text>
-          </>
+          <Text>
+            Buying {buyRideNum} Rides for ${RIDE_CREDIT_COST * buyRideNum}. Are
+            you sure?
+          </Text>
         }
         closeModal={closeAlertModal}
         confirmButtonText={"Confirm"}
@@ -81,17 +70,18 @@ const ItemDrawer = ({
         onConfirm={() => {
           openPaymentModal();
           closeAlertModal();
-          closeDrawer();
+          closeItemModal();
         }}
         titleText={"Confirm Purchase"}
       />
-      <Drawer
-        offset={8}
-        onClose={closeDrawer}
-        opened={drawerOpened}
-        position="right"
-        radius="md"
-        size={"xs"}
+      <Modal
+        centered
+        onClose={closeItemModal}
+        opened={itemModalOpened}
+        radius={"lg"}
+        size={"sm"}
+        withCloseButton={true}
+        zIndex={299}
       >
         <Flex
           align="center"
@@ -107,67 +97,59 @@ const ItemDrawer = ({
               Ride x1
             </Title>
             <Text ta={"center"}>Owned: {numberOfRidesOwned}</Text>
-            <Text c={"red"} ta={"center"}>
-              Rides cannot be refunded after purchased
-            </Text>
           </div>
-          <ActionIcon.Group>
-            <ActionIcon
-              onClick={decreaseRideNum}
-              radius="md"
-              size="lg"
-              variant="default"
-            >
-              <MinusIcon size={20} />
-            </ActionIcon>
-            <ActionIcon.GroupSection
-              bg="var(--mantine-color-body)"
-              miw={60}
-              size="lg"
-              variant="default"
-            >
-              {buyRideNum}
-            </ActionIcon.GroupSection>
-            <ActionIcon
-              onClick={increaseRideNum}
-              radius="md"
-              size="lg"
-              variant="default"
-            >
-              <PlusIcon size={20} />
-            </ActionIcon>
-          </ActionIcon.Group>
-          <Grid>
-            <Grid.Col span={6}>
-              <Text>{`$${RIDE_CREDIT_COST * buyRideNum}`}</Text>
-            </Grid.Col>
-            <Grid.Col span={6}>
-              <Button
-                autoContrast
-                color="buttonColor"
-                onClick={() => openAlertModal()}
-                px={"xl"}
-                radius="md"
-              >
-                Purchase
-              </Button>
-            </Grid.Col>
-          </Grid>
+          <Stack gap={"xs"} w={"100%"}>
+            <Text>Quantity (${RIDE_CREDIT_COST}/Ride)</Text>
+            <Group justify="flex-end">
+              <Group flex={1} gap={"xs"} grow>
+                <ActionIcon
+                  color="black"
+                  onClick={() => {
+                    setBuyRideNum(1);
+                    openAlertModal();
+                  }}
+                  variant="outline"
+                >
+                  +1 Ride
+                </ActionIcon>
+                <ActionIcon
+                  color="black"
+                  onClick={() => {
+                    setBuyRideNum(5);
+                    openAlertModal();
+                  }}
+                  variant="outline"
+                >
+                  +5 Rides
+                </ActionIcon>
+                <ActionIcon
+                  color="black"
+                  onClick={() => {
+                    setBuyRideNum(10);
+                    openAlertModal();
+                  }}
+                  variant="outline"
+                >
+                  +10 Rides
+                </ActionIcon>
+              </Group>
+            </Group>
+          </Stack>
         </Flex>
-      </Drawer>
+      </Modal>
     </>
   );
 };
 
 const ShopItem = ({ numberOfRidesOwned }: { numberOfRidesOwned: number }) => {
-  const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
+  const [itemModalOpened, { open: openItemModal, close: closeItemModal }] =
     useDisclosure(false);
 
   return (
     <>
-      <ItemDrawer
-        closeDrawer={closeDrawer}
-        drawerOpened={drawerOpened}
+      <ItemModal
+        closeItemModal={closeItemModal}
+        itemModalOpened={itemModalOpened}
         numberOfRidesOwned={numberOfRidesOwned}
       />
       <Card h={300} padding="lg" radius="md" shadow="sm" w={250} withBorder>
@@ -192,7 +174,7 @@ const ShopItem = ({ numberOfRidesOwned }: { numberOfRidesOwned: number }) => {
             color="buttonColor"
             fullWidth
             mt="md"
-            onClick={openDrawer}
+            onClick={openItemModal}
             radius="md"
           >
             Purchase

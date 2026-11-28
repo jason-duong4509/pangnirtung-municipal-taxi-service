@@ -2,6 +2,7 @@
 
 import {
   Button,
+  CloseButton,
   Group,
   Loader,
   Modal,
@@ -158,7 +159,10 @@ export default function ChangePhoneNumberModal({
       zIndex={300}
     >
       <Stack gap={"lg"} p={"md"}>
-        <Title order={4}>Change Phone Number</Title>
+        <Group justify="space-between">
+          <Title order={4}>Change Phone Number</Title>
+          <CloseButton onClick={closeModal} />
+        </Group>
         <TextInput
           aria-label="Enter one-time code"
           key={form.key("otp")}

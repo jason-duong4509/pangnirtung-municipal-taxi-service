@@ -14,7 +14,7 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useDisclosure } from "@mantine/hooks";
-import { useEffect, useState } from "react";
+import { type JSX, useEffect, useState } from "react";
 import { dbTimeToPrettyString } from "~/lib/helpers";
 import {
   checkReportAppPriority,
@@ -23,7 +23,6 @@ import {
 } from "~/lib/input-checkers";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api, type RouterOutputs } from "~/trpc/react";
-import { ReportAppIssueChipTypes } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 
 type issuesData = RouterOutputs["reportApp"]["get"]["data"][0];
@@ -41,6 +40,30 @@ export default function ViewAppIssuesDrawer({
   const [modalOpened, { open: openModal, close: closeModal }] =
     useDisclosure(false);
   const utils = api.useUtils();
+
+  let tags = [] as JSX.Element[];
+
+  const getTagsQuery = api.issueTag.getList.useQuery();
+
+  useEffect(() => {
+    if (!getTagsQuery.isLoading && getTagsQuery.error) {
+      showNotifications.error(
+        getTagsQuery.error.message ??
+          "An error occurred while fetching issue tags",
+      );
+    }
+  }, [getTagsQuery.error, getTagsQuery.isLoading]);
+
+  if (!getTagsQuery.isLoading && getTagsQuery.data) {
+    for (const tag of getTagsQuery.data) {
+      tags = [
+        ...tags,
+        <Chip color={tag.colorHex} key={tag.id} value={tag.name}>
+          {tag.name}
+        </Chip>,
+      ];
+    }
+  }
 
   const updateIssueMutation = api.reportApp.update.useMutation({
     onSuccess: () => {
@@ -199,15 +222,7 @@ export default function ViewAppIssuesDrawer({
                   {...form.getInputProps("tags")}
                 >
                   <Group justify="flex-start" mt="md">
-                    {ReportAppIssueChipTypes.map((chipType) => (
-                      <Chip
-                        color={chipType.chip_color}
-                        key={chipType.label}
-                        value={chipType.label}
-                      >
-                        {chipType.label}
-                      </Chip>
-                    ))}
+                    {tags}
                   </Group>
                 </Chip.Group>
                 <Input.Error>{form.errors.tags}</Input.Error>

@@ -340,7 +340,7 @@ export default function ManageAccountModal({
           {form.getValues().role === UserRoles.MEMBER && (
             <Flex direction={isPhone ? "column" : "row"}>
               <Input.Wrapper>
-                <Input.Label>Name and Phone Number Presets</Input.Label>
+                <Input.Label>Your People</Input.Label>
                 <Input.Description pb={"xs"}>
                   Used to quickly fill in information while booking trips
                 </Input.Description>
@@ -358,7 +358,7 @@ export default function ManageAccountModal({
                   type="button"
                   variant="filled"
                 >
-                  Edit Presets
+                  Edit People
                 </Button>
               </Flex>
             </Flex>

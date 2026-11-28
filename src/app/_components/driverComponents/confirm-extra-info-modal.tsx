@@ -153,7 +153,6 @@ export default function ConfirmExtraInfoModal({
       }
       closeModal={closeModal}
       confirmButtonText={"Verify Selected Users"}
-      hideCloseButton
       isLoading={isMutating}
       modalOpened={modalOpened}
       onConfirm={() => handleVerifyMutation()}

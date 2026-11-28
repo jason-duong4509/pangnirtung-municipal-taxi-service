@@ -50,7 +50,6 @@ export default function NameNumberPresetModal({
       loadPreset: false;
     }) {
   const [value, setValue] = useState<string[]>([]);
-  const isMobile = useMediaQuery("(max-width: 470px)");
   const [isEditing, setIsEditing] = useState(false);
   const [
     addPresetModalOpened,
@@ -104,7 +103,7 @@ export default function NameNumberPresetModal({
         <Group key={`${preset.name}+${preset.phoneNumber}`}>
           {isEditing && (
             <CloseButton
-              aria-label="Delete preset"
+              aria-label="Delete Person"
               onClick={() => {
                 setAlertBodyComponent(
                   <Stack>
@@ -174,7 +173,7 @@ export default function NameNumberPresetModal({
         isLoading={isLoading}
         modalOpened={alertModalOpened}
         onConfirm={() => deletePreset(deletedPreset)}
-        titleText={"Deleting Preset"}
+        titleText={"Deleting Person"}
       />
       <AddNameNumberPresetModal
         closeModal={closeAddPresetModal}
@@ -198,12 +197,12 @@ export default function NameNumberPresetModal({
             <Group justify="space-between">
               <Title order={4}>
                 {loadPreset ? "Load " : "Edit "}
-                {!isMobile ? "Name + Phone Number " : ""}Preset
+                Your People
               </Title>
               <CloseButton onClick={closeModal} />
             </Group>
             <Group justify="space-between">
-              <Text>Presets</Text>
+              <Text>People</Text>
               {loadPreset && (
                 <Button
                   c={"black"}
@@ -218,7 +217,7 @@ export default function NameNumberPresetModal({
                   type="button"
                   variant="transparent"
                 >
-                  {!isEditing && "Edit Presets"}
+                  {!isEditing && "Edit People"}
                   {isEditing && "Finish"}
                 </Button>
               )}
@@ -238,7 +237,7 @@ export default function NameNumberPresetModal({
                   {getPresetsQuery.isLoading ? (
                     <TripLoading />
                   ) : presets.length === 0 ? (
-                    "No presets found"
+                    "No people found"
                   ) : (
                     presets
                   )}
@@ -297,7 +296,7 @@ export default function NameNumberPresetModal({
                   type="submit"
                   variant="filled"
                 >
-                  Add a Preset
+                  Add a Person
                 </Button>
               </Group>
             </footer>

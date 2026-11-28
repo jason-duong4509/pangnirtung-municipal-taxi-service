@@ -129,6 +129,7 @@ export const appIssues = pgTable(
 export const appIssuesTags = pgTable("app_issues_tags", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull().unique(),
+  colorHex: text("color_hex").notNull().unique(),
 });
 
 export const rideCreditTransactions = pgTable("ride_credit_transactions", {

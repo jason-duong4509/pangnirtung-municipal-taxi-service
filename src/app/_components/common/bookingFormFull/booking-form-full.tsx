@@ -192,7 +192,6 @@ export default function BookingFormFull({
       name: values.name,
       pickupTime: values.pickupTime,
       tripReason: values.reasonForTrip,
-      reminders: values.sendReminders,
       contactPhone: values.phoneNumber,
       bookingType: values.bookingType,
       email: values.email,
@@ -283,22 +282,6 @@ export default function BookingFormFull({
           minRows={1}
           placeholder="Reason for Trip (optional)"
         />
-        <Box>
-          <Input.Label required>
-            Send App Reminders? (user needs app)
-          </Input.Label>
-          <MantineProvider theme={{ cursorType: "pointer" }}>
-            <Checkbox
-              aria-label="Enable reminders for user"
-              color="buttonColor"
-              key={form.key("sendReminders")}
-              label="Yes"
-              {...form.getInputProps("sendReminders", {
-                type: "checkbox",
-              })}
-            />
-          </MantineProvider>
-        </Box>
         <Radio.Group
           key={form.key("bookingType")}
           label="Booking Type"

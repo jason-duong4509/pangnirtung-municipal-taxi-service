@@ -12,16 +12,14 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import {
   FunnelSimpleIcon,
-  TrashIcon,
+  SelectionIcon,
+  SelectionSlashIcon,
   TrashSimpleIcon,
 } from "@phosphor-icons/react";
-import { type Dispatch, type SetStateAction, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { showNotifications } from "~/lib/mantine-notifications-system";
 import { api } from "~/trpc/react";
-import {
-  PriorityRatingTypesString,
-  ReportAppIssueChipTypes,
-} from "~/types/types";
+import { PriorityRatingTypesString } from "~/types/types";
 import AlertPopup from "../../common/alert/alert";
 import AsideButton from "../../common/appShell/aside-button";
 
@@ -48,6 +46,31 @@ export default function ViewAppIssuesAsideBar({
   const [pickedFilters, setPickedFilters] = useState<string[]>([]);
   const [popoverOpened, setPopoverOpened] = useState(false);
   const utils = api.useUtils();
+
+  let tags = [] as { name: string; color: string }[];
+
+  const getTagsQuery = api.issueTag.getList.useQuery();
+
+  useEffect(() => {
+    if (!getTagsQuery.isLoading && getTagsQuery.error) {
+      showNotifications.error(
+        getTagsQuery.error.message ??
+          "An error occurred while fetching issue tags",
+      );
+    }
+  }, [getTagsQuery.error, getTagsQuery.isLoading]);
+
+  if (!getTagsQuery.isLoading && getTagsQuery.data) {
+    for (const tag of getTagsQuery.data) {
+      tags = [
+        ...tags,
+        {
+          name: tag.name,
+          color: tag.colorHex,
+        },
+      ];
+    }
+  }
 
   const deleteIssuesMutation = api.reportApp.delete.useMutation({
     onSuccess: () => {
@@ -115,13 +138,11 @@ export default function ViewAppIssuesAsideBar({
               clearable
               comboboxProps={{ withinPortal: false }}
               data={[
+                { group: "Priority Ratings", items: PriorityRatingTypesString },
                 {
                   group: "Tags",
-                  items: ReportAppIssueChipTypes.map(
-                    (chipType) => chipType.label,
-                  ),
+                  items: tags.map((chipType) => chipType.name),
                 },
-                { group: "Priority Ratings", items: PriorityRatingTypesString },
               ]}
               label="Filter Issues by Tag or Priority"
               onChange={(values) => setPickedFilters(values)}
@@ -139,9 +160,9 @@ export default function ViewAppIssuesAsideBar({
                 } else {
                   //Render tag components
                   let badgeColor = "blue";
-                  for (const chipType of ReportAppIssueChipTypes) {
-                    if (chipType.label === option.value) {
-                      badgeColor = chipType.chip_color;
+                  for (const chipType of tags) {
+                    if (chipType.name === option.value) {
+                      badgeColor = chipType.color;
                     }
                   }
                   return (
@@ -172,19 +193,36 @@ export default function ViewAppIssuesAsideBar({
       </Popover>
       <AsideButton
         buttonIcon={
-          isSelecting ? <TrashIcon size={20} /> : <TrashSimpleIcon size={20} />
+          isSelecting ? (
+            <SelectionSlashIcon size={20} />
+          ) : (
+            <SelectionIcon size={20} />
+          )
         }
-        buttonText={isSelecting ? "Confirm" : "Delete Issues"}
+        buttonText={`${isSelecting ? "Deselect" : "Select"} Issues`}
         expandButton={expandAside}
         onClick={() => {
-          if (!isSelecting || selectedRows.length === 0) {
-            setIsSelecting(!isSelecting);
-          } else {
-            //Is selecting and rows have been selected
-            openAlertModal();
+          setIsSelecting(!isSelecting);
+          if (isSelecting) {
+            setSelectedRows([]);
           }
         }}
       />
+      {isSelecting && (
+        <AsideButton
+          buttonIcon={<TrashSimpleIcon size={20} />}
+          buttonText={"Delete Issues"}
+          expandButton={expandAside}
+          onClick={() => {
+            if (selectedRows.length === 0) {
+              showNotifications.error("No issues selected");
+            } else {
+              //Is selecting and rows have been selected
+              openAlertModal();
+            }
+          }}
+        />
+      )}
     </>
   );
 }

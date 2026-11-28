@@ -4,6 +4,7 @@ import utc from "dayjs/plugin/utc";
 import { parsePhoneNumberWithError } from "libphonenumber-js";
 import {
   addressRegex,
+  colorHexRegex,
   emailRegex,
   IANA_TIME_ZONE,
   nameRegex,
@@ -17,7 +18,6 @@ import {
   PaymentMethods,
   PriorityRatingTypesNumber,
   PriorityRatingTypesString,
-  ReportAppIssueChipTypes,
 } from "~/types/types";
 
 //--Add UTC and timezone conversion features for dayjs--
@@ -367,31 +367,17 @@ export const checkReportAppTags = (
 ):
   | { isProper: false; errorMessage: string }
   | { isProper: true; formattedInput: string[] } => {
-  if (input.length > ReportAppIssueChipTypes.length) {
-    return {
-      isProper: false,
-      errorMessage: "Input has more tags than possible",
-    };
-  }
-
   let listOfTags = [] as string[];
   for (const tag of input) {
-    const matchingChip = ReportAppIssueChipTypes.filter(
-      (chipType) => chipType.label === tag,
-    );
-
-    if (matchingChip.length !== 1) {
+    const result = checkIssueTagName(tag);
+    if (result.isProper) {
+      listOfTags = [...listOfTags, result.formattedInput];
+    } else {
       return {
         isProper: false,
-        errorMessage: `Tag ${tag} is not a valid tag`,
-      };
-    } else if (listOfTags.includes(tag)) {
-      return {
-        isProper: false,
-        errorMessage: `Duplicate tag ${tag} found`,
+        errorMessage: `Invalid tag "${tag}" with error: ${result.errorMessage}`,
       };
     }
-    listOfTags = [...listOfTags, tag];
   }
 
   return {
@@ -601,11 +587,10 @@ export const checkReportAppFilters = (
   for (const filter of input) {
     let isValid = false;
     //Check chip types
-    for (const chipType of ReportAppIssueChipTypes) {
-      if (chipType.label === filter) {
-        isValid = true;
-        tagFilters = [...tagFilters, filter];
-      }
+    const result = checkIssueTagName(filter);
+    if (result.isProper) {
+      isValid = true;
+      tagFilters = [...tagFilters, result.formattedInput];
     }
     //Check priorities
     if (PriorityRatingTypesString.includes(filter) && !isValid) {
@@ -945,4 +930,78 @@ export const checkRideCodeTableFilters = (
       errorMessage: `Invalid filter type (${input.filter}) or filter keyword (${input.filterKeyword}) given`,
     };
   }
+};
+
+export const checkIssueTagName = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: string } => {
+  if (input.length === 0) {
+    return {
+      isProper: false,
+      errorMessage: "Name cannot be blank",
+    };
+  }
+
+  const trimmedInput = input.trim();
+  const splitNames = trimmedInput.split(" ");
+  if (splitNames.length > 2) {
+    return {
+      isProper: false,
+      errorMessage: "Name cannot have more than 1 space",
+    };
+  }
+
+  if (trimmedInput.length > 15) {
+    return {
+      isProper: false,
+      errorMessage: "Name too long (max 15 characters)",
+    };
+  }
+
+  if (splitNames.map((name) => nameRegex.test(name)).includes(false)) {
+    return {
+      isProper: false,
+      errorMessage: "Only alphabetical names are accepted",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: trimmedInput,
+  };
+};
+
+export const checkIssueTagColor = (
+  input: string,
+):
+  | { isProper: false; errorMessage: string }
+  | { isProper: true; formattedInput: string } => {
+  if (input.length === 0) {
+    return {
+      isProper: false,
+      errorMessage: "Cannot be blank",
+    };
+  }
+
+  const trimmedInput = input.trim();
+  if (trimmedInput.length !== 7) {
+    return {
+      isProper: false,
+      errorMessage: "Invalid color code length",
+    };
+  }
+
+  if (!colorHexRegex.test(trimmedInput)) {
+    return {
+      isProper: false,
+      errorMessage: "Invalid color code",
+    };
+  }
+
+  return {
+    isProper: true,
+    formattedInput: trimmedInput,
+  };
 };
